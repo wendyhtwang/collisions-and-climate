@@ -1,11 +1,14 @@
 # Animal Collisions & Climate
 
-Development repository.
+Personal development repository for my EPIC Bartlett Fellowship (Summer 2026).
 
-## Environment
+## Purpose
 
-Python 3.13
+- Develop and version-control Python scripts.
+- Test Earth Engine workflows locally.
+- Keep experimental code separate from the shared Kodama project directory.
 
-## Run
+## Repository Structure
 
-python codePYTHON/01_test_weather_extract.py
+codePYTHON/
+    Python scripts for Earth Engine, data processing, and analysis.
