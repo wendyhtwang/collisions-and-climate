@@ -1,3 +1,8 @@
+"""
+Authentication + connection test
+"""
+
+
 import ee
 ee.Authenticate()
 ee.Initialize(project="collisions-and-climate")

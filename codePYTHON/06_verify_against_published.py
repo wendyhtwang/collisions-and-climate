@@ -1,0 +1,3 @@
+"""
+spot-check published summaries
+"""

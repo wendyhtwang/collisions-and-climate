@@ -19,3 +19,5 @@ env/
 
 # Environment variables
 .env
+# Reference clones (not part of this repo)
+references/earthengine-api/
