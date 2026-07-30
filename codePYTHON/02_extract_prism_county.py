@@ -29,7 +29,7 @@ aggregation happens client-side in 04_aggregate_daily_to_monthly.py,
 which is already validated correct, rather than risking the same
 discrepancy silently across 45 years of production data.
 
-CAUTION: this is a large job (45 export tasks, full CONUS, ~3100
+Note: this is a large job (45 export tasks, full CONUS, ~3100
 counties x ~365 days x 7 bands per year). Per CLAUDE.md, do not run this
 against the full YEARS range without explicit sign-off -- consider
 testing with a 1-2 year YEARS range first.
@@ -144,8 +144,14 @@ def main():
             len(completed_years), len(years_to_run),
         )
 
-    tasks = []
-    task_year_by_id = {}
+    # CHANGE: build all export specs first, without submitting, then hand
+    # them to start_exports_to_shared_folder() so the first task's Drive
+    # folder is confirmed to exist before the rest are submitted -- see
+    # that function's docstring for why submitting them all back-to-back
+    # (the old behavior) risks creating duplicate same-named Drive
+    # folders instead of reusing one.
+    export_specs = []
+    spec_years = []
 
     for year in years_to_run:
         logging.info("Building PRISM extraction for %d...", year)
@@ -161,15 +167,16 @@ def main():
         )
 
         filename = f"prism_county_daily_{year}_{RUN_TIMESTAMP}"
-        task = geeutil.start_export(
+        export_specs.append(dict(
             collection=annual_results,
             description=filename,
-            drive_folder=DRIVE_FOLDER,
             filename=filename,
             selectors=geeutil.ID_COLS + ["date", "year", "dataset_type"] + BANDS,
-        )
-        tasks.append(task)
-        task_year_by_id[task.id] = year
+        ))
+        spec_years.append(year)
+
+    tasks = geeutil.start_exports_to_shared_folder(export_specs, drive_folder=DRIVE_FOLDER)
+    task_year_by_id = {task.id: year for task, year in zip(tasks, spec_years)}
 
     logging.info("Monitoring %d export task(s)...", len(tasks))
     failed_task_ids = geeutil.monitor_export_tasks(

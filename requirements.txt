@@ -1,0 +1,3 @@
+earthengine-api==1.7.37
+tqdm==4.70.0
+pandas==2.3.3

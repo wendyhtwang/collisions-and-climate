@@ -198,8 +198,14 @@ def main():
             len(completed_years), len(years_to_run),
         )
 
-    tasks = []
-    task_year_by_id = {}
+    # CHANGE: build all export specs first, without submitting, then hand
+    # them to start_exports_to_shared_folder() so every year lands in one
+    # Drive folder instead of racing to create duplicates -- see
+    # gee_extract_utils.py for why (same fix applied to the PRISM script
+    # after the 2020/2021 CONUS run created two "earth_engine_prism_full"
+    # folders).
+    export_specs = []
+    spec_years = []
 
     for year in years_to_run:
         logging.info("Building ERA5 extraction for %d...", year)
@@ -215,15 +221,16 @@ def main():
         )
 
         filename = f"era5_county_daily_{year}_{RUN_TIMESTAMP}"
-        task = geeutil.start_export(
+        export_specs.append(dict(
             collection=annual_results,
             description=filename,
-            drive_folder=DRIVE_FOLDER,
             filename=filename,
             selectors=geeutil.ID_COLS + ["date", "year"] + FINAL_BANDS,
-        )
-        tasks.append(task)
-        task_year_by_id[task.id] = year
+        ))
+        spec_years.append(year)
+
+    tasks = geeutil.start_exports_to_shared_folder(export_specs, drive_folder=DRIVE_FOLDER)
+    task_year_by_id = {task.id: year for task, year in zip(tasks, spec_years)}
 
     logging.info("Monitoring %d export task(s)...", len(tasks))
     failed_task_ids = geeutil.monitor_export_tasks(
