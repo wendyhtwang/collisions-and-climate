@@ -14,11 +14,11 @@ Plain ERA5/DAILY does NOT have snowfall, snow depth, or skin
 temperature -- confirmed against the Earth Engine catalog. ERA5-Land
 has all of the requested variables in one collection, at finer native
 resolution (~11.1km vs ERA5's ~28km), covering 1950-present. Flag to
-Nicole/PI if plain ERA5 (not -Land) was actually intended for a
+Nicole/Eyal if plain ERA5 (not -Land) was actually intended for a
 specific reason (e.g. matching a different published product).
 
 UNIT/BAND NOTES (flagging for the data dictionary -- confirm with
-Charvi/PI rather than assume these choices are final):
+Charvi/Eyal rather than assume these choices are final):
 - temperature_2m, dewpoint_temperature_2m, skin_temperature are natively
   Kelvin. Converted to Celsius here (tmean_c, dewpoint_c, skin_temp_c)
   to match PRISM's Celsius convention, since having one dataset in K and
@@ -45,7 +45,7 @@ logging, resumability) live in gee_extract_utils.py, shared with
 aggregation happens client-side in 04_aggregate_daily_to_monthly.py
 rather than server-side in Earth Engine.
 
-CAUTION: large job (45 export tasks, full CONUS). Do not run against
+Note: this is a large job (45 export tasks, full CONUS). Do not run against
 the full YEARS range without explicit sign-off -- test with 1-2 years
 first.
 

@@ -24,21 +24,21 @@ end target is county-year-month: the Earth Engine console spot-check
 during the small-scale test showed that compositing an ImageCollection
 with .sum()/.mean() before reduceRegions gives numbers off by ~1-2% from
 summing/averaging independently-reduced daily values (root cause not yet
-diagnosed -- see chat history). Until that's resolved, monthly
+diagnosed). Until that's resolved, monthly
 aggregation happens client-side in 04_aggregate_daily_to_monthly.py,
 which is already validated correct, rather than risking the same
 discrepancy silently across 45 years of production data.
 
 Note: this is a large job (45 export tasks, full CONUS, ~3100
 counties x ~365 days x 7 bands per year). Per CLAUDE.md, do not run this
-against the full YEARS range without explicit sign-off -- consider
-testing with a 1-2 year YEARS range first.
+against the full YEARS range without explicit sign-off.
 
 Google Drive folder: earth_engine_prism_full
 After completion, sync/move the CSVs to:
   Kodama: /mnt/data_f/AnimalCollisionsWeatherData/PRISM
   (personal dev repo fallback: dataRAW/PRISM)
 """
+
 
 import logging
 from pathlib import Path
