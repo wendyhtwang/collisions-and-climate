@@ -15,6 +15,17 @@ boundary (AN91 uses a newer 1991-2020 baseline normals period instead of
 1981-2010) -- not provisional-vs-final, but still worth flagging so a
 boundary month isn't silently averaged across two vintages without anyone
 noticing.
+
+PROPOSED CHANGE (this file, not yet copied into 04_aggregate_daily_to_monthly.py):
+load_daily_extract() no longer hard-errors on every geoid/date duplicate.
+See resolve_duplicate_rows()'s docstring below for the full reasoning --
+short version: a reproducible, confirmed-byte-identical duplicate (18 WI
+counties, both the 2020 and 2021 full-CONUS exports; root cause
+investigated across several diagnostic scripts on 2026-08-05 but never
+conclusively pinned down) is now dropped automatically and logged,
+instead of blocking the whole run. Any duplicate pair whose values
+actually DISAGREE still hard-fails, same as before -- that's a different,
+more dangerous case this change does not paper over.
 """
 
 import calendar
@@ -36,7 +47,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # that's where the full 46-file run was generated; dataRAW/PRISM is the
 # personal dev repo fallback (e.g. a partial local copy for testing).
 INPUT_DIR_CANDIDATES = [
-    "/mnt/data_f/AnimalCollisionsWeatherData/PRISM/extracted/county_daily_year",  # Kodama server
+    "/mnt/data_f/AnimalCollisionsWeatherData/PRISM",  # Kodama server
     REPO_ROOT / "dataRAW" / "PRISM",  # personal dev repo fallback
 ]
 
@@ -59,7 +70,7 @@ FLAGGED_INCOMPLETE_FILENAME = "prism_county_month_incomplete_flagged.csv"
 # Column names produced by 02_extract_prism_county.py.
 ID_COLS = ["geoid", "state_fips", "county_fips", "county_name"]
 
-# Aggregation for each PRISM band: 
+# Aggregation for each PRISM band:
 # precipitation is a monthly total,
 # everything else is a monthly mean.
 SUM_VARS = ["ppt"]
@@ -147,17 +158,50 @@ def check_for_year_conflicts(paths: list[Path]) -> None:
 
 
 # ---------------------------------------------------------------------
-# Load + aggregate (one year/file at a time, 
+# Load + aggregate (one year/file at a time,
 # without holding all 46 years of daily rows (~9GB total) in memory (a single DataFrame) at once.
 # ---------------------------------------------------------------------
 
 def resolve_duplicate_rows(daily: pd.DataFrame, duplicate_mask: pd.Series, path: Path) -> pd.DataFrame:
-    """Handle geoid/date rows that appear more than once in a single file, w/o hard-erroring."""
+    """
+    Handle geoid/date rows that appear more than once in a single file.
+
+    CHANGE: this used to be a hard error on ANY geoid/date duplicate,
+    forcing a manual look before aggregating could proceed -- a
+    reasonable default for a case nobody had characterized yet. Since
+    then, a reproducible instance was investigated in detail (18
+    Wisconsin counties, present identically in both the 2020 and 2021
+    full-CONUS exports; see the 02c-02h diagnostic scripts and the
+    2026-08-05 team discussion): every duplicate row in that case is
+    byte-for-byte identical to its sibling -- same
+    ppt/tmean/tmin/tmax/tdmean/vpdmin/vpdmax/dataset_type values, not
+    just the same geoid+date key. The root cause was never conclusively
+    pinned down (ruled out: duplicate TIGER county features, tileScale
+    artifacts, multi-part county geometries; gee_extract_utils.
+    get_counties() itself gave contradictory duplicate counts across two
+    different Earth Engine query shapes -- stable/repeatable within each
+    shape, but disagreeing with each other -- which looks like a
+    platform-level quirk rather than something fixable in this repo).
+
+    Given that a byte-identical duplicate is unambiguous to resolve
+    (keeping either copy is correct -- there's no question of which
+    value is "right"), it's safe to drop these automatically here rather
+    than block the entire aggregation run on an upstream mystery that
+    may never get a clean answer -- AS LONG AS every dropped case is
+    verified identical first, and logged rather than silently discarded.
+
+    Any duplicate geoid/date pair whose rows are NOT byte-identical (the
+    same key with genuinely different values in some other column) still
+    hard-fails, exactly as before. That's a different, more dangerous
+    failure mode -- silently picking one of two disagreeing values would
+    be a real correctness risk, not a cosmetic cleanup -- and this change
+    deliberately does not touch that path.
+    """
     dup_rows = daily[duplicate_mask]
- 
+
     # Rows that share a geoid/date key but are NOT full-row duplicates
-    # (some other column disagrees) -- 
-    # this is the dangerous case that still needs a human eye, not an automatic drop.
+    # (some other column disagrees) -- the dangerous case that still
+    # needs a human, not an automatic drop.
     conflicting_rows = dup_rows[~dup_rows.duplicated(keep=False)]
     if not conflicting_rows.empty:
         conflicting_pairs = conflicting_rows[["geoid", "date"]].drop_duplicates()
@@ -168,7 +212,7 @@ def resolve_duplicate_rows(daily: pd.DataFrame, duplicate_mask: pd.Series, path:
             "the known byte-identical-duplicate case and needs manual "
             f"review before aggregating:\n{conflicting_pairs.to_string(index=False)}"
         )
- 
+
     # Everything remaining is a confirmed byte-identical duplicate --
     # safe to collapse to one row per geoid/date.
     n_pairs_affected = dup_rows[["geoid", "date"]].drop_duplicates().shape[0]
@@ -179,9 +223,9 @@ def resolve_duplicate_rows(daily: pd.DataFrame, duplicate_mask: pd.Series, path:
         f"across {n_pairs_affected} geoid/date combination(s) -- confirmed "
         f"byte-identical, dropped automatically. Affected geoid(s): {affected_geoids}"
     )
- 
+
     return daily.drop_duplicates(subset=["geoid", "date"], keep="first")
- 
+
 
 def load_daily_extract(path: Path) -> pd.DataFrame:
     """Read one daily extraction CSV (one calendar year)."""
@@ -194,27 +238,27 @@ def load_daily_extract(path: Path) -> pd.DataFrame:
         parse_dates=["date"],
         dtype={"geoid": str, "state_fips": str, "county_fips": str},
     )
- 
+
     duplicate_mask = daily.duplicated(subset=["geoid", "date"], keep=False)
     if duplicate_mask.any():
         daily = resolve_duplicate_rows(daily, duplicate_mask, path)
- 
+
     return daily
- 
- 
+
+
 def aggregate_file_to_month(daily: pd.DataFrame) -> pd.DataFrame:
     """Collapse one file's daily county rows to county-year-month."""
     daily = daily.copy()
     daily["month"] = daily["date"].dt.month
- 
+
     group_cols = ID_COLS + ["year", "month"]
- 
+
     agg_kwargs = {"n_days": ("date", "count")}
     agg_kwargs.update({f"{v}_total": (v, "sum") for v in SUM_VARS})
     agg_kwargs.update({f"{v}_mean": (v, "mean") for v in MEAN_VARS})
- 
+
     monthly = daily.groupby(group_cols, as_index=False).agg(**agg_kwargs)
- 
+
     # Flag months that mix PRISM vintages (e.g. Dec 2020, which straddles
     # the AN81 -> AN91 switch) so they can be spot-checked/documented
     # rather than silently averaged over without anyone noticing.
@@ -225,21 +269,21 @@ def aggregate_file_to_month(daily: pd.DataFrame) -> pd.DataFrame:
         .rename(columns={"dataset_type": "dataset_types"})
     )
     monthly = monthly.merge(dataset_types, on=group_cols, how="left")
- 
+
     return monthly
- 
- 
+
+
 # ---------------------------------------------------------------------
 # Completeness check: flag any county-month whose day count
 #    doesn't match the calendar days expected for that month/year (leap
 #    years included), to avoid averaging/summing over incomplete-month data.
 # ---------------------------------------------------------------------
- 
+
 def flag_incomplete_months(monthly: pd.DataFrame) -> pd.DataFrame:
     """
     Add an `is_incomplete` column: True if a county-month's day count
     doesn't match the calendar days expected for that year/month.
- 
+
     Catches partial-month data (e.g. a truncated export, missing daily
     rows) that would otherwise be silently summed/averaged as if it were
     a full month.
@@ -251,39 +295,39 @@ def flag_incomplete_months(monthly: pd.DataFrame) -> pd.DataFrame:
     monthly["expected_days"] = expected_days
     monthly["is_incomplete"] = monthly["n_days"] != monthly["expected_days"]
     return monthly
- 
- 
+
+
 # ---------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------
- 
+
 def main() -> None:
     input_dir = resolve_data_root(INPUT_DIR_CANDIDATES)
     print(f"Reading daily extracts from: {input_dir}")
- 
+
     paths = discover_input_files(input_dir, INPUT_PATTERN)
     print(f"Found {len(paths)} daily extract file(s).")
     check_for_year_conflicts(paths)
- 
+
     monthly_frames = []
     total_daily_rows = 0
- 
+
     for i, path in enumerate(paths, start=1):
         print(f"  [{i}/{len(paths)}] {path.name}")
         daily = load_daily_extract(path)
         total_daily_rows += len(daily)
         monthly_frames.append(aggregate_file_to_month(daily))
         del daily  # free the daily rows before loading the next year/file
- 
+
     monthly = pd.concat(monthly_frames, ignore_index=True)
     group_cols = ID_COLS + ["year", "month"]
     monthly = monthly.sort_values(group_cols).reset_index(drop=True)
- 
+
     print(f"\nLoaded {total_daily_rows:,} daily county-day rows across {len(paths)} file(s).")
     print(f"Aggregated to {len(monthly):,} county-month rows.")
- 
+
     monthly = flag_incomplete_months(monthly)
- 
+
     mixed_vintage = monthly[monthly["dataset_types"].str.contains(",")]
     if not mixed_vintage.empty:
         months = mixed_vintage[["year", "month"]].drop_duplicates()
@@ -292,7 +336,7 @@ def main() -> None:
             "vintages (AN81/AN91) -- expected at the 2020/2021 boundary:"
         )
         print(months.to_string(index=False))
- 
+
     incomplete = monthly[monthly["is_incomplete"]]
     if not incomplete.empty:
         print(
@@ -302,18 +346,18 @@ def main() -> None:
         )
     else:
         print("\nNo incomplete county-months found (n_days matches calendar days everywhere).")
- 
+
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
- 
+
     output_path = OUTPUT_DIR / OUTPUT_FILENAME
     monthly.to_csv(output_path, index=False)
     print(f"\nSaved aggregated county-month table to:\n  {output_path}")
- 
+
     if not incomplete.empty:
         flagged_path = OUTPUT_DIR / FLAGGED_INCOMPLETE_FILENAME
         incomplete.to_csv(flagged_path, index=False)
         print(f"Saved incomplete-month rows for review to:\n  {flagged_path}")
- 
- 
+
+
 if __name__ == "__main__":
     main()

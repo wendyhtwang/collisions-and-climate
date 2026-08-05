@@ -7,7 +7,11 @@ Extracts daily county-level mean ERA5-Land weather values for:
 - 1981-01-01 through 2025-12-31 (45 calendar years)
 - Every ERA5 variable Phase 3 asks for: 2m temperature, 2m dewpoint
   temperature, total precipitation, snowfall, snow depth, 10m wind
-  speed, surface pressure, skin temperature
+  speed, surface pressure, skin temperature -- plus daily 2m temperature
+  min/max (tmin_c, tmax_c), added 2026-08-05 after validating alongside
+  the rest in 03a_test_era5_extract.py. Phase 3's ERA5 list doesn't call
+  for daily min/max the way PRISM's spec does (tmin, tmax); confirm with
+  the team whether PRISM already covering tmin/tmax makes this redundant.
 
 DATASET CHOICE: ECMWF/ERA5_LAND/DAILY_AGGR (not ECMWF/ERA5/DAILY).
 Plain ERA5/DAILY does NOT have snowfall, snow depth, or skin
@@ -18,26 +22,34 @@ Nicole/Eyal if plain ERA5 (not -Land) was actually intended for a
 specific reason (e.g. matching a different published product).
 
 UNIT/BAND NOTES (flagging for the data dictionary -- confirm with
-Charvi/Eyal rather than assume these choices are final):
-- temperature_2m, dewpoint_temperature_2m, skin_temperature are natively
-  Kelvin. Converted to Celsius here (tmean_c, dewpoint_c, skin_temp_c)
-  to match PRISM's Celsius convention, since having one dataset in K and
-  the other in C invites mistakes downstream. This IS a light
-  processing step happening inside "extraction" rather than a separate
-  harmonization stage -- flagging in case the project's raw/build
-  separation wants this deferred instead.
+Eyal rather than assume these choices are final):
+- temperature_2m, temperature_2m_min, temperature_2m_max,
+  dewpoint_temperature_2m, skin_temperature are natively Kelvin.
+  Converted to Celsius here (tmean_c, tmin_c, tmax_c, dewpoint_c,
+  skin_temp_c) to match PRISM's Celsius convention, since having one
+  dataset in K and the other in C invites mistakes downstream. This IS
+  a light processing step happening inside "extraction" rather than a
+  separate harmonization stage -- flagging in case the project's
+  raw/build separation wants this deferred instead. Note this is a new
+  pattern for this project, not a continuation of one:
+  02_extract_prism_county.py does zero unit conversion, because PRISM's
+  native units already matched the targets.
 - wind_speed_10m is computed as sqrt(u^2 + v^2) from
   u_component_of_wind_10m / v_component_of_wind_10m (m/s )-- ERA5-Land
   has no single "wind speed" band, only vector components.
-- total_precipitation_sum and snowfall_sum are left in their native
-  units (meters of water equivalent), NOT converted to mm to match
-  PRISM's ppt (mm). Deliberately not harmonizing this one since it's a
-  more consequential unit choice than temperature -- do that in
-  05_build_derived_weather_vars.py where it can be documented alongside
-  the other derived variables, rather than silently inside extraction.
+- total_precipitation_sum and snowfall_sum are natively meters of water
+  equivalent. CHANGE (2026-08-05): now converted to mm here
+  (precip_mm, snowfall_mm) to match PRISM's ppt (mm) convention, rather
+  than left in meters and deferred to 05_build_derived_weather_vars.py
+  as originally planned -- m->mm is the same kind of linear conversion
+  as the temperature one, so there's no clear reason to treat it
+  differently. Validated first in 03a_test_era5_extract.py before being
+  carried in here.
 - surface_pressure is left in Pa (native units).
 - No ERA5-Land equivalent of PRISM's 'dataset_type' vintage flag exists
   in the catalog documentation reviewed -- omitted from extra_property_names.
+- All of the above are still flagged for Eyal's sign-off
+  before being treated as final in the shared data dictionary.
 
 The mechanics (auth, county reduction, export, progress monitoring,
 logging, resumability) live in gee_extract_utils.py, shared with
@@ -73,6 +85,8 @@ ERA5_COLLECTION = "ECMWF/ERA5_LAND/DAILY_AGGR"
 # Raw bands read from the collection before derived-band preprocessing.
 RAW_BANDS = [
     "temperature_2m",
+    "temperature_2m_min",
+    "temperature_2m_max",
     "dewpoint_temperature_2m",
     "skin_temperature",
     "u_component_of_wind_10m",
@@ -87,13 +101,15 @@ RAW_BANDS = [
 # module docstring for the reasoning behind each choice).
 FINAL_BANDS = [
     "tmean_c",
+    "tmin_c",
+    "tmax_c",
     "dewpoint_c",
     "skin_temp_c",
     "wind_speed_10m",
     "snow_depth",
-    "snowfall_sum",
+    "snowfall_mm",
     "surface_pressure",
-    "total_precipitation_sum",
+    "precip_mm",
 ]
 
 # ERA5-Land's native pixel size is approximately 11.1 km.
@@ -130,13 +146,16 @@ POLL_INTERVAL_SECONDS = 30
 
 def add_derived_bands(image):
     """
-    Convert temperature bands Kelvin -> Celsius and compute wind speed
-    from the u/v components. See module docstring for why these
-    conversions happen here vs. left for a later harmonization step.
+    Convert temperature bands Kelvin -> Celsius, precip/snowfall
+    meters -> mm, and compute wind speed from the u/v components. See
+    module docstring for why these conversions happen here vs. left for
+    a later harmonization step.
     """
     image = ee.Image(image)
 
     tmean_c = image.select("temperature_2m").subtract(273.15).rename("tmean_c")
+    tmin_c = image.select("temperature_2m_min").subtract(273.15).rename("tmin_c")
+    tmax_c = image.select("temperature_2m_max").subtract(273.15).rename("tmax_c")
     dewpoint_c = (
         image.select("dewpoint_temperature_2m").subtract(273.15).rename("dewpoint_c")
     )
@@ -150,9 +169,19 @@ def add_derived_bands(image):
         .rename("wind_speed_10m")
     )
 
+    precip_mm = (
+        image.select("total_precipitation_sum").multiply(1000).rename("precip_mm")
+    )
+    snowfall_mm = image.select("snowfall_sum").multiply(1000).rename("snowfall_mm")
+
     # addBands() on `image` preserves image-level metadata (including
     # system:time_start), so no explicit copyProperties() is needed.
-    return image.addBands([tmean_c, dewpoint_c, skin_temp_c, wind_speed_10m])
+    return image.addBands(
+        [
+            tmean_c, tmin_c, tmax_c, dewpoint_c, skin_temp_c,
+            wind_speed_10m, precip_mm, snowfall_mm,
+        ]
+    )
 
 
 def build_year_image_collection(year):
