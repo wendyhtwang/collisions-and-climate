@@ -114,7 +114,7 @@ DRIVE_FOLDER = "earth_engine_era5_test"
 RUN_TIMESTAMP = geeutil.run_timestamp()
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-STATE_DIR = REPO_ROOT / "dataBUILD" / "ERA5" / "test"
+STATE_DIR = REPO_ROOT / "dataCSV" / "ERA5" / "test"
 LOG_PATH = STATE_DIR / "logs" / f"era5_test_extract_{RUN_TIMESTAMP}.log"
 
 MOVE_DESTINATION_CANDIDATES = [

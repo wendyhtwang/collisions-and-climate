@@ -79,7 +79,7 @@ RUN_TIMESTAMP = geeutil.run_timestamp()
 # script's own location rather than a hardcoded root, so it doesn't need
 # to change when the script moves.
 REPO_ROOT = Path(__file__).resolve().parents[1]
-STATE_DIR = REPO_ROOT / "dataBUILD" / "PRISM"
+STATE_DIR = REPO_ROOT / "dataCSV" / "PRISM"
 MANIFEST_PATH = STATE_DIR / "prism_full_completed_years.json"
 LOG_PATH = STATE_DIR / "logs" / f"prism_full_extract_{RUN_TIMESTAMP}.log"
 

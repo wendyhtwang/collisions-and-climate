@@ -25,4 +25,4 @@ references/earthengine-api/
 # Raw & built data -- lives on Kodama's F: drive / gets regenerated from
 # raw + code, not source-controlled here.
 dataRAW/
-dataBUILD/
+dataCSV/

@@ -63,7 +63,7 @@ INPUT_PATTERN = "prism_county_daily_*.csv"
 # unexpected years found among the input files -- not to filter them.
 EXPECTED_YEARS = set(range(1981, 2026))
 
-OUTPUT_DIR = REPO_ROOT / "dataBUILD" / "PRISM"
+OUTPUT_DIR = REPO_ROOT / "dataCSV" / "PRISM"
 OUTPUT_FILENAME = "prism_county_month.csv"
 FLAGGED_INCOMPLETE_FILENAME = "prism_county_month_incomplete_flagged.csv"
 

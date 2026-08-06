@@ -13,7 +13,7 @@
  * 5. Open the "Console" tab (right-hand panel) to see the print() output.
  *    Click the small triangles to expand Dictionary results.
  * 6. Compare the printed numbers to the matching row in
- *    dataBUILD/PRISM/prism_county_month.csv (for the monthly checks) or
+ *    dataCSV/PRISM/prism_county_month.csv (for the monthly checks) or
  *    the matching row in dataRAW/PRISM/prism_county_daily_*.csv (for the
  *    single-day check). Tiny differences in the last decimal place are
  *    floating-point noise, not a problem -- differences at the first or
