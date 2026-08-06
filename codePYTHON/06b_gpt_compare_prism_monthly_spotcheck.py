@@ -163,7 +163,21 @@ def compare_panels(
     spot: pd.DataFrame,
     production: pd.DataFrame,
 ) -> pd.DataFrame:
-    """Outer-join the two panels and calculate variable-by-variable differences."""
+    """
+    Left-join the small GEE spot-check panel onto production and calculate
+    variable-by-variable differences.
+
+    CHANGE (2026-08-06): was `how="outer"`, which kept every one of
+    production's ~1,678,320 rows in the merged frame (padded with NaN on
+    the GEE side for anything outside the sample) even though only the
+    ~480 sampled county-months are ever meaningful here. `how="left"` with
+    spot as the driving table keeps just the sampled rows -- still surfaces
+    a sampled county-month missing from production via `_merge ==
+    "left_only"` (the case that matters), it just no longer keeps the
+    millions of production-only rows nobody was comparing anyway. Same
+    hash-join mechanics, ~3,500x fewer rows to compute diffs over and
+    write to the comparison CSV.
+    """
     production_cols = KEY_COLS + VALUE_COLS
     spot_cols = KEY_COLS + ["n_days", "dataset_types", "expected_days",
                             "n_days_matches_calendar"] + VALUE_COLS
@@ -171,7 +185,7 @@ def compare_panels(
     merged = spot[spot_cols].merge(
         production[production_cols],
         on=KEY_COLS,
-        how="outer",
+        how="left",
         suffixes=("_gee", "_prod"),
         indicator=True,
     )
@@ -282,30 +296,24 @@ def main() -> None:
 
     matched_mask = comparison["_merge"] == "both"
     gee_only_mask = comparison["_merge"] == "left_only"
-    prod_only_mask = comparison["_merge"] == "right_only"
+    # No "right_only" case anymore -- compare_panels() now left-joins with
+    # spot as the driving table, so production-only rows are never pulled
+    # into `comparison` in the first place. The "how much bigger is
+    # production than the sample" count is still worth printing, but it's
+    # cheap to get directly from the two source frames rather than paying
+    # for an outer join just to produce it.
+    prod_only = len(production) - int(matched_mask.sum())
 
-    # CHANGE (2026-08-06): a "failed" row is either (a) a sampled
-    # county-month that WAS found in production but didn't pass the
-    # value/calendar checks, or (b) a sampled county-month missing from
-    # production entirely (gee_only) -- both are real problems worth
-    # investigating. Production-only rows are NOT failures: production
-    # covers ~3,108 counties x 45 years x 12 months, while this GEE sample
-    # only covers a handful of counties/years, so an outer join always
-    # leaves the vast majority of production rows with no GEE counterpart
-    # to compare against. Originally `failed` was `~row_passes` over the
-    # whole outer-joined frame, which counted every one of those out-of-
-    # sample production rows as "failed" too -- on a real run this reported
-    # 1,677,840 "failures" (exactly len(production) - len(sample)) even
-    # though all 480 sampled rows actually passed, and forced a misleading
-    # SystemExit("discrepancies found") every time the sample is smaller
-    # than production, which is every time.
+    # A "failed" row is either (a) a sampled county-month that WAS found in
+    # production but didn't pass the value/calendar checks, or (b) a
+    # sampled county-month missing from production entirely (gee_only) --
+    # both are real problems worth investigating.
     failed = comparison[(matched_mask & ~comparison["row_passes"]) | gee_only_mask].copy()
     if not failed.empty:
         failed.to_csv(failed_path, index=False)
 
     matched = int(matched_mask.sum())
     gee_only = int(gee_only_mask.sum())
-    prod_only = int(prod_only_mask.sum())
     passed = int((matched_mask & comparison["row_passes"]).sum())
 
     print("\nComparison results")
