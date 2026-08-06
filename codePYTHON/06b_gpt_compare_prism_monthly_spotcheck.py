@@ -280,22 +280,44 @@ def main() -> None:
     comparison.to_csv(comparison_path, index=False)
     summary.to_csv(summary_path, index=False)
 
-    failed = comparison[~comparison["row_passes"]].copy()
+    matched_mask = comparison["_merge"] == "both"
+    gee_only_mask = comparison["_merge"] == "left_only"
+    prod_only_mask = comparison["_merge"] == "right_only"
+
+    # CHANGE (2026-08-06): a "failed" row is either (a) a sampled
+    # county-month that WAS found in production but didn't pass the
+    # value/calendar checks, or (b) a sampled county-month missing from
+    # production entirely (gee_only) -- both are real problems worth
+    # investigating. Production-only rows are NOT failures: production
+    # covers ~3,108 counties x 45 years x 12 months, while this GEE sample
+    # only covers a handful of counties/years, so an outer join always
+    # leaves the vast majority of production rows with no GEE counterpart
+    # to compare against. Originally `failed` was `~row_passes` over the
+    # whole outer-joined frame, which counted every one of those out-of-
+    # sample production rows as "failed" too -- on a real run this reported
+    # 1,677,840 "failures" (exactly len(production) - len(sample)) even
+    # though all 480 sampled rows actually passed, and forced a misleading
+    # SystemExit("discrepancies found") every time the sample is smaller
+    # than production, which is every time.
+    failed = comparison[(matched_mask & ~comparison["row_passes"]) | gee_only_mask].copy()
     if not failed.empty:
         failed.to_csv(failed_path, index=False)
 
-    matched = int((comparison["_merge"] == "both").sum())
-    gee_only = int((comparison["_merge"] == "left_only").sum())
-    prod_only = int((comparison["_merge"] == "right_only").sum())
-    passed = int(comparison["row_passes"].sum())
+    matched = int(matched_mask.sum())
+    gee_only = int(gee_only_mask.sum())
+    prod_only = int(prod_only_mask.sum())
+    passed = int((matched_mask & comparison["row_passes"]).sum())
 
     print("\nComparison results")
     print("------------------")
-    print(f"Matched county-month rows: {matched:,}")
-    print(f"GEE-only rows:             {gee_only:,}")
-    print(f"Production-only rows:      {prod_only:,}")
-    print(f"Rows passing all checks:   {passed:,}")
-    print(f"Rows failing any check:    {len(failed):,}")
+    print(f"Matched county-month rows:              {matched:,}")
+    print(f"GEE-only rows (missing from production): {gee_only:,}")
+    print(
+        f"Production-only rows (outside the sample, expected -- not "
+        f"compared, not a failure): {prod_only:,}"
+    )
+    print(f"Rows passing all checks:                {passed:,}")
+    print(f"Rows failing (mismatched or gee-only):  {len(failed):,}")
 
     print("\nVariable summary")
     print(summary.to_string(index=False))
@@ -306,13 +328,17 @@ def main() -> None:
     if not failed.empty:
         print(f"Failed rows saved to:\n  {failed_path}")
         raise SystemExit(
-            "\nSpot check found discrepancies. Review the failed-row file before "
-            "treating the production panel as verified."
+            "\nSpot check found discrepancies among sampled county-months "
+            "(mismatched values, or a sampled county-month missing from "
+            "production). Review the failed-row file before treating the "
+            "production panel as verified."
         )
 
     print(
         "\nPASS: every sampled county-month matched the independent GEE "
-        "calculation within tolerance, and all day counts matched the calendar."
+        "calculation within tolerance, and all day counts matched the "
+        f"calendar. ({prod_only:,} production rows outside the sample "
+        "were not compared, as expected.)"
     )
 
 
