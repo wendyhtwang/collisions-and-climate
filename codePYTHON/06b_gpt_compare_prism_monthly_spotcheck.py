@@ -7,7 +7,11 @@ Input
 1. Independent GEE export from:
        06_export_prism_monthly_spotcheck.py
    placed in:
-       dataCSV/PRISM/spot_check/monthly_gee/raw/
+       dataCSV/PRISM/
+   (CHANGE 2026-08-06: originally expected under dataCSV/PRISM/spot_check/
+   monthly_gee/raw/, but the synced Drive export actually landed directly in
+   dataCSV/PRISM/ on Kodama alongside prism_county_month.csv -- pointed the
+   glob there instead of moving the file to match the original assumption.)
 
 2. Production panel:
        dataCSV/PRISM/prism_county_month.csv
@@ -39,9 +43,10 @@ import pandas as pd
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 PRODUCTION_PATH = REPO_ROOT / "dataCSV" / "PRISM" / "prism_county_month.csv"
-SPOT_CHECK_RAW_DIR = (
-    REPO_ROOT / "dataCSV" / "PRISM" / "spot_check" / "monthly_gee" / "raw"
-)
+# Points at dataCSV/PRISM/ directly (not a spot_check/monthly_gee/raw/
+# subfolder) -- matches where the synced Drive export actually landed on
+# Kodama, alongside prism_county_month.csv. See module docstring.
+SPOT_CHECK_RAW_DIR = REPO_ROOT / "dataCSV" / "PRISM"
 RESULTS_DIR = (
     REPO_ROOT / "dataCSV" / "PRISM" / "spot_check" / "monthly_gee" / "results"
 )
