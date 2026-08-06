@@ -163,19 +163,37 @@ def build_county_sample(counties):
 
 
 # ---------------------------------------------------------------------
-# Fetch: same per-day reduceRegions call the production pipeline uses
+# Fetch: same per-day reduceRegions call the production pipeline uses,
+# fetched one calendar month at a time (see CHANGE note below).
 # ---------------------------------------------------------------------
 
-def fetch_daily_county_panel(sampled_counties, year):
-    """
-    Return one calendar year's daily county-mean PRISM rows for the
-    sampled counties, as a DataFrame with the same columns
-    02_extract_prism_county.py's exports have (ID_COLS + date + year +
-    dataset_type + BANDS).
-    """
-    start_date = ee.Date.fromYMD(year, 1, 1)
-    end_date = start_date.advance(1, "year")
+def month_date_ranges(year):
+    """Yield (start_date, end_date, label) ee.Date windows for each calendar month in `year`."""
+    for month in range(1, 13):
+        start = ee.Date.fromYMD(year, month, 1)
+        end = start.advance(1, "month")
+        yield start, end, f"{year}-{month:02d}"
 
+
+def fetch_daily_county_chunk(sampled_counties, start_date, end_date):
+    """
+    Return daily county-mean PRISM rows for one date window, as a
+    DataFrame with the same columns 02_extract_prism_county.py's exports
+    have (ID_COLS + date + year + dataset_type + BANDS).
+
+    CHANGE: originally fetched a full calendar year per getInfo() call
+    (~365 chained daily reduceRegions calls). That hit Earth Engine's
+    interactive-compute timeout ("Computation timed out", ~5 min
+    wall-clock) once run against the real sample on Kodama -- chaining
+    365 daily reduceRegions calls behind one synchronous getInfo() is too
+    much for EE's interactive/value:compute endpoint, even though the
+    same per-image reduction is exactly what the async Drive-export path
+    production uses (02_extract_prism_county.py) handles fine at full
+    CONUS scale. Fetching one calendar month at a time (~28-31 images
+    instead of ~365) keeps each request small enough to finish before
+    that timeout; see fetch_daily_county_panel() below for the per-year
+    wrapper that chunks and concatenates these.
+    """
     image_collection = (
         ee.ImageCollection(PRISM_COLLECTION)
         .filterDate(start_date, end_date)
@@ -192,22 +210,28 @@ def fetch_daily_county_panel(sampled_counties, year):
     )
 
     selectors = geeutil.ID_COLS + ["date", "year", "dataset_type"] + BANDS
-    # Single getInfo() call for the whole year -- fine at this sample size
-    # (~14 counties x 365 days =~ 5,100 features). If this errors or hangs
-    # for a larger sample, that's Earth Engine's getInfo() payload/size
-    # limit -- reduce N_RANDOM_COUNTIES/SPOT_CHECK_YEARS, or switch this to
-    # Export.table.toDrive() (see start_export() in gee_extract_utils.py)
-    # and download the CSV instead, same as the production scripts do.
     features = daily_fc.select(selectors).getInfo()["features"]
     rows = [f["properties"] for f in features]
 
     daily = pd.DataFrame(rows)
+    if daily.empty:
+        return daily
+
     daily["date"] = pd.to_datetime(daily["date"])
     daily["year"] = daily["year"].astype(int)
     for col in ("geoid", "state_fips", "county_fips"):
         daily[col] = daily[col].astype(str)
 
     return daily
+
+
+def fetch_daily_county_panel(sampled_counties, year):
+    """Return one calendar year's daily county-mean PRISM rows, fetched one month at a time."""
+    month_frames = [
+        fetch_daily_county_chunk(sampled_counties, start, end)
+        for start, end, _ in month_date_ranges(year)
+    ]
+    return pd.concat(month_frames, ignore_index=True)
 
 
 # ---------------------------------------------------------------------
@@ -318,9 +342,19 @@ def main():
         len(sampled_geoids), len(SPOT_CHECK_YEARS), SPOT_CHECK_YEARS, sampled_geoids,
     )
 
+    # Flat list of (year, start, end) month-chunks across all SPOT_CHECK_YEARS,
+    # so the progress bar reflects the actual unit of work (one getInfo()
+    # call per month, not per year -- see fetch_daily_county_chunk()'s
+    # CHANGE note for why a whole year in one call times out).
+    month_chunks = [
+        (year, start, end)
+        for year in SPOT_CHECK_YEARS
+        for start, end, _label in month_date_ranges(year)
+    ]
+
     daily_frames = []
-    for year in tqdm(SPOT_CHECK_YEARS, desc="Fetching GEE daily panels", unit="year"):
-        daily_frames.append(fetch_daily_county_panel(sampled_counties, year))
+    for _year, start, end in tqdm(month_chunks, desc="Fetching GEE daily panels", unit="month"):
+        daily_frames.append(fetch_daily_county_chunk(sampled_counties, start, end))
 
     daily = pd.concat(daily_frames, ignore_index=True)
     logging.info("Fetched %d daily county-day rows from Earth Engine.", len(daily))
