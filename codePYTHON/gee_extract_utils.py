@@ -201,15 +201,26 @@ def run_timestamp():
     return datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
-def start_export(collection, description, drive_folder, filename, selectors):
+def start_export(collection, description, drive_folder, filename, selectors, priority=None):
     """
     Start a CSV export to Google Drive.
 
     `filename` should already include a run timestamp (see
     `run_timestamp()`) so reruns don't collide with prior exports in
     Drive.
+
+    `priority`: optional task priority (integer 0-9999; higher runs sooner
+    relative to other queued tasks in the same project -- Earth Engine's
+    own default is 100). Leave as None (the default here) to omit it
+    entirely and let every export use Earth Engine's standard 100, as all
+    of this pipeline's other callers do. Per Earth Engine's docs, setting
+    anything other than the default only has an effect on projects
+    registered for paid Earth Engine access -- confirm the priority
+    actually took (Tasks panel, GEE console) if that matters for a given
+    run, since on a free/noncommercial project this may be silently
+    ignored rather than erroring.
     """
-    task = ee.batch.Export.table.toDrive(
+    export_kwargs = dict(
         collection=collection,
         description=description,
         folder=drive_folder,
@@ -217,6 +228,10 @@ def start_export(collection, description, drive_folder, filename, selectors):
         fileFormat="CSV",
         selectors=selectors,
     )
+    if priority is not None:
+        export_kwargs["priority"] = priority
+
+    task = ee.batch.Export.table.toDrive(**export_kwargs)
 
     try:
         task.start()
