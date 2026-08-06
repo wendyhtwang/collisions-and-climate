@@ -121,7 +121,16 @@ STATE_FIPS = geeutil.CONUS_STATE_FIPS
 
 # Same 1981-2025 period as the PRISM extraction (ERA5-Land itself goes
 # back to 1950, but we only need 1981 on to match PRISM's start).
-YEARS = list(range(1981, 2026))
+# TEMPORARY (2026-08-06): trimmed to 2010-2025 -- 1981-2009 already
+# completed and confirmed via checkmarks in the GEE Tasks panel, but the
+# manifest at MANIFEST_PATH was never written (the original run's
+# terminal was closed before all 45 tasks finished, and the manifest is
+# only written after monitor_export_tasks() sees every task reach a
+# terminal state -- see that function's docstring). Cancel the 16
+# pending 2010-2025 tasks in the Tasks panel BEFORE rerunning this
+# script, so this doesn't submit duplicates alongside them. REVERT to
+# YEARS = list(range(1981, 2026)) once this run completes.
+YEARS = list(range(2010, 2026))
 
 DRIVE_FOLDER = "earth_engine_era5_full"
 

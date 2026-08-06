@@ -9,13 +9,36 @@ Does NO Earth Engine calls -- pure local pandas, same as
 completed AND the resulting CSVs have been synced from Drive into
 RAW_DAILY_DIR (see 06's "Next steps" log message for the exact path).
 
-METHOD: aggregates via 04_aggregate_daily_to_monthly.py's own
-aggregate_file_to_month() and resolve_duplicate_rows() (imported by file
-path, since 04's filename starts with a digit) -- not a reimplementation
--- so this spot check uses the exact same monthly-aggregation and
-duplicate-row handling as production. Any divergence found below
-therefore reflects a real GEE-vs-pipeline difference, not a second,
-possibly-inconsistent reimplementation of the same math.
+METHOD -- CHANGE (2026-08-06): the monthly aggregation below (sum ppt,
+mean everything else, grouped by county-year-month) is a FROM-SCRATCH
+reimplementation, deliberately NOT calling 04_aggregate_daily_to_monthly.py's
+aggregate_file_to_month(). Originally it did call that function directly,
+on the theory that reusing production's exact logic would rule out a
+second, possibly-divergent reimplementation. That reasoning had a real
+gap: if aggregate_file_to_month() itself has a bug (wrong sum/mean split,
+wrong month/groupby logic, mishandled duplicates interacting badly with
+the groupby, etc.), calling it here would reproduce that same bug in the
+spot-check too -- the comparison would report "no discrepancy" even
+though the underlying logic is wrong. Testing a function against a
+second call to itself only proves the file currently on disk matches
+what the code produces RIGHT NOW; it proves nothing about whether that
+code is CORRECT. (verify_prism_gee_console.js's original manual
+county-month checks avoided this from the start -- they compute the
+monthly sum/mean via GEE's own ee.Reducer.sum()/.mean() in JavaScript,
+not by calling the Python aggregation function -- this file's SUM_VARS/
+MEAN_VARS split and groupby logic are re-derived from the same domain
+reasoning (precipitation is a monthly total; everything else is a
+monthly mean) rather than copied from 04's config, for the same reason.
+
+Duplicate-row handling (resolve_duplicate_rows()) is still imported from
+04_aggregate_daily_to_monthly.py, NOT reimplemented -- that's data
+hygiene (dropping confirmed byte-identical export duplicates), not the
+aggregation math actually being spot-checked, so reusing it doesn't
+reintroduce the "testing code against itself" problem above. The
+production file's location (OUTPUT_DIR/OUTPUT_FILENAME) is also read
+from that module rather than hardcoded here, so this script can't drift
+out of sync with wherever 04 actually writes its output -- again just a
+path, not aggregation logic.
 
 OUTPUT: writes ONLY under dataCSV/PRISM/spot_check/ -- never touches
 dataCSV/PRISM/prism_county_month.csv itself.
@@ -44,6 +67,22 @@ FILENAME_YEAR_RE = re.compile(r"^prism_spotcheck_daily_(\d{4})_")
 
 AGGREGATE_MODULE_PATH = REPO_ROOT / "codePYTHON" / "04_aggregate_daily_to_monthly.py"
 
+# County/state identifier columns -- matches the schema every extraction
+# script in this repo uses (geeutil.ID_COLS). Defined fresh here rather
+# than imported, same independence reasoning as SUM_VARS/MEAN_VARS below
+# (this one's just column names, not math, so the risk is low either way,
+# but keeping this script's aggregation step free of any import from
+# 04_aggregate_daily_to_monthly.py makes the independence easy to audit
+# at a glance).
+ID_COLS = ["geoid", "state_fips", "county_fips", "county_name"]
+
+# Re-derived from domain knowledge (precipitation is a monthly total;
+# temperature/humidity/pressure-type variables are monthly means) -- NOT
+# copied from 04_aggregate_daily_to_monthly.py's SUM_VARS/MEAN_VARS. See
+# module docstring for why that distinction matters here.
+SUM_VARS = ["ppt"]
+MEAN_VARS = ["tmean", "tmin", "tmax", "tdmean", "vpdmin", "vpdmax"]
+
 # Flag a comparison row if any variable's absolute percent difference
 # exceeds this. Differences below this are treated as expected
 # floating-point/rounding noise, per verify_prism_gee_console.js's
@@ -55,15 +94,17 @@ RUN_TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 
 
 # ---------------------------------------------------------------------
-# Reuse 04_aggregate_daily_to_monthly.py's own aggregation + dedup logic
+# Only used for duplicate-row dedup and locating the production file --
+# NOT for the aggregation math itself. See module docstring.
 # ---------------------------------------------------------------------
 
 def load_aggregate_module():
     """
     Import 04_aggregate_daily_to_monthly.py by file path (a plain `import`
     won't work -- its filename starts with a digit, which isn't a legal
-    Python module name). See this script's docstring for why reusing its
-    functions -- rather than reimplementing them here -- matters.
+    Python module name). Used here only for resolve_duplicate_rows() and
+    OUTPUT_DIR/OUTPUT_FILENAME -- the monthly aggregation itself is
+    reimplemented independently below, on purpose.
     """
     spec = importlib.util.spec_from_file_location(
         "aggregate_daily_to_monthly", AGGREGATE_MODULE_PATH
@@ -71,6 +112,33 @@ def load_aggregate_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+# ---------------------------------------------------------------------
+# Independent monthly aggregation
+# ---------------------------------------------------------------------
+
+def aggregate_to_month(daily: pd.DataFrame) -> pd.DataFrame:
+    """
+    Collapse one file's daily county rows to county-year-month: ppt
+    summed, everything else averaged, grouped by county-year-month.
+
+    Written from scratch here rather than calling
+    04_aggregate_daily_to_monthly.py's aggregate_file_to_month() -- see
+    this module's docstring for why that matters for a spot check meant
+    to catch bugs in that function, not just reproduce them.
+    """
+    daily = daily.copy()
+    daily["month"] = daily["date"].dt.month
+
+    group_cols = ID_COLS + ["year", "month"]
+
+    monthly = daily.groupby(group_cols, as_index=False).agg(
+        n_days=("date", "count"),
+        **{f"{v}_total": (v, "sum") for v in SUM_VARS},
+        **{f"{v}_mean": (v, "mean") for v in MEAN_VARS},
+    )
+    return monthly
 
 
 # ---------------------------------------------------------------------
@@ -128,10 +196,10 @@ def load_and_aggregate(aggregate_module):
         if duplicate_mask.any():
             daily = aggregate_module.resolve_duplicate_rows(daily, duplicate_mask, path)
 
-        monthly_frames.append(aggregate_module.aggregate_file_to_month(daily))
+        monthly_frames.append(aggregate_to_month(daily))
 
     monthly = pd.concat(monthly_frames, ignore_index=True)
-    return monthly.sort_values(aggregate_module.ID_COLS + ["year", "month"]).reset_index(drop=True)
+    return monthly.sort_values(ID_COLS + ["year", "month"]).reset_index(drop=True)
 
 
 # ---------------------------------------------------------------------
@@ -155,14 +223,13 @@ def compare_to_production(spot_check_monthly, aggregate_module):
             "04_aggregate_daily_to_monthly.py first."
         )
 
-    id_cols = aggregate_module.ID_COLS
-    dtype_map = {c: str for c in id_cols}
+    dtype_map = {c: str for c in ID_COLS}
     production = pd.read_csv(prod_path, dtype=dtype_map)
 
-    key_cols = id_cols + ["year", "month"]
+    key_cols = ID_COLS + ["year", "month"]
     compare_cols = (
-        [f"{v}_total" for v in aggregate_module.SUM_VARS]
-        + [f"{v}_mean" for v in aggregate_module.MEAN_VARS]
+        [f"{v}_total" for v in SUM_VARS]
+        + [f"{v}_mean" for v in MEAN_VARS]
     )
 
     merged = spot_check_monthly.merge(
@@ -240,7 +307,7 @@ def main():
     if not flagged.empty:
         print("\nFlagged rows:")
         print(
-            flagged[aggregate_module.ID_COLS + ["year", "month", "max_pct_diff"]]
+            flagged[ID_COLS + ["year", "month", "max_pct_diff"]]
             .to_string(index=False)
         )
     else:

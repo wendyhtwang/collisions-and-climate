@@ -108,16 +108,6 @@ MAX_COUNTY_YEAR_COMBINATIONS = 150
 DRIVE_FOLDER = "earth_engine_prism_spotcheck"
 POLL_INTERVAL_SECONDS = 15  # small job -- same as the small-scale 01 test script
 
-# Higher than Earth Engine's default task priority (100) -- the ERA5
-# extraction (03_extract_era5_county.py) has a long queue of tasks
-# already sitting at the default 100, and this spot check is small and
-# meant to be checked quickly, not wait behind that queue. Only has an
-# effect on projects registered for paid Earth Engine access -- if
-# "collisions-and-climate" isn't one, this is silently a no-op and these
-# tasks will queue normally behind the ERA5 ones. See start_export()'s
-# docstring in gee_extract_utils.py.
-TASK_PRIORITY = 500
-
 RUN_TIMESTAMP = geeutil.run_timestamp()
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = REPO_ROOT / "dataCSV" / "PRISM" / "spot_check"
@@ -214,7 +204,6 @@ def main():
             description=filename,
             filename=filename,
             selectors=geeutil.ID_COLS + ["date", "year", "dataset_type"] + BANDS,
-            priority=TASK_PRIORITY,
         ))
 
     # Same shared-folder submission helper 02_extract_prism_county.py uses,
