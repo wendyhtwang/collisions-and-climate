@@ -1,15 +1,14 @@
 """
 Independent PRISM county-month spot check in Google Earth Engine.
 
-Purpose
--------
-Implement Eyal's suggestion directly: have GEE produce a small
-county-year-month panel from PRISM, then compare that panel with the
-production file created by the daily-extraction -> local-aggregation pipeline.
+Have GEE produce a small county-year-month panel from PRISM, 
+then compare that panel with the production file created by the 
+daily-extraction -> local-aggregation pipeline.
 
 This script deliberately DOES NOT import gee_extract_utils.py and DOES NOT
-call any production extraction or aggregation functions. It independently:
+call any production extraction or aggregation functions.
 
+It independently:
 1. selects a small, explicit set of counties;
 2. reduces each PRISM daily image to county spatial means;
 3. aggregates those daily county means to county-month values inside GEE;

@@ -81,20 +81,22 @@ print('Single-day county means (compare to the matching date row in the daily CS
 // 3) Check the FULL MONTH -- compare to 04_aggregate_daily_to_monthly.py
 //    output (ppt_total, tmean_mean, tmin_mean, tmax_mean columns).
 //
-// CHANGE: this now reduces EACH DAY separately (like
-// 01_test_prism_extract.py's extract_image_by_county() does) and
-// aggregates the 31 per-day results in JS, instead of compositing the
-// ImageCollection with .sum()/.mean() and reducing once. That
-// composite-then-reduce shortcut looked mathematically equivalent
-// (summing/averaging and spatial-reduction are both linear, so order
-// "shouldn't" matter) but in practice came out ~1-2% off on every
-// band when tested against real console output -- most likely because
-// ee.ImageCollection.sum()/.mean() don't reliably preserve the exact
-// per-image pixel grid each day's own reduceRegion call used, so the
-// composite gets reduced over a subtly different/resampled lattice.
-// Reducing per-day and aggregating client-side avoids that risk
-// entirely, since it's the same method the Python pipeline itself
-// uses (already confirmed correct by the single-day check above).
+// Reduces EACH DAY separately (like 01_test_prism_extract.py's 
+// extract_image_by_county() does) and aggregates the 31 per-day results in JS, 
+// 
+// instead of compositing the ImageCollection with .sum()/.mean() and reducing once. 
+// That composite-then-reduce shortcut looked mathematically equivalent
+// (summing/averaging and spatial-reduction are both linear, 
+// so order "shouldn't" matter)...
+// 
+// but in practice came out ~1-2% off on every band when tested against GEE console output 
+// - most likely b/c ee.ImageCollection.sum()/.mean() don't reliably preserve 
+// the exact per-image pixel grid each day's own reduceRegion call used, 
+// so the composite gets reduced over a subtly different/resampled lattice.
+
+// Reducing per-day and aggregating client-side avoids that risk entirely, 
+// since it's the same method the Python pipeline itself uses 
+// (already confirmed correct by the single-day check above).
 // ---------------------------------------------------------------------
 var dailyReduced = prismMonth.map(function(img) {
   img = ee.Image(img);

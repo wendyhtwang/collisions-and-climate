@@ -9,6 +9,13 @@ them to one row per county-year-month:
 - ppt: summed over the month (monthly total precipitation)
 - tmean, tmin, tmax, tdmean, vpdmin, vpdmax: averaged over the month
 
+PRISM documentation notes that: 
+"Monthly temperature grids may not match the average of the dailies in that month; 
+all stations are used in the monthlies, 
+but only “PRISM Day” (morning) observers and hourly stations are used in the dailies 
+to maintain day-to-day consistency of the data"
+
+
 Also still flags any month whose daily rows mix PRISM 'dataset_type'
 vintages (AN81 vs AN91). PRISM switches from AN81 to AN91 at the 2020/2021
 boundary (AN91 uses a newer 1991-2020 baseline normals period instead of
