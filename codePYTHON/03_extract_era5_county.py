@@ -130,7 +130,7 @@ STATE_FIPS = geeutil.CONUS_STATE_FIPS
 # pending 2010-2025 tasks in the Tasks panel BEFORE rerunning this
 # script, so this doesn't submit duplicates alongside them. REVERT to
 # YEARS = list(range(1981, 2026)) once this run completes.
-YEARS = list(range(2010, 2026))
+YEARS = list(range(1981, 2026))
 
 DRIVE_FOLDER = "earth_engine_era5_full"
 

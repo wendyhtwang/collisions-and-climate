@@ -8,7 +8,7 @@ PRISM's single-location Data Explorer values.
 Does NO Earth Engine calls, and doesn't import anything from this repo's
 PRISM extraction/aggregation scripts -- this is real station data, not a
 re-derivation of PRISM, so there's no "independence" concern to preserve
-here the way there was for 06_gpt/06b_gpt.
+here the way there was for 06/06b.
 
 INPUT: any number of per-station daily CSVs directly under
 NOAA_STATION_DIR (matching the header row NCEI's API returns, e.g.

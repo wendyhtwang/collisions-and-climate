@@ -84,7 +84,7 @@ GHCND_STATIONS_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-statio
 GHCND_INVENTORY_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-inventory.txt"
 COUNTY_SHP_URL = "https://www2.census.gov/geo/tiger/GENZ2018/shp/cb_2018_us_county_20m.zip"
 
-# Matches 06_gpt_export_prism_monthly_spotcheck.py's SPOT_CHECK_YEARS, so a
+# Matches 06_export_prism_monthly_spotcheck.py's SPOT_CHECK_YEARS, so a
 # county picked here can slot directly into that same sample.
 TARGET_YEARS = [2000, 2010, 2020, 2021, 2025]
 REQUIRED_ELEMENTS = ["PRCP", "TMAX", "TMIN"]  # station must report all of these

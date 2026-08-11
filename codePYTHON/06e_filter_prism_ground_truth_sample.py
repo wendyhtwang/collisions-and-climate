@@ -6,7 +6,7 @@ comparing against aggregated NOAA station data (06d's output) and/or
 PRISM's single-location Data Explorer values.
 
 Does NO Earth Engine calls, no aggregation -- just a row filter, so this
-can't introduce any of the aggregation-logic concerns 06_gpt/06b_gpt were
+can't introduce any of the aggregation-logic concerns 06/06b were
 built to keep independent of. Every column from the production file
 passes through unchanged.
 

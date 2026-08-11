@@ -154,10 +154,24 @@ def check_for_year_conflicts(paths: list[Path]) -> None:
 
 
 # ---------------------------------------------------------------------
-# Load + aggregate (one year/file at a time, 
+# Load + aggregate (one year/file at a time,
 # without holding all 46 years of daily rows (~9GB total) in memory (a single DataFrame) at once.
 # ---------------------------------------------------------------------
 
+# KNOWN CASE -- Wisconsin county duplication (root cause, for the byte-identical
+# duplicates resolve_duplicate_rows() below drops automatically):
+# 18 WI counties (55001, 55003, 55005, 55007, 55023, 55041, 55065, 55067,
+# 55085, 55095, 55113, 55119, 55121, 55123, 55125, 55129, 55135, 55137) had
+# every daily row duplicated, byte-for-byte identical, in both the 2020 and
+# 2021 full-CONUS PRISM exports -- same 18 GEOIDs both years, so not a random
+# export glitch. Confirmed via an actual run on Kodama (2026-08-06): the
+# TIGER/2018/Counties FeatureCollection itself contains two separate features
+# for these GEOIDs (checked directly for 55001/55003), not a downstream
+# reduceRegions/tileScale artifact. Since the extraction reduces per feature,
+# each duplicated GEOID gets the same PRISM value computed and written twice.
+# Net effect: harmless. The values are identical, so dropping to one row per
+# geoid/date (below) loses no information. Not re-investigated further since
+# 04's dedup already handles it as a routine, safety-net case.
 def resolve_duplicate_rows(daily: pd.DataFrame, duplicate_mask: pd.Series, path: Path) -> pd.DataFrame:
     """Handle geoid/date rows that appear more than once in a single file, w/o hard-erroring."""
     dup_rows = daily[duplicate_mask]
