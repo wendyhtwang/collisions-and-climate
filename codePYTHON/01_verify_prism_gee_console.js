@@ -1,34 +1,24 @@
 /**
- * Verify 01_test_prism_extract.py / 04_aggregate_daily_to_monthly.py output
- * by recomputing the same numbers directly in the Earth Engine Code Editor.
+ * Manually recomputes one county's PRISM daily and monthly values
+ * directly in the Earth Engine Code Editor, to check them against
+ * 01_test_prism_extract.py / 05_aggregate_daily_to_monthly.py's CSV
+ * output.
+ *
+ * - Defaults are pre-filled with Marion County, IL (GEOID 17121), Jan
+ *   2020 -- a row already spot-checked from the test run.
+ * - Also worth checking Dec 2020 (same GEOID, MONTH=12): the aggregation
+ *   script flags it as mixing PRISM vintages (AN81/AN91) at the
+ *   2020/2021 boundary.
  *
  * HOW TO USE
- * 1. Go to https://code.earthengine.google.com/ and sign in with the
- *    account tied to the "collisions-and-climate" GEE project.
- * 2. Confirm that project is selected (top toolbar, next to the search
- *    bar -- it should read "collisions-and-climate", matching EE_PROJECT
- *    in the Python script).
- * 3. Paste this whole file into the center Editor pane.
- * 4. Click "Run" (top-right of the Editor pane).
- * 5. Open the "Console" tab (right-hand panel) to see the print() output.
- *    Click the small triangles to expand Dictionary results.
- * 6. Compare the printed numbers to the matching row in
- *    dataCSV/PRISM/prism_county_month.csv (for the monthly checks) or
- *    the matching row in dataRAW/PRISM/prism_county_daily_*.csv (for the
- *    single-day check). Tiny differences in the last decimal place are
- *    floating-point noise, not a problem -- differences at the first or
- *    second decimal place are worth investigating.
- *
- * Defaults below are pre-filled with Marion County, IL (GEOID 17121),
- * matching a row already spot-checked from this test run:
- *   Jan 2020 -> n_days=31, ppt_total=158.92, tmean_mean=1.84,
- *               tmin_mean=-2.13, tmax_mean=5.81, dataset_types=AN81
- * Change GEOID / YEAR / MONTH to check other county-months -- try at
- * least one more county in each state, and definitely check Dec 2020
- * (GEOID 17121, YEAR 2020, MONTH 12), since the aggregation script
- * flagged it as mixing PRISM dataset vintages (AN81 for Dec 1-30, AN91
- * for Dec 31 -- one day earlier than the documented Jan 1, 2021
- * cutover, confirmed by inspecting the raw daily CSV).
+ * 1. Go to https://code.earthengine.google.com/, signed into the
+ *    "collisions-and-climate" project.
+ * 2. Paste this file into the Editor pane and click "Run".
+ * 3. Open the "Console" tab to see the print() output.
+ * 4. Compare to the matching row in dataCSV/PRISM/prism_county_month.csv
+ *    (monthly checks) or dataRAW/PRISM/prism_county_daily_*.csv (daily
+ *    check). Last-decimal-place differences are floating-point noise;
+ *    first/second-decimal differences are worth investigating.
  */
 
 // ---------------------------------------------------------------------
@@ -78,25 +68,12 @@ print('Single-day county means (compare to the matching date row in the daily CS
       dailyMeans);
 
 // ---------------------------------------------------------------------
-// 3) Check the FULL MONTH -- compare to 04_aggregate_daily_to_monthly.py
+// 3) Check the FULL MONTH -- compare to 05_aggregate_daily_to_monthly.py
 //    output (ppt_total, tmean_mean, tmin_mean, tmax_mean columns).
 //
-// Reduces EACH DAY separately (like 01_test_prism_extract.py's 
-// extract_image_by_county() does) and aggregates the 31 per-day results in JS, 
-// 
-// instead of compositing the ImageCollection with .sum()/.mean() and reducing once. 
-// That composite-then-reduce shortcut looked mathematically equivalent
-// (summing/averaging and spatial-reduction are both linear, 
-// so order "shouldn't" matter)...
-// 
-// but in practice came out ~1-2% off on every band when tested against GEE console output 
-// - most likely b/c ee.ImageCollection.sum()/.mean() don't reliably preserve 
-// the exact per-image pixel grid each day's own reduceRegion call used, 
-// so the composite gets reduced over a subtly different/resampled lattice.
-
-// Reducing per-day and aggregating client-side avoids that risk entirely, 
-// since it's the same method the Python pipeline itself uses 
-// (already confirmed correct by the single-day check above).
+// Reduces each day separately and aggregates client-side, matching the
+// Python pipeline's method -- compositing with .sum()/.mean() first and
+// reducing once tested ~1-2% off (see SCRIPT_OVERVIEW.md for why).
 // ---------------------------------------------------------------------
 var dailyReduced = prismMonth.map(function(img) {
   img = ee.Image(img);

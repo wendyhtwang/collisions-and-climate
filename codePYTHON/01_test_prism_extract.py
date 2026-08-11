@@ -1,27 +1,18 @@
 """
-Small-scale PRISM extraction test: IL/IN, 2020-21, county mean
+Small-scale PRISM extraction test (IL/IN, 2020-2021), used to validate the
+extraction method before running it at full CONUS scale.
 
-Extracts daily county-level mean PRISM weather values for:
-- Illinois and Indiana
-- 2020 and 2021
-- a few (of the 7) climate variables
-
-Creates one Google Drive CSV export task per state/year pair
-(2 states x 2 years = 4 files total).
-
-CHANGE: refactored onto gee_extract_utils.py, the shared module now also
-used by the full-scale 02_extract_prism_county.py and
-03_extract_era5_county.py. This file's behavior is unchanged from before
-the refactor (same counties, years, bands, scale, filenames, Drive
-folder) -- it's kept around as the small, fast, already-validated-against-
-the-GEE-console sanity check to rerun whenever gee_extract_utils.py
-changes, before trusting it for a full-scale run.
-
-After completion, move the CSV files to:
-F:\\AnimalCollisionsWeatherData\\PRISM\\test
+- Tests only 4 of PRISM's 7 bands and 2 states/2 years -- same states/years
+  used by the ERA5 test script, so results are directly comparable.
+- Kept in the repo as a fast sanity check to rerun whenever
+  gee_extract_utils.py (the shared extraction module) changes, before
+  trusting a full-scale run.
+- Output has been validated against manual Earth Engine Console
+  calculations -- see 01_verify_prism_gee_console.js.
 """
 
 import logging
+from pathlib import Path
 
 import gee_extract_utils as geeutil
 
@@ -32,6 +23,13 @@ import gee_extract_utils as geeutil
 EE_PROJECT = "collisions-and-climate"
 
 RUN_TIMESTAMP = geeutil.run_timestamp()
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+MOVE_DESTINATION_CANDIDATES = [
+    "/mnt/data_f/AnimalCollisionsWeatherData/PRISM/test",  # Kodama server
+    REPO_ROOT / "dataRAW" / "PRISM" / "test",  # personal dev repo fallback
+]
 
 # Illinois = 17; Indiana = 18
 STATE_FIPS = ["17", "18"]
@@ -91,9 +89,7 @@ def main():
 
     tasks = []
 
-    # Loop over each state (nested outside the year loop) so every
-    # state/year combination is built and exported separately -- 2
-    # states x 2 years = 4 tasks/files.
+    # Nested loop: one export task per state/year combination (2x2 = 4).
     for state_fips in STATE_FIPS:
         state_abbrev = geeutil.CONUS_STATE_ABBREVIATIONS[state_fips]
         state_counties = geeutil.filter_counties_by_state(counties, state_fips)
@@ -124,11 +120,18 @@ def main():
     logging.info("\nMonitoring export progress...")
     geeutil.monitor_export_tasks(tasks, poll_interval_seconds=POLL_INTERVAL_SECONDS)
 
-    logging.info(
-        "\nExports have finished.\nGoogle Drive folder: %s\n"
-        "Move the CSV files to:\nF:\\AnimalCollisionsWeatherData\\PRISM\\test",
-        DRIVE_FOLDER,
-    )
+    try:
+        destination = geeutil.resolve_data_root(MOVE_DESTINATION_CANDIDATES)
+        logging.info(
+            "Exports have finished. Google Drive folder: %s. Once downloaded, "
+            "move the CSVs into: %s", DRIVE_FOLDER, destination,
+        )
+    except FileNotFoundError:
+        logging.warning(
+            "Exports have finished. Google Drive folder: %s. Could not resolve "
+            "a local destination folder from %s -- move the CSVs manually.",
+            DRIVE_FOLDER, MOVE_DESTINATION_CANDIDATES,
+        )
 
 
 if __name__ == "__main__":

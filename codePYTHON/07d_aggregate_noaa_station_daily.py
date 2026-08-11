@@ -1,42 +1,22 @@
 """
-Aggregate NOAA GHCN-Daily station CSVs (pulled from NCEI's Access Data
-Service -- dataset=daily-summaries, see 06c's docstring / the 08.07.26 Fri
-team meeting ground-truth station-check plan) to station-year-month, for
-direct comparison against dataCSV/PRISM/prism_county_month.csv and
-PRISM's single-location Data Explorer values.
+Aggregates downloaded NOAA station daily CSVs to station-year-month, in
+the same style as the production PRISM aggregation, so they can be
+compared to PRISM's county-month values.
 
-Does NO Earth Engine calls, and doesn't import anything from this repo's
-PRISM extraction/aggregation scripts -- this is real station data, not a
-re-derivation of PRISM, so there's no "independence" concern to preserve
-here the way there was for 06/06b.
-
-INPUT: any number of per-station daily CSVs directly under
-NOAA_STATION_DIR (matching the header row NCEI's API returns, e.g.
-STATION, DATE, PRCP, TMAX, TMIN in metric units, per this repo's
-`units=metric` request URLs). Filenames are NOT trusted for station/year/
-month -- those are derived from the STATION/DATE columns themselves, so
-this works regardless of how many months one file covers or how it's
-named. Each file must contain exactly one station (raises otherwise).
-
-AGGREGATION: matches production's convention
-(04_aggregate_daily_to_monthly.py) -- ppt is a monthly total (sum), tmax/
-tmin are monthly means. tmean is derived the same way PRISM itself
-derives it ("Tmean ... calculated as (tmax+tmin)/2", per PRISM's own
-dataset documentation), computed per day from TMAX/TMIN before averaging,
-not averaged from the monthly tmax_mean/tmin_mean after the fact (those
-happen to be equal for a plain mean, but computing it the daily way
-keeps this consistent with how missing days are handled below).
-
-MISSING DATA: a blank daily reading (e.g. a day with no TMIN, which does
-occur -- see USC00123777_2021_12.csv, 2021-12-20) is excluded from that
-variable's sum/mean, NOT treated as zero. Zero-filling a missing PRCP day
-would silently bias ppt_total low. Each variable's missing-day count is
-reported in its own `<var>_n_missing` column rather than silently
-dropped, so a month with lots of missing data is visible before treating
-its aggregate as reliable.
-
-OUTPUT: one row per station-year-month, written to
-NOAA_STATION_DIR/noaa_station_month.csv
+- Derives station/year/month from the DATE column itself rather than
+  trusting filenames, so input files can cover any date range. Each file
+  must contain exactly one station.
+- Matches production's aggregation convention
+  (05_aggregate_daily_to_monthly.py): ppt is a monthly total, temperature
+  variables are monthly means; tmean is computed per day as
+  (tmax+tmin)/2 before averaging, matching PRISM's own documented method.
+- A missing daily reading is excluded from that variable's sum/mean (not
+  treated as zero), and each variable's missing-day count is reported in
+  its own column rather than silently dropped.
+- Flags station-months whose day count doesn't match the calendar, same
+  completeness check as production.
+- No Earth Engine calls, no dependency on this repo's PRISM scripts --
+  this is real station data, not a re-derivation of PRISM.
 """
 
 import calendar
@@ -74,10 +54,8 @@ def load_station_file(path: Path) -> pd.DataFrame:
             f"{len(stations_present)}: {sorted(stations_present)}"
         )
 
-    # Daily mean temp, derived the same way PRISM derives its own tmean --
-    # (TMAX+TMIN)/2 -- computed BEFORE aggregating, so a day missing either
-    # extreme correctly drops out of the month's tmean average too (pandas
-    # arithmetic propagates NaN automatically: TMAX + NaN = NaN).
+    # Daily mean, same method PRISM uses: (TMAX+TMIN)/2, computed before
+    # aggregating (NaN propagates, so a missing extreme drops the day).
     df["TMEAN"] = (df["TMAX"] + df["TMIN"]) / 2
 
     return df
@@ -103,7 +81,7 @@ def aggregate_station_month(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def flag_incomplete_months(monthly: pd.DataFrame) -> pd.DataFrame:
-    """Same completeness check as 04_aggregate_daily_to_monthly.py: n_days vs calendar days."""
+    """Same completeness check as 05_aggregate_daily_to_monthly.py: n_days vs calendar days."""
     monthly = monthly.copy()
     monthly["expected_days"] = monthly.apply(
         lambda row: calendar.monthrange(int(row["year"]), int(row["month"]))[1], axis=1

@@ -1,5 +1,8 @@
 """
-Authentication + connection test
+Authenticates to Earth Engine and confirms the connection works.
+
+- One-time/occasional sanity check, not part of the numbered pipeline.
+- No data-handling decisions -- just an auth + connection test.
 """
 
 

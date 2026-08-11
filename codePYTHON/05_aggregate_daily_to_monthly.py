@@ -1,27 +1,22 @@
 """
-Aggregate daily county-level PRISM extracts to county-year-month.
-No Earth Engine (earthengine-api) required.
-Checks for duplicate geoid/date rows, flagging conflicting-year files, incomplete months, etc.
+Aggregates the daily county-level PRISM CSVs into one county-year-month
+panel (the final PRISM output): ppt summed to a monthly total, all other
+variables averaged.
 
-Reads the daily CSVs produced by 02_extract_prism_county.py (one file per
-calendar year, ~3,109 CONUS counties x ~365 days x 7 bands) and collapses
-them to one row per county-year-month:
-- ppt: summed over the month (monthly total precipitation)
-- tmean, tmin, tmax, tdmean, vpdmin, vpdmax: averaged over the month
-
-PRISM documentation notes that: 
-"Monthly temperature grids may not match the average of the dailies in that month; 
-all stations are used in the monthlies, 
-but only “PRISM Day” (morning) observers and hourly stations are used in the dailies 
-to maintain day-to-day consistency of the data"
-
-
-Also still flags any month whose daily rows mix PRISM 'dataset_type'
-vintages (AN81 vs AN91). PRISM switches from AN81 to AN91 at the 2020/2021
-boundary (AN91 uses a newer 1991-2020 baseline normals period instead of
-1981-2010) -- not provisional-vs-final, but still worth flagging so a
-boundary month isn't silently averaged across two vintages without anyone
-noticing.
+- ppt is summed; tmean, tmin, tmax, tdmean, vpdmin, vpdmax are averaged --
+  matches PRISM's own documented convention (PRISM notes monthly grids
+  aren't a pure average of the dailies, since the monthlies use more
+  stations than the dailies).
+- Flags (doesn't silently average over) any county-month mixing PRISM's
+  AN81/AN91 vintages, which happens at the 2020/2021 boundary.
+- Flags, and writes to a separate file, any county-month whose day count
+  doesn't match the expected calendar days, rather than silently
+  aggregating a partial month.
+- Drops confirmed byte-identical duplicate rows automatically (known case:
+  18 WI counties -- see SCRIPT_OVERVIEW.md); raises an error instead if
+  duplicate rows actually disagree in value, since that needs a human look.
+- Reads one year/file at a time rather than loading all 45 years into
+  memory at once.
 """
 
 import calendar
@@ -108,14 +103,9 @@ def discover_input_files(input_dir: Path, pattern: str) -> list[Path]:
 
 def check_for_year_conflicts(paths: list[Path]) -> None:
     """
-    Raise if more than one input file claims the same year.
-
-    Filenames follow prism_county_daily_<year>_<run_timestamp>.csv (one
-    export task per calendar year). Two files sharing a year most likely
-    means a rerun produced a second CSV for a year already extracted --
-    silently picking one (e.g. "last sorted") risks dropping a valid
-    export or keeping a stale one, so this stops and asks rather than
-    guessing which to use.
+    Raise if more than one input file claims the same year (e.g. a rerun
+    produced a second CSV) -- stops rather than silently guessing which
+    file to use.
     """
     years_to_files: dict[str, list[Path]] = {}
     unparsed = []
@@ -158,27 +148,13 @@ def check_for_year_conflicts(paths: list[Path]) -> None:
 # without holding all 46 years of daily rows (~9GB total) in memory (a single DataFrame) at once.
 # ---------------------------------------------------------------------
 
-# KNOWN CASE -- Wisconsin county duplication (root cause, for the byte-identical
-# duplicates resolve_duplicate_rows() below drops automatically):
-# 18 WI counties (55001, 55003, 55005, 55007, 55023, 55041, 55065, 55067,
-# 55085, 55095, 55113, 55119, 55121, 55123, 55125, 55129, 55135, 55137) had
-# every daily row duplicated, byte-for-byte identical, in both the 2020 and
-# 2021 full-CONUS PRISM exports -- same 18 GEOIDs both years, so not a random
-# export glitch. Confirmed via an actual run on Kodama (2026-08-06): the
-# TIGER/2018/Counties FeatureCollection itself contains two separate features
-# for these GEOIDs (checked directly for 55001/55003), not a downstream
-# reduceRegions/tileScale artifact. Since the extraction reduces per feature,
-# each duplicated GEOID gets the same PRISM value computed and written twice.
-# Net effect: harmless. The values are identical, so dropping to one row per
-# geoid/date (below) loses no information. Not re-investigated further since
-# 04's dedup already handles it as a routine, safety-net case.
+# KNOWN CASE -- 18 WI counties have a source-data duplicate county feature
+# (harmless, byte-identical rows). Full root-cause writeup: SCRIPT_OVERVIEW.md.
 def resolve_duplicate_rows(daily: pd.DataFrame, duplicate_mask: pd.Series, path: Path) -> pd.DataFrame:
     """Handle geoid/date rows that appear more than once in a single file, w/o hard-erroring."""
     dup_rows = daily[duplicate_mask]
  
-    # Rows that share a geoid/date key but are NOT full-row duplicates
-    # (some other column disagrees) -- 
-    # this is the dangerous case that still needs a human eye, not an automatic drop.
+    # Same geoid/date but a different value elsewhere -- needs a human look.
     conflicting_rows = dup_rows[~dup_rows.duplicated(keep=False)]
     if not conflicting_rows.empty:
         conflicting_pairs = conflicting_rows[["geoid", "date"]].drop_duplicates()
@@ -251,20 +227,13 @@ def aggregate_file_to_month(daily: pd.DataFrame) -> pd.DataFrame:
  
  
 # ---------------------------------------------------------------------
-# Completeness check: flag any county-month whose day count
-#    doesn't match the calendar days expected for that month/year (leap
-#    years included), to avoid averaging/summing over incomplete-month data.
+# Completeness check: flag county-months with fewer/more days than the
+# calendar expects (leap years included), so partial data isn't silently
+# aggregated as if it were a full month.
 # ---------------------------------------------------------------------
- 
+
 def flag_incomplete_months(monthly: pd.DataFrame) -> pd.DataFrame:
-    """
-    Add an `is_incomplete` column: True if a county-month's day count
-    doesn't match the calendar days expected for that year/month.
- 
-    Catches partial-month data (e.g. a truncated export, missing daily
-    rows) that would otherwise be silently summed/averaged as if it were
-    a full month.
-    """
+    """Add an `is_incomplete` column: day count vs. expected calendar days."""
     monthly = monthly.copy()
     expected_days = monthly.apply(
         lambda row: calendar.monthrange(int(row["year"]), int(row["month"]))[1], axis=1

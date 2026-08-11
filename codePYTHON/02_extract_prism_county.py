@@ -1,42 +1,18 @@
 """
-Full-scale PRISM extraction: CONUS, 1981-2025, county mean, all 7 bands.
+Full-scale PRISM extraction for all CONUS counties, 1981-2025, all 7
+PRISM variables, at daily resolution.
 
-Extracts daily county-level mean PRISM weather values for:
-- All CONUS counties (48 states + DC; excludes AK, HI, territories)
-- 1981-01-01 through 2025-12-31 (45 calendar years)
-- All 7 PRISM variables Phase 3 asks for: ppt, tmean, tmin, tmax, tdmean,
-  vpdmin, vpdmax
+- Extracts at DAILY resolution even though the end target is monthly:
+  compositing images with .sum()/.mean() before reducing to county means
+  was found to shift results ~1-2% from reducing each day independently.
+  Monthly aggregation instead happens client-side in
+  05_aggregate_daily_to_monthly.py, which is validated correct.
+- One Drive export task per calendar year (~45 tasks). A local JSON
+  manifest tracks completed years so a rerun skips them.
+- Output destination is resolved from a candidate-path list (Kodama path
+  first, personal dev repo fallback second), not hardcoded, so the same
+  script works on either machine.
 
-This is the full-scale generalization of 01_test_prism_extract.py (which
-validated the method against the GEE console for IL/IN, 2020-21). The
-mechanics (auth, county reduction, export, progress monitoring, logging,
-resumability) live in gee_extract_utils.py, shared with
-03_extract_era5_county.py.
-
-One export task per calendar year (~45 tasks total), each a Drive CSV
-named prism_county_daily_<year>_<run_timestamp>.csv. After each run,
-completed years are recorded in a local manifest (see MANIFEST_PATH)
-so a restart -- e.g. after this is moved to run on Kodama -- skips
-years already done instead of re-submitting them.
-
-Deliberately kept at DAILY resolution (like the test), even though the
-end target is county-year-month: the Earth Engine console spot-check
-during the small-scale test showed that compositing an ImageCollection
-with .sum()/.mean() before reduceRegions gives numbers off by ~1-2% from
-summing/averaging independently-reduced daily values (root cause not yet
-diagnosed). Until that's resolved, monthly
-aggregation happens client-side in 04_aggregate_daily_to_monthly.py,
-which is already validated correct, rather than risking the same
-discrepancy silently across 45 years of production data.
-
-Note: this is a large job (45 export tasks, full CONUS, ~3100
-counties x ~365 days x 7 bands per year). Per CLAUDE.md, do not run this
-against the full YEARS range without explicit sign-off.
-
-Google Drive folder: earth_engine_prism_full
-After completion, sync/move the CSVs to:
-  Kodama: /mnt/data_f/AnimalCollisionsWeatherData/PRISM
-  (personal dev repo fallback: dataRAW/PRISM)
 """
 
 
@@ -144,12 +120,8 @@ def main():
             len(completed_years), len(years_to_run),
         )
 
-    # CHANGE: build all export specs first, without submitting, then hand
-    # them to start_exports_to_shared_folder() so the first task's Drive
-    # folder is confirmed to exist before the rest are submitted -- see
-    # that function's docstring for why submitting them all back-to-back
-    # (the old behavior) risks creating duplicate same-named Drive
-    # folders instead of reusing one.
+    # Build all export specs before submitting -- see
+    # start_exports_to_shared_folder() in gee_extract_utils.py for why.
     export_specs = []
     spec_years = []
 

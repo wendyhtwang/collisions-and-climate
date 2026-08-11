@@ -1,70 +1,23 @@
 """
-Full-scale ERA5 extraction: CONUS, 1981-2025, county mean.
+Full-scale ERA5-Land extraction for all CONUS counties, 1981-2025 --
+mirrors 02_extract_prism_county.py's structure for the parallel weather
+dataset.
 
-Extracts daily county-level mean ERA5-Land weather values for:
-- All CONUS counties (48 states + DC; excludes AK, HI, territories) --
-  same county set as 02_extract_prism_county.py
-- 1981-01-01 through 2025-12-31 (45 calendar years)
-- Every ERA5 variable Phase 3 asks for: 2m temperature, 2m dewpoint
-  temperature, total precipitation, snowfall, snow depth, 10m wind
-  speed, surface pressure, skin temperature -- plus daily 2m temperature
-  min/max (tmin_c, tmax_c), added 2026-08-05 after validating alongside
-  the rest in 03a_test_era5_extract.py. Phase 3's ERA5 list doesn't call
-  for daily min/max the way PRISM's spec does (tmin, tmax); confirm with
-  the team whether PRISM already covering tmin/tmax makes this redundant.
-
-DATASET CHOICE: ECMWF/ERA5_LAND/DAILY_AGGR (not ECMWF/ERA5/DAILY).
-Plain ERA5/DAILY does NOT have snowfall, snow depth, or skin
-temperature -- confirmed against the Earth Engine catalog. ERA5-Land
-has all of the requested variables in one collection, at finer native
-resolution (~11.1km vs ERA5's ~28km), covering 1950-present. Flag to
-Nicole/Eyal if plain ERA5 (not -Land) was actually intended for a
-specific reason (e.g. matching a different published product).
-
-UNIT/BAND NOTES (flagging for the data dictionary -- confirm with
-Eyal rather than assume these choices are final):
-- temperature_2m, temperature_2m_min, temperature_2m_max,
-  dewpoint_temperature_2m, skin_temperature are natively Kelvin.
-  Converted to Celsius here (tmean_c, tmin_c, tmax_c, dewpoint_c,
-  skin_temp_c) to match PRISM's Celsius convention, since having one
-  dataset in K and the other in C invites mistakes downstream. This IS
-  a light processing step happening inside "extraction" rather than a
-  separate harmonization stage -- flagging in case the project's
-  raw/build separation wants this deferred instead. Note this is a new
-  pattern for this project, not a continuation of one:
-  02_extract_prism_county.py does zero unit conversion, because PRISM's
-  native units already matched the targets.
-- wind_speed_10m is computed as sqrt(u^2 + v^2) from
-  u_component_of_wind_10m / v_component_of_wind_10m (m/s )-- ERA5-Land
-  has no single "wind speed" band, only vector components.
-- total_precipitation_sum and snowfall_sum are natively meters of water
-  equivalent. CHANGE (2026-08-05): now converted to mm here
-  (precip_mm, snowfall_mm) to match PRISM's ppt (mm) convention, rather
-  than left in meters and deferred to 05_build_derived_weather_vars.py
-  as originally planned -- m->mm is the same kind of linear conversion
-  as the temperature one, so there's no clear reason to treat it
-  differently. Validated first in 03a_test_era5_extract.py before being
-  carried in here.
-- surface_pressure is left in Pa (native units).
-- No ERA5-Land equivalent of PRISM's 'dataset_type' vintage flag exists
-  in the catalog documentation reviewed -- omitted from extra_property_names.
-- All of the above are still flagged for Eyal's sign-off
-  before being treated as final in the shared data dictionary.
-
-The mechanics (auth, county reduction, export, progress monitoring,
-logging, resumability) live in gee_extract_utils.py, shared with
-02_extract_prism_county.py -- see that file's header for why monthly
-aggregation happens client-side in 04_aggregate_daily_to_monthly.py
-rather than server-side in Earth Engine.
-
-Note: this is a large job (45 export tasks, full CONUS). Do not run against
-the full YEARS range without explicit sign-off -- test with 1-2 years
-first.
-
-Google Drive folder: earth_engine_era5_full
-After completion, sync/move the CSVs to:
-  Kodama: /mnt/data_f/AnimalCollisionsWeatherData/ERA5
-  (personal dev repo fallback: dataRAW/ERA5)
+- Uses `ECMWF/ERA5_LAND/DAILY_AGGR`, not plain `ERA5/DAILY`: only the
+  -Land version has snowfall, snow depth, and skin temperature bands, at
+  finer resolution (~11.1km vs ~28km).
+- Converts temperature bands Kelvin->Celsius and precipitation/snowfall
+  meters->mm **inline during extraction**, to match PRISM's Celsius/mm
+  conventions. Wind speed is computed from u/v components since
+  ERA5-Land has no direct wind-speed band. `surface_pressure` is left in
+  native Pa. 
+- Adds tmin_c/tmax_c (daily extremes), which weren't in the original ERA5
+  variable list, after validating them in the small-scale test -- worth
+  confirming with the team whether this duplicates PRISM's own tmin/tmax.
+- Shares gee_extract_utils.py's resumability-manifest and shared-Drive-
+  folder mechanics with the PRISM script.
+- Large job -- do not run against the full YEARS range without explicit
+  sign-off; test with 1-2 years first.
 """
 
 import logging
@@ -121,15 +74,6 @@ STATE_FIPS = geeutil.CONUS_STATE_FIPS
 
 # Same 1981-2025 period as the PRISM extraction (ERA5-Land itself goes
 # back to 1950, but we only need 1981 on to match PRISM's start).
-# TEMPORARY (2026-08-06): trimmed to 2010-2025 -- 1981-2009 already
-# completed and confirmed via checkmarks in the GEE Tasks panel, but the
-# manifest at MANIFEST_PATH was never written (the original run's
-# terminal was closed before all 45 tasks finished, and the manifest is
-# only written after monitor_export_tasks() sees every task reach a
-# terminal state -- see that function's docstring). Cancel the 16
-# pending 2010-2025 tasks in the Tasks panel BEFORE rerunning this
-# script, so this doesn't submit duplicates alongside them. REVERT to
-# YEARS = list(range(1981, 2026)) once this run completes.
 YEARS = list(range(1981, 2026))
 
 DRIVE_FOLDER = "earth_engine_era5_full"
@@ -236,12 +180,8 @@ def main():
             len(completed_years), len(years_to_run),
         )
 
-    # CHANGE: build all export specs first, without submitting, then hand
-    # them to start_exports_to_shared_folder() so every year lands in one
-    # Drive folder instead of racing to create duplicates -- see
-    # gee_extract_utils.py for why (same fix applied to the PRISM script
-    # after the 2020/2021 CONUS run created two "earth_engine_prism_full"
-    # folders).
+    # Build all export specs before submitting -- see
+    # start_exports_to_shared_folder() in gee_extract_utils.py for why.
     export_specs = []
     spec_years = []
 

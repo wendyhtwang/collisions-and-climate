@@ -1,33 +1,24 @@
 """
-Independent PRISM county-month spot check in Google Earth Engine.
+Independently reproduces a small PRISM county-month panel directly in
+Earth Engine, without using any of this repo's own extraction/aggregation
+code, so it can be compared against the production panel as a check on
+the production pipeline's logic.
 
-Have GEE produce a small county-year-month panel from PRISM, 
-then compare that panel with the production file created by the 
-daily-extraction -> local-aggregation pipeline.
+- Deliberately avoids importing gee_extract_utils.py or reusing any
+  production function, so a bug shared between the two wouldn't be
+  invisible to this check.
+- Reduces each daily image to county means first, then aggregates to
+  monthly inside GEE -- matches production's order of operations, since
+  compositing images before reducing was found to shift results ~1-2%.
+- Samples 8 explicit counties across 5 years (including the 2020/2021
+  PRISM vintage boundary), not the full CONUS panel, to keep the check
+  fast and its scope transparent/repeatable.
+- Errors out if the source county collection contains more than one
+  feature for a requested GEOID (see the known WI duplication case in
+  SCRIPT_OVERVIEW.md), rather than silently picking one.
 
-This script deliberately DOES NOT import gee_extract_utils.py and DOES NOT
-call any production extraction or aggregation functions.
-
-It independently:
-1. selects a small, explicit set of counties;
-2. reduces each PRISM daily image to county spatial means;
-3. aggregates those daily county means to county-month values inside GEE;
-4. exports one small monthly CSV to Google Drive.
-
-The order of operations matches the production estimand:
-
-    daily image -> county spatial mean -> monthly sum/mean
-
-Do not replace that with ImageCollection.sum()/mean() followed by one spatial
-reduction, because that can change the effective raster grid/resampling.
-
-Workflow
---------
-1. Review SPOT_CHECK_GEOIDS and SPOT_CHECK_YEARS below.
-2. Run this script.
-3. When the export finishes, download/sync the resulting CSV into:
-       dataCSV/PRISM/spot_check/monthly_gee/raw/
-4. Run 06b_compare_prism_monthly_spotcheck.py.
+Workflow: run this, sync the exported CSV into dataCSV/PRISM/, then run
+07b_compare_prism_monthly_spotcheck.py.
 """
 
 from __future__ import annotations
@@ -321,7 +312,7 @@ def main() -> None:
     logging.info(
         "Download/sync the CSV from Google Drive folder '%s' into:\n"
         "  dataCSV/PRISM/spot_check/monthly_gee/raw/\n"
-        "Then run 06b_compare_prism_monthly_spotcheck.py.",
+        "Then run 07b_compare_prism_monthly_spotcheck.py.",
         DRIVE_FOLDER,
     )
 

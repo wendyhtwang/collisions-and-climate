@@ -1,16 +1,16 @@
 """
-Filter dataCSV/PRISM/prism_county_month.csv down to exact (geoid, year,
-month) rows picked for the weather-station ground-truth spot check
-(06c's candidate list / the 08.07.26 Fri team meeting plan) -- for
-comparing against aggregated NOAA station data (06d's output) and/or
-PRISM's single-location Data Explorer values.
+Filters the production PRISM county-month panel down to the exact
+county-year-month rows selected for the ground-truth station comparison.
 
-Does NO Earth Engine calls, no aggregation -- just a row filter, so this
-can't introduce any of the aggregation-logic concerns 06/06b were
-built to keep independent of. Every column from the production file
-passes through unchanged.
-
-OUTPUT: dataCSV/PRISM/spot_check/prism_ground_truth_sample.csv
+- Pulls an explicit list of (geoid, year, month) triples rather than a
+  cross-product of separate lists, so different counties can be checked
+  against different periods.
+- Reports (rather than silently drops) any requested row not found in
+  production, distinguishing "GEOID not in production at all" from
+  "GEOID exists, just not for that year/month."
+- Does no aggregation or Earth Engine calls -- a pure row filter, so it
+  can't introduce any of the independent-reimplementation concerns the
+  06/06b scripts were built to avoid.
 """
 
 from pathlib import Path
@@ -56,10 +56,7 @@ def main() -> None:
     row_key = list(zip(production["geoid"], production["year"], production["month"]))
     selected = production[[key in set(TARGET_COUNTY_MONTHS) for key in row_key]].copy()
 
-    # Report any requested (geoid, year, month) with no matching row --
-    # don't silently produce a sample that's missing one you asked for.
-    # Distinguish "GEOID not in production at all" (typo, or not yet
-    # extracted there) from "GEOID exists, just not for that year/month".
+    # Report any requested (geoid, year, month) with no matching row.
     found_triples = set(zip(selected["geoid"], selected["year"], selected["month"]))
     geoids_in_production = set(production["geoid"].unique())
     missing = [t for t in TARGET_COUNTY_MONTHS if t not in found_triples]

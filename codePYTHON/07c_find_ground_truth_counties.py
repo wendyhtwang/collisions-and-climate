@@ -1,70 +1,24 @@
 """
-Identify candidate CONUS counties for Eyal's weather-station ground-truth
-spot check (per the 08.07.26 Fri team meeting): a small county containing
-just one (or very few) weather stations, where PRISM's interpolation
-should lean heavily on that station's own readings rather than spatial
-interpolation from neighboring stations -- so the station's raw monthly
-values can be treated as an approximate ground truth to compare against
-dataCSV/PRISM/prism_county_month.csv.
+Identifies candidate CONUS counties served by only one (or very few) NOAA
+weather stations, as candidates for a ground-truth spot check of PRISM
+against real station data (per the 08.07.26 Fri team meeting).
 
-Does NO Earth Engine calls. Two public, no-auth data sources:
-
-  1. NOAA GHCN-Daily station inventory + per-station/per-element
-     year-coverage inventory. GHCN-Daily is one of PRISM's primary US
-     station-data inputs per PRISM's own documentation, so station
-     density here is a reasonable (if imperfect -- PRISM's exact input
-     station list isn't published) proxy for "how many stations PRISM
-     had available in this county."
-       https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-stations.txt
-       https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-inventory.txt
-     Format spec: https://www.ncei.noaa.gov/pub/data/ghcn/daily/readme.txt
-
-  2. Census cartographic county boundaries -- same county universe as
-     TIGER/2018/Counties (used elsewhere in this repo via Earth Engine),
-     just fetched locally instead, since this script makes no `ee` calls.
-       https://www2.census.gov/geo/tiger/GENZ2018/shp/cb_2018_us_county_20m.zip
-
-METHOD: point-in-polygon join of every US GHCN-Daily station with
-PRCP+TMAX+TMIN coverage across every year in TARGET_YEARS against every
-CONUS county polygon; count qualifying stations per county; keep counties
-with <= MAX_STATIONS_PER_COUNTY, sorted by land area ascending (smaller
-county = the one station covers a larger share of it, per Eyal's
-reasoning about why this should look close to ground truth).
-
-CHANGE (2026-08-09): the first run's smallest-by-area results were
-dominated by independent cities (VA cities like Covington/Buena Vista/
-Galax, plus Baltimore city, St. Louis city, NYC/San Francisco) -- these
-ARE legitimate TIGER county-equivalents (same set 02/04 already process,
-so nothing here was a data error), but they're a poor fit for what Eyal
-actually described: a small, low-interpolation RURAL area. Two concrete
-problems specific to picking a city: (1) several of the qualifying
-stations are literally water-treatment-plant or downtown sites (e.g.
-COVINGTON FLTR PLT, SAN FRANCISCO DWTN, NY CITY CNTRL PARK), which are
-exactly the kind of sites prone to urban-heat-island microclimate effects
-unrepresentative of the county as PRISM would model it; (2) a small city
-carved out of an otherwise well-instrumented metro area (VA Piedmont, NYC,
-SF, Baltimore, STL) can have "1 station within this tiny polygon" while
-still sitting inside a densely-monitored region -- since PRISM's search
-window isn't bounded by county lines, that's actually a weak case for
-"low regional interpolation," the opposite of a genuinely isolated rural
-county with the same land area and station count. Now filters to
-NAMELSAD suffixes used by true county-type units (County/Parish/Borough/
-Census Area/Municipio/Municipality) and excludes anything ending in
-"city" (VA/MD/MO/NV independent cities, consolidated city-counties like
-San Francisco). This is a name-string heuristic, not a guaranteed-correct
-classification (e.g. Carson City, NV is a legitimate independent city
-despite "City" being part of its literal name rather than an LSAD
-suffix) -- NAMELSAD is carried through to the output so candidates can
-still be eyeballed by hand before picking one.
-
-OUTPUT: CSV of candidate counties + their station(s) for manual review --
-does NOT auto-pick a "final" county. Prints the smallest-by-area
-candidates to the console too.
-
-Requires geopandas (`pip install geopandas --break-system-packages`).
-Run this once, locally on Kodama (needs real internet access -- NOT part
-of the numbered extraction/aggregation/spot-check pipeline, and not
-something to run from a network-restricted sandbox).
+- Uses NOAA GHCN-Daily station density as a proxy for how many stations
+  fed PRISM's interpolation for that county (PRISM's exact input station
+  list isn't published, so this is an imperfect but reasonable stand-in).
+- Requires a candidate station to report precipitation, max temp, and min
+  temp for every one of the target years.
+- Ranks candidates by land area ascending -- a smaller county means the
+  one station covers more of it, a better ground-truth case.
+- Excludes independent cities (e.g. Baltimore city, VA cities) even
+  though they're legitimate Census county-equivalents: their stations are
+  often urban/microclimate sites sitting inside well-instrumented metro
+  areas, a poor fit for the isolated-rural-county case wanted. This is a
+  name/code heuristic, not a guaranteed-correct classification, so
+  candidates should still be reviewed by eye.
+- Doesn't auto-pick a final county -- outputs a candidate list for manual
+  review. No Earth Engine calls; needs real internet access, so run this
+  locally (e.g. on Kodama), not from a network-restricted sandbox.
 """
 
 import io
@@ -84,7 +38,7 @@ GHCND_STATIONS_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-statio
 GHCND_INVENTORY_URL = "https://www.ncei.noaa.gov/pub/data/ghcn/daily/ghcnd-inventory.txt"
 COUNTY_SHP_URL = "https://www2.census.gov/geo/tiger/GENZ2018/shp/cb_2018_us_county_20m.zip"
 
-# Matches 06_export_prism_monthly_spotcheck.py's SPOT_CHECK_YEARS, so a
+# Matches 07_export_prism_monthly_spotcheck.py's SPOT_CHECK_YEARS, so a
 # county picked here can slot directly into that same sample.
 TARGET_YEARS = [2000, 2010, 2020, 2021, 2025]
 REQUIRED_ELEMENTS = ["PRCP", "TMAX", "TMIN"]  # station must report all of these
@@ -94,19 +48,12 @@ REQUIRED_ELEMENTS = ["PRCP", "TMAX", "TMIN"]  # station must report all of these
 MAX_STATIONS_PER_COUNTY = 1
 TOP_N_TO_PRINT = 25
 
-# CHANGE (2026-08-09, take 2): the Census cartographic boundary file
-# (cb_*) doesn't have a NAMELSAD column -- that's a TIGER/Line (tl_*)
-# field. cb_* files instead carry a 2-character LSAD code. These are
-# Census's published LSAD codes for genuine county-type units (06=County,
-# 13=Parish, 03/04/05=AK City-and-Borough/Borough/Census Area,
-# 12=Municipality/Municipio) -- deliberately an allowlist of what TO keep
-# (excludes 25=independent city, e.g. VA cities, Baltimore city, St.
-# Louis city, Carson City NV) rather than a blocklist, for the same
-# robustness reason as before. NOT verified against this exact file's
-# vintage yet (couldn't run this script to completion in a
-# network-restricted sandbox) -- load_conus_counties() prints an
-# LSAD -> example-name crosswalk on every run specifically so a wrong
-# code here is visible immediately rather than silently mis-filtering.
+# Census LSAD codes for genuine county-type units: 06=County, 13=Parish,
+# 03/04/05=AK City-and-Borough/Borough/Census Area, 12=Municipality.
+# Allowlist (not a blocklist) so 25=independent city is excluded. Not yet
+# verified against this file's exact vintage -- load_conus_counties()
+# prints an LSAD -> example-name crosswalk each run so a wrong code here
+# is visible immediately.
 VALID_COUNTY_LSAD_CODES = {"06", "13", "03", "04", "05", "12"}
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -170,10 +117,8 @@ def load_conus_counties() -> gpd.GeoDataFrame:
     counties = gpd.read_file(io.BytesIO(resp.content))
     counties = counties[counties["STATEFP"].isin(geeutil.CONUS_STATE_FIPS)].reset_index(drop=True)
 
-    # Print what's actually in this file's schema, and an LSAD ->
-    # example-name crosswalk, before trusting VALID_COUNTY_LSAD_CODES --
-    # verify the codes below actually mean what the docstring says for
-    # THIS downloaded vintage before picking a candidate from the output.
+    # Print schema + LSAD -> example-name crosswalk so a bad code is
+    # visible before trusting VALID_COUNTY_LSAD_CODES for this vintage.
     print(f"  Columns in downloaded county file: {list(counties.columns)}")
     if "LSAD" in counties.columns:
         print("  LSAD -> example county name(s):")

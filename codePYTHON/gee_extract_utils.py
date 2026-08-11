@@ -1,23 +1,27 @@
 """
-Shared Earth Engine extraction utilities for the PRISM and ERA5 pipelines.
+Shared library of Earth Engine extraction mechanics (auth, county geometry, 
+daily reduction, Drive export, progress monitoring, resumability) 
+used by both the PRISM and ERA5 extraction scripts, 
+so that dataset-specific scripts only need to supply their own configuration.
 
-Factored out of 01_test_prism_extract.py (the validated IL/IN small-scale
-test) so the full-scale PRISM (02_extract_prism_county.py) and ERA5
-(03_extract_era5_county.py) scripts share one tested implementation of the
-dataset-agnostic mechanics:
-- Earth Engine auth
-- cross-machine path resolution (personal Mac dev repo vs Kodama Ubuntu
-  server)
-- CONUS county geometry
-- per-day county-mean reduction
-- export to Drive
-- progress-bar monitoring + logging
-- simple manifest-based resumability (skip already-completed periods)
-
-Each dataset-specific script supplies only its own config: collection ID,
-band list, any band preprocessing (unit conversions, derived bands like
-wind speed), and scale/tileScale. Keep this module dataset-agnostic --
-anything PRISM- or ERA5-specific belongs in the calling script, not here.
+- Deliberately dataset-agnostic: PRISM-/ERA5-specific logic (unit
+  conversions, band lists) stays in the calling script, not here.
+- CONUS scope (48 states + DC) is defined once here as the shared source
+  of truth other scripts import.
+- Cross-machine paths are resolved via a candidate-list pattern (try each
+  path, use the first that exists) rather than hardcoding one machine's
+  path.
+- Resumability is a simple local JSON manifest of completed periods --
+  it doesn't check Drive/GCS directly, so the manifest and the actual
+  exported files could in principle drift apart if a Drive file is
+  deleted by hand.
+- When multiple export tasks share one new Drive folder, the first task
+  is submitted alone and the rest wait for it to leave the READY state --
+  works around an observed Earth Engine race that once created two
+  duplicate Drive folders with the same name.
+- Progress monitoring surfaces EECU-seconds (compute time) per task, not
+  just task state, since "RUNNING" alone doesn't show whether a job is
+  stalled or making progress.
 """
 
 import json
@@ -33,10 +37,8 @@ from tqdm import tqdm
 # Geography
 # ---------------------------------------------------------------------
 
-# All CONUS state FIPS codes + DC (48 states + DC = 49 units). Excludes
-# AK (02), HI (15), and territories (60, 66, 69, 72, 78) per the
-# project's "contiguous United States" scope -- confirm with the PI if
-# a different scope is ever needed.
+# All contiguous US (CONUS) state FIPS codes + DC (48 states + DC = 49 units); 
+# excludes AK (02), HI (15), and territories (60, 66, 69, 72, 78)
 CONUS_STATE_ABBREVIATIONS = {
     "01": "AL", "04": "AZ", "05": "AR", "06": "CA", "08": "CO", "09": "CT",
     "10": "DE", "11": "DC", "12": "FL", "13": "GA", "16": "ID", "17": "IL",
@@ -53,7 +55,7 @@ CONUS_STATE_FIPS = sorted(CONUS_STATE_ABBREVIATIONS)
 COUNTY_COLLECTION = "TIGER/2018/Counties"
 
 # Identifier columns every extraction shares -- keep these column names in
-# sync with the "ID_COLS" convention used in 04_aggregate_daily_to_monthly.py.
+# sync with the "ID_COLS" convention used in 05_aggregate_daily_to_monthly.py.
 ID_COLS = ["geoid", "state_fips", "county_fips", "county_name"]
 
 
@@ -84,14 +86,10 @@ def filter_counties_by_state(counties, state_fips):
 
 def resolve_data_root(candidates):
     """
-    Return the first existing directory from `candidates`, in order.
-
-    Mirrors the project's Stata style guide pattern of checking multiple
-    candidate roots (C:/Dropbox, D:/Dropbox, /mnt/data_d/Dropbox) so the
-    same script's informational messages make sense whether it's run
-    from the personal dev repo on a Mac or from Kodama. Raises rather
-    than silently defaulting to one, since guessing wrong here means
-    telling the user to move files to the wrong place.
+    Return the first existing directory from `candidates`, in order
+    (mirrors the project's Stata style guide's multi-root path pattern).
+    Raises rather than silently defaulting, since guessing wrong here
+    means telling the user to move files to the wrong place.
     """
     for candidate in candidates:
         path = Path(candidate)
@@ -238,44 +236,22 @@ def start_exports_to_shared_folder(
     Start multiple Drive CSV exports that should all land in ONE shared
     Drive folder, rather than each creating its own.
 
-    CHANGE: added after the 2020/2021 CONUS PRISM validation run created
-    two separate Drive folders both named "earth_engine_prism_full"
-    instead of reusing one, even though both years' tasks were started
-    with the exact same `drive_folder` string. Root cause (confirmed via
-    the installed earthengine-api's Export.table.toDrive docstring, not
-    guessed): the `folder` argument is described as "the name of a
-    UNIQUE folder in your Drive account" -- it is a name to look up (or
-    create if missing), not a stable folder ID. Google does not document
-    the exact timing of that server-side lookup-or-create step, but
-    Drive itself permits multiple folders with identical names. If two
-    export tasks targeting a not-yet-existing folder name are submitted
-    back-to-back (as a tight per-year loop does), it's plausible each
-    one's backend resolves "does this folder exist?" to "no" before
-    either has actually finished creating it, so both create their own
-    copy. This matches what was observed: two tasks, submitted ~0.3s
-    apart, both transitioning READY -> RUNNING within milliseconds of
-    each other.
+    Works around an observed Earth Engine race condition: submitting many
+    export tasks back-to-back with the same new (not-yet-existing)
+    `drive_folder` name can make each task's backend independently decide
+    the folder doesn't exist yet and create its own copy, producing
+    duplicate same-named Drive folders (seen during the 2020/2021 CONUS
+    PRISM run). Mitigation here: submit the first export alone and wait
+    for it to leave the READY state (proxy for "the folder now exists")
+    before submitting the rest. Not a guaranteed fix, and doesn't undo
+    folders that already got duplicated (consolidate those by hand in
+    Drive). For a deterministic guarantee, create the destination folder
+    by hand in Drive before the first run against a new folder name.
 
-    Mitigation, not a guaranteed fix: submit the FIRST export alone and
-    wait for it to leave the READY state (a proxy for "the backend has
-    started processing this task, so the folder should now exist")
-    before submitting the rest. This should prevent the race for any
-    *new* folder name across a same-run batch (e.g. the upcoming 45-task
-    PRISM run, or ERA5's separate folder). It does NOT retroactively fix
-    folders that already got duplicated -- consolidate those by hand in
-    Drive (move the files into one folder, delete the empty duplicate)
-    before relying on "one folder per dataset" downstream. For the most
-    deterministic guarantee, create the destination folder once by hand
-    in Drive before the first run against a new folder name -- then
-    every task's "does it exist?" lookup finds the same real folder
-    instead of racing to create it.
-
-    `export_specs` is a list of dicts, each holding the keyword
-    arguments for one `start_export()` call (collection, description,
-    filename, selectors) -- `drive_folder` is supplied once here rather
-    than per-spec, since the whole point is that every task shares it.
-    Returns the list of started Task objects, in the same order as
-    `export_specs`.
+    `export_specs` is a list of kwargs dicts for `start_export()`
+    (collection, description, filename, selectors); `drive_folder` is
+    supplied once here since every task shares it. Returns the started
+    Task objects, in the same order as `export_specs`.
     """
     if not export_specs:
         return []
@@ -316,13 +292,8 @@ def start_exports_to_shared_folder(
 def attach_to_tasks(task_ids):
     """
     Return Task objects for already-submitted tasks, found by ID via
-    Task.list() -- no export config needed.
-
-    Useful for reattaching a monitor to tasks that are already running
-    server-side in Earth Engine, e.g. after the original script was
-    interrupted (Ctrl+C stops the local Python process, NOT the Earth
-    Engine batch task -- only task.cancel() or the GEE Tasks tab does
-    that), or just to watch an in-progress run from a second terminal.
+    Task.list() -- e.g. to reattach a monitor after the local script was
+    interrupted (Ctrl+C stops the local process, not the EE batch task).
     """
     task_ids = set(task_ids)
     all_tasks = ee.batch.Task.list()
@@ -338,18 +309,12 @@ def attach_to_tasks(task_ids):
 def monitor_export_tasks(tasks, poll_interval_seconds=15, detail_log_every_n_polls=10):
     """
     Poll Earth Engine until all export tasks finish, showing a progress
-    bar and logging state transitions (e.g. READY -> RUNNING -> COMPLETED).
+    bar and logging state transitions. Surfaces EECU-seconds (cumulative
+    compute time) and running duration per task, since task state alone
+    ("RUNNING") doesn't show whether a long export is stuck or progressing.
 
-    Surfaces `batch_eecu_usage_seconds` (cumulative Earth Engine compute
-    time used, updated continuously for RUNNING tasks as of EE's Sept
-    2024 API change) and per-task running duration, since task state
-    alone ("RUNNING") gives no sense of whether a long export is actually
-    making progress or is stuck -- EECU-seconds ticking upward is a real
-    "it's still working" signal, not just an unchanging status label.
-
-    Returns the list of task IDs that did NOT finish as COMPLETED (i.e.
-    FAILED or CANCELLED), so the caller can decide not to mark those
-    periods complete in the resumability manifest.
+    Returns task IDs that did NOT finish COMPLETED, so the caller can
+    skip marking those periods complete in the resumability manifest.
     """
     terminal_states = {"COMPLETED", "FAILED", "CANCELLED"}
     remaining = {task.id: task for task in tasks}
@@ -376,11 +341,7 @@ def monitor_export_tasks(tasks, poll_interval_seconds=15, detail_log_every_n_pol
                     )
                     last_seen_state[task_id] = state
 
-                    # CHANGE: surface *why* a task failed, not just that
-                    # it did. status()['error_message'] only appears
-                    # when state == FAILED, per the earthengine-api
-                    # docstring -- without this, a failure just showed
-                    # up as an unexplained "FAILED" with no next step.
+                    # Surface *why* it failed, not just that it did.
                     if state == "FAILED":
                         logging.error(
                             "Task %s FAILED: %s",
@@ -415,10 +376,8 @@ def monitor_export_tasks(tasks, poll_interval_seconds=15, detail_log_every_n_pol
                 remaining.pop(task_id)
                 bar.update(1)
 
-            # Full per-task breakdown goes to the log periodically
-            # (not every poll -- that would spam the log with one
-            # block per task per interval) rather than the tqdm bar,
-            # which only has room for a compact summary.
+            # Full per-task breakdown goes to the log periodically, not
+            # every poll (would spam the log) or the tqdm bar (too small).
             if running_detail_lines and poll_count % detail_log_every_n_polls == 0:
                 logging.info(
                     "Still running (%d task(s)):\n%s",
@@ -450,17 +409,10 @@ def monitor_export_tasks(tasks, poll_interval_seconds=15, detail_log_every_n_pol
 
 
 # ---------------------------------------------------------------------
-# Resumability: track which periods (e.g. years) have already exported
+# Resumability: track which periods (e.g. years) have already exported.
+# A JSON file listing completed period keys -- protects against *this
+# script* being restarted, but doesn't inspect Drive/GCS directly.
 # ---------------------------------------------------------------------
-#
-# This is deliberately simple: a JSON file listing period keys (e.g.
-# "1994") that have already been submitted and completed successfully.
-# It only protects against *this script* being restarted -- it doesn't
-# inspect Drive/GCS directly. That's a reasonable tradeoff for now: it
-# avoids needing separate Drive/GCS API credentials just to check what
-# already exists, at the cost of the manifest and the actual exported
-# files being able to drift apart if someone deletes a Drive file by
-# hand. Worth revisiting if that turns out to be a problem in practice.
 
 def load_completed_periods(manifest_path):
     """Return the set of period keys (e.g. years) already marked complete."""

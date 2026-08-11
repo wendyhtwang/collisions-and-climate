@@ -1,57 +1,18 @@
 """
-Small-scale ERA5-Land extraction test: IL/IN, 2020-21, county mean.
+Small-scale ERA5-Land extraction test (IL/IN, 2020-2021), used to
+validate unit-conversion decisions before they're carried into the
+full-scale ERA5 script.
 
-Extracts daily county-level mean ERA5-Land weather values for:
-- Illinois and Indiana (same states as 01_test_prism_extract.py)
-- 2020 and 2021 (same years as 01_test_prism_extract.py)
-- The 8 ERA5 variables 03_extract_era5_county.py asks for -- 2m
-  temperature, 2m dewpoint temperature, total precipitation, snowfall,
-  snow depth, 10m wind speed, surface pressure, skin temperature -- plus
-  daily 2m temperature min/max (see note below), for 10 bands total.
-
-Creates one Google Drive CSV export task per state/year pair
-(2 states x 2 years = 4 files total).
-
-Run this BEFORE 03_extract_era5_county.py, and spot-check the output
-against the GEE code editor console (the same way 01_test_prism_extract.py
-was validated for PRISM) before trusting the full 45-year CONUS run. Per
-CLAUDE.md: do not launch a full-scale run until a small test run succeeds.
-
-DECISIONS BEING TESTED HERE (discussed 2026-08-05, not yet applied to
-03_extract_era5_county.py):
-- DATASET: ECMWF/ERA5_LAND/DAILY_AGGR, not ECMWF/ERA5/DAILY. Plain ERA5
-  lacks snowfall, snow depth, and skin temperature bands entirely, so
-  ERA5-Land is the only option that can produce the full variable list --
-  not really a judgment call given the variables required.
-- TEMPERATURE UNITS: Kelvin -> Celsius conversion happens inline, inside
-  extraction (matches 03's current approach). Note this is a new pattern
-  for this project, not a continuation of one: 02_extract_prism_county.py
-  does zero unit conversion, because PRISM's native units already matched
-  the targets. There's no existing "conversions happen in extraction"
-  precedent being followed here -- it's being established now.
-- PRECIP/SNOWFALL UNITS: also converted inline, meters -> mm (x1000), to
-  match PRISM's ppt (mm) convention. 03's current version deliberately
-  left these in native meters and deferred the conversion to
-  05_build_derived_weather_vars.py. Converting inline here instead, since
-  m->mm is the same kind of linear conversion as the temperature one and
-  there's no clear reason to treat it differently.
-These are still flagged for Charvi/Eyal/Nicole sign-off before being
-treated as final in the shared data dictionary -- this test validates
-that the conversions run correctly and produce sane values, not that the
-team has signed off on them.
-
-2026-08-05. ADDED BAND PAIR: tmin_c / tmax_c, from the
-collection's temperature_2m_min / temperature_2m_max bands (server-side
-daily aggregates, not derived from tmean here). The ERA5 variable list
-this script is based on doesn't call for daily min/max the way PRISM's
-spec does (tmin, tmax) -- added here to test alongside the rest since
-daily extremes matter for freeze-thaw/road-ice and cold-stress framing,
-but confirm with the team whether PRISM already covering tmin/tmax makes
-this redundant before carrying it into 03_extract_era5_county.py.
-
-After completion, move the CSV files to:
-  Kodama: /mnt/data_f/AnimalCollisionsWeatherData/ERA5/test
-  (personal dev repo fallback: dataRAW/ERA5/test)
+- Validates several decisions before applying them in 03: using
+  ECMWF/ERA5_LAND/DAILY_AGGR (only dataset with all required bands),
+  converting Kelvin->Celsius and precip/snowfall meters->mm inline (a new
+  pattern for this project -- PRISM needed no such conversion), and
+  computing wind speed from u/v components.
+- Adds tmin_c/tmax_c daily extremes as a test addition, to check whether
+  they're worth carrying into the full pipeline (PRISM already covers
+  tmin/tmax, so this may be redundant -- flagged for the team).
+- Run this before 04_extract_era5_county.py; don't launch
+  a full-scale run until a small test run succeeds.
 """
 
 import logging
@@ -201,9 +162,7 @@ def main():
 
     tasks = []
 
-    # Loop over each state (nested outside the year loop) so every
-    # state/year combination is built and exported separately -- 2
-    # states x 2 years = 4 tasks/files.
+    # Nested loop: one export task per state/year combination (2x2 = 4).
     for state_fips in STATE_FIPS:
         state_abbrev = geeutil.CONUS_STATE_ABBREVIATIONS[state_fips]
         state_counties = geeutil.filter_counties_by_state(counties, state_fips)
