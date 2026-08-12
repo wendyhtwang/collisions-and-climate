@@ -61,12 +61,20 @@ ERA5_AT_POINT_PATH = REPO_ROOT / "dataCSV" / "ERA5" / "spot_check" / "era5_at_po
 ERA5_SAMPLE_PATH = REPO_ROOT / "dataCSV" / "ERA5" / "spot_check" / "era5_ground_truth_sample.csv"
 OUTPUT_PATH = REPO_ROOT / "dataCSV" / "ERA5" / "spot_check" / "era5_ground_truth_comparison.csv"
 
-# (era5/production column, station column, output label)
+# (07f/at-point column, station column, production column, output label).
+# The at-point and production columns are NOT the same string: 07f's
+# output uses bare names (precip_mm, tmean_c, ...), while the production
+# panel (era5_county_month.csv, filtered through by 07g) suffixes them
+# with how they were aggregated (_total for summed vars, _mean for
+# averaged vars) -- e.g. precip_mm_total, tmean_c_mean. Keep both sides
+# in sync with 07f_extract_era5_ground_truth_points.py's SUM_VARS/
+# MEAN_VARS and 05b_aggregate_era5_daily_to_monthly.py's actual output
+# columns if either changes.
 VARIABLES = [
-    ("precip_mm", "ppt_total", "precip_mm"),
-    ("tmax_c", "tmax_mean", "tmax_c"),
-    ("tmin_c", "tmin_mean", "tmin_c"),
-    ("tmean_c", "tmean_mean", "tmean_c"),
+    ("precip_mm", "ppt_total", "precip_mm_total", "precip_mm"),
+    ("tmax_c", "tmax_mean", "tmax_c_mean", "tmax_c"),
+    ("tmin_c", "tmin_mean", "tmin_c_mean", "tmin_c"),
+    ("tmean_c", "tmean_mean", "tmean_c_mean", "tmean_c"),
 ]
 
 
@@ -137,12 +145,15 @@ def build_comparison(station: pd.DataFrame, at_point: pd.DataFrame, production: 
             "era5_expected_hours": point_row["expected_hours"],
             "era5_n_days_flagged": point_row["n_days_flagged"],
             "station_is_incomplete": station_row.get("is_incomplete", None),
+            "production_n_days": prod_row.get("n_days", None),
+            "production_expected_days": prod_row.get("expected_days", None),
+            "production_is_incomplete": prod_row.get("is_incomplete", None),
         }
 
-        for era5_col, station_col, label in VARIABLES:
+        for point_col, station_col, production_col, label in VARIABLES:
             station_val = station_row[station_col]
-            point_val = point_row[era5_col]
-            county_val = prod_row[era5_col]
+            point_val = point_row[point_col]
+            county_val = prod_row[production_col]
 
             row[f"{label}_station"] = station_val
             row[f"{label}_era5_point"] = point_val
