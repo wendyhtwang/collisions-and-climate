@@ -75,11 +75,25 @@ ground_truth_spotcheck_summary.xlsx.
   picking its own.
 - Monthly aggregation convention matches 05b_aggregate_era5_daily_to_monthly.py
   exactly: precip_mm/snowfall_mm summed, everything else averaged.
+- Suppresses (only around the cfgrib call) the xarray FutureWarning about
+  xr.merge's `compat` default changing from "no_conflicts" to "override".
+  Checked cfgrib 0.9.15.1's source directly: its internal merge call
+  (cfgrib/xarray_store.py, merge_datasets()) never passes `compat`
+  through at all, so there's no argument on our side to set explicitly --
+  this has to be fixed upstream in cfgrib, not here. Deliberately NOT
+  opting into the new "override" default in the meantime: "no_conflicts"
+  is the safer of the two (it checks overlapping variables actually
+  agree before merging; "override" silently keeps the first value
+  without checking), which matters for a pipeline that already caught
+  real problems (a mislabeled file, a masked grid cell) by not trusting
+  things silently. Revisit once cfgrib ships a release that sets
+  `compat` explicitly.
 """
 
 from __future__ import annotations
 
 import re
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -157,7 +171,16 @@ def load_groups(path: Path) -> list[xr.Dataset]:
     bytes. Re-parsing the file each run costs a little time but avoids
     that failure mode entirely.
     """
-    groups = cfgrib.open_datasets(str(path), backend_kwargs={"indexpath": ""})
+    with warnings.catch_warnings():
+        # See module docstring: cfgrib doesn't expose xr.merge's `compat`
+        # argument, so this can't be fixed by passing something through --
+        # scoped narrowly to this call so unrelated FutureWarnings elsewhere
+        # still surface normally.
+        warnings.filterwarnings(
+            "ignore", category=FutureWarning,
+            message=".*compat.*no_conflicts.*override.*",
+        )
+        groups = cfgrib.open_datasets(str(path), backend_kwargs={"indexpath": ""})
     normalized = []
     for ds in groups:
         lon = ds.longitude.values
