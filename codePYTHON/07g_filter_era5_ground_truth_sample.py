@@ -1,0 +1,88 @@
+"""
+Filters the production ERA5 county-month panel down to the exact
+county-year-month rows selected for the ground-truth station comparison --
+the ERA5 counterpart to 07e_filter_prism_ground_truth_sample.py.
+
+- Uses the same GROUND_TRUTH_CASES list as 07f_extract_era5_ground_truth_points.py
+  (kept in sync manually, same convention this repo already uses for
+  values that must match across scripts -- e.g. SCALE_METERS between the
+  extraction script and its console-verification counterpart).
+- Reuses the exact three county-year-months already vetted for the PRISM
+  ground-truth check (Blackford County, IN 2021-12; Chowan County, NC
+  2000-01; Moore County, TN 1999-06) rather than re-running
+  07c_find_ground_truth_counties.py: the station-density selection logic
+  is dataset-agnostic, and reusing the same sites gives a direct
+  PRISM-vs-ERA5-vs-station comparison at identical locations.
+- Does no aggregation or Earth Engine calls -- a pure row filter, same as
+  07e, so it can't introduce any of the independent-reimplementation
+  concerns 07f was built to avoid.
+- Reports (rather than silently drops) any requested row not found in
+  production, distinguishing "GEOID not in production at all" from
+  "GEOID exists, just not for that year/month" -- same as 07e.
+"""
+
+from pathlib import Path
+
+import pandas as pd
+
+# Keep in sync with 07f_extract_era5_ground_truth_points.py and
+# 07h_compare_era5_ground_truth.py.
+GROUND_TRUTH_CASES = [
+    {"geoid": "18009", "county": "Blackford", "state": "IN", "year": 2021, "month": 12},
+    {"geoid": "37041", "county": "Chowan", "state": "NC", "year": 2000, "month": 1},
+    {"geoid": "47127", "county": "Moore", "state": "TN", "year": 1999, "month": 6},
+]
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PRODUCTION_PATH = REPO_ROOT / "dataCSV" / "ERA5" / "era5_county_month.csv"
+OUTPUT_PATH = REPO_ROOT / "dataCSV" / "ERA5" / "spot_check" / "era5_ground_truth_sample.csv"
+
+ID_COLS = ["geoid", "state_fips", "county_fips", "county_name"]
+
+
+def main() -> None:
+    if not PRODUCTION_PATH.exists():
+        raise FileNotFoundError(
+            f"Production ERA5 monthly file not found: {PRODUCTION_PATH}\n"
+            "This means the full-CONUS ERA5 extraction (04_extract_era5_county.py) and/or "
+            "its monthly aggregation (05b_aggregate_era5_daily_to_monthly.py) haven't been "
+            "run yet, or their output hasn't been synced to this machine."
+        )
+
+    print(f"Reading: {PRODUCTION_PATH}")
+    production = pd.read_csv(PRODUCTION_PATH, dtype={c: str for c in ID_COLS})
+    production["year"] = production["year"].astype(int)
+    production["month"] = production["month"].astype(int)
+
+    target_triples = {(c["geoid"], c["year"], c["month"]) for c in GROUND_TRUTH_CASES}
+    row_key = list(zip(production["geoid"], production["year"], production["month"]))
+    selected = production[[key in target_triples for key in row_key]].copy()
+
+    found_triples = set(zip(selected["geoid"], selected["year"], selected["month"]))
+    geoids_in_production = set(production["geoid"].unique())
+    missing = [
+        (c["geoid"], c["year"], c["month"]) for c in GROUND_TRUTH_CASES
+        if (c["geoid"], c["year"], c["month"]) not in found_triples
+    ]
+    if missing:
+        for geoid, year, month in missing:
+            reason = (
+                "GEOID not in production at all"
+                if geoid not in geoids_in_production
+                else "GEOID exists, but not for this year/month"
+            )
+            print(f"Warning: no row for {geoid} {year}-{month:02d} -- {reason}.")
+
+    selected = selected.sort_values(ID_COLS + ["year", "month"]).reset_index(drop=True)
+
+    OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    selected.to_csv(OUTPUT_PATH, index=False)
+
+    print(
+        f"\n{len(selected):,} of {len(GROUND_TRUTH_CASES)} requested county-year-month "
+        f"row(s) found.\nSaved to: {OUTPUT_PATH}"
+    )
+
+
+if __name__ == "__main__":
+    main()
