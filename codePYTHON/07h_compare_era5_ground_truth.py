@@ -39,9 +39,15 @@ GROUND_TRUTH_CASES = [
 
 # First existing candidate wins, same cross-machine-path pattern used
 # elsewhere in this repo. Produced by 07d_aggregate_noaa_station_daily.py,
-# which may only have been run on one machine (e.g. Kodama).
+# which writes to a REPO_ROOT-relative path -- so unlike 05/05b's
+# INPUT_DIR_CANDIDATES (an external raw-data mount), what's missing here
+# isn't a shared mount but simply having run 07d on *this* machine's
+# checkout. If 07d was only run elsewhere (e.g. Kodama's shared project
+# checkout), add that machine's absolute path too.
 NOAA_STATION_MONTH_CANDIDATES = [
     REPO_ROOT / "dataCSV" / "PRISM" / "spot_check" / "noaa_station_daily_data" / "noaa_station_month.csv",
+    Path("/Users/wendyhtw/Documents/CAPP ('25-'27)/Q4 - Summer'26/EPIC/Repos/collisions-and-climate")
+    / "dataCSV" / "PRISM" / "spot_check" / "noaa_station_daily_data" / "noaa_station_month.csv",  # local repo fallback
 ]
 
 ERA5_AT_POINT_PATH = REPO_ROOT / "dataCSV" / "ERA5" / "spot_check" / "era5_at_point_month.csv"
