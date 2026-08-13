@@ -3,16 +3,14 @@ Filters the production ERA5 county-month panel down to the exact
 county-year-month rows selected for the ground-truth station comparison --
 the ERA5 counterpart to 07e_filter_prism_ground_truth_sample.py.
 
-- Uses the same GROUND_TRUTH_CASES list as 07f_extract_era5_ground_truth_points.py
-  (kept in sync manually, same convention this repo already uses for
-  values that must match across scripts -- e.g. SCALE_METERS between the
-  extraction script and its console-verification counterpart).
-- Reuses the exact three county-year-months already vetted for the PRISM
-  ground-truth check (Blackford County, IN 2021-12; Chowan County, NC
-  2000-01; Moore County, TN 1999-06) rather than re-running
+- Reuses the same three county-year-months already vetted for the PRISM
+  ground-truth check, rather than re-running
   07c_find_ground_truth_counties.py: the station-density selection logic
   is dataset-agnostic, and reusing the same sites gives a direct
   PRISM-vs-ERA5-vs-station comparison at identical locations.
+- Keeps GROUND_TRUTH_CASES in sync by hand with
+  07f_extract_era5_ground_truth_points.py and
+  07h_compare_era5_ground_truth.py -- see SCRIPT_OVERVIEW.md.
 - Does no aggregation or Earth Engine calls -- a pure row filter, same as
   07e, so it can't introduce any of the independent-reimplementation
   concerns 07f was built to avoid.

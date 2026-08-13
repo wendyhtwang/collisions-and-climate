@@ -8,8 +8,7 @@ explanations regarding decisions that were not included in the code itself.
 
 Scripts are numbered in pipeline order: 
 `01` = small-scale PRISM test, `02` = full-scale PRISM extraction (`b` suffix = WMA-polygon
-variant). `05` = aggregation, `06` = derived vars
-(not yet built), `07` = spot-checks, `08` = population data (not yet
+variant). `05` = aggregation, `06` = derived vars, `07` = spot-checks, `08` = population data (not yet
 built). `gee_extract_utils.py` = shared library (unnumbered).
 `0X_verify_*_gee_console.js` = manual Earth Engine Console checks to verify 
 small-scale test extractions
@@ -40,7 +39,7 @@ variables, at daily resolution.
   compositing images with `.sum()`/`.mean()` before reducing to county
   means was found to shift results ~1-2% from reducing each day
   independently (root cause not fully diagnosed). Monthly aggregation
-  instead happens client-side in `05_aggregate_daily_to_monthly.py`, which
+  instead happens client-side in `05_aggregate_prism_daily_to_monthly.py`, which
   is validated correct.
 - One Drive export task per calendar year (~45 tasks). A local JSON
   manifest tracks completed years so a rerun skips them instead of
@@ -101,7 +100,7 @@ Empty file. Placeholder for the ERA5 equivalent of `02b_extract_prism_wma.py`
 
 ## Aggregation
 
-### `05_aggregate_daily_to_monthly.py`
+### `05_aggregate_prism_daily_to_monthly.py`
 Aggregates the daily county-level PRISM CSVs into one county-year-month
 panel (the final PRISM output): `ppt` summed to a monthly total, all other
 variables averaged.
@@ -115,16 +114,58 @@ variables averaged.
   doesn't match the expected calendar days, rather than silently
   aggregating a partial month.
 - Drops confirmed byte-identical duplicate rows automatically; raises an
-  error instead if duplicate rows actually disagree in value, since that
-  needs a human look. **See "Wisconsin county duplication"
-  below** for the root cause.
+  error instead if any non-key column disagrees within a geoid/date group,
+  since that needs a human look. **See "Wisconsin county duplication"
+  below** for the root cause and "Duplicate-conflict detection fix" for
+  the check itself.
 - Reads one year/file at a time rather than loading all 45 years into
   memory at once (~9GB across all years).
 
-### `06_build_derived_weather_vars.py` -- not yet implemented
-Placeholder for computing derived weather variables (freeze-thaw days,
-heating/cooling degree days) from the PRISM/ERA5 panels. No code written
-yet.
+### `05b_aggregate_era5_daily_to_monthly.py`
+Aggregates the daily county-level ERA5-Land CSVs into one county-year-month
+panel (the ERA5 counterpart to `05`): `precip_mm`/`snowfall_mm` summed to
+monthly totals, all other variables averaged.
+- `precip_mm`/`snowfall_mm` are summed; `tmean_c`, `tmin_c`, `tmax_c`,
+  `dewpoint_c`, `skin_temp_c`, `wind_speed_10m`, `snow_depth`,
+  `surface_pressure` are averaged -- `snow_depth` is a stock (snow
+  currently on the ground), not a flux, so a mean is the meaningful
+  summary, not a sum.
+- No dataset-vintage flag: unlike PRISM's AN81/AN91, ERA5-Land is a single
+  reanalysis product with no vintage boundary in this period.
+- Same completeness check as `05` (flags county-months whose day count
+  doesn't match the calendar) and the same automatic-drop-if-identical /
+  error-if-any-non-key-column-disagrees handling of the WI-county
+  duplicate rows (see "Wisconsin county duplication" below -- confirmed to
+  affect ERA5 too, since it draws counties from the same TIGER source as
+  PRISM).
+- Reads one year/file at a time, same memory-management reasoning as `05`.
+
+### `06_build_derived_weather_vars.py`
+Computes derived weather variables (per Phase 3 of the task doc) from the
+raw daily PRISM/ERA5 county extracts -- one script for both datasets,
+unlike 05/05b, since the derivation logic is identical and only the
+column names/units differ.
+- Reads the same raw daily extracts as 05/05b directly (not 05/05b's own
+  monthly output), so `mean_temp_c` here can be cross-checked against
+  05/05b's `tmean_mean`/`tmean_c_mean` as an independent consistency
+  check.
+- Derived variables: `days_below_freezing` (daily TMIN < 0C -- **flagged
+  assumption**, task doc doesn't specify min/max/mean), `freeze_thaw_days`
+  (daily TMIN < 0C AND TMAX > 0C -- given explicitly in the task doc),
+  `mean_temp_c`, `tmean_variance_c2` (sample variance, ddof=1, on daily
+  mean temp -- **flagged assumption** on which series), `days_precip_gt_
+  10mm` (threshold configurable via `PRECIP_THRESHOLD_MM` -- task doc's
+  example value), `heating_degree_days`/`cooling_degree_days` (base
+  65F/18.33C -- **flagged assumption**, standard US convention but not
+  specified in the task doc), and ERA5-only `total_snowfall_mm` (summed)
+  /`mean_snow_depth` (averaged, since it's a stock not a flux, native
+  ERA5-Land meters -- same reasoning as 05b's `snow_depth_mean`).
+- Same completeness check and WI-county duplicate-row handling (per-column,
+  see "Duplicate-conflict detection fix" below) as 05/05b.
+- Writes a standalone `derived_weather_vars_data_dictionary.csv`
+  (variable/label/unit/source/notes) for Charvi's data dictionary, rather
+  than leaving documentation only in code comments.
+
 
 ## Spot-checks
 
@@ -222,6 +263,78 @@ county-year-month rows selected for the ground-truth station comparison.
   can't introduce any of the independent-reimplementation concerns the
   07/07b scripts were built to avoid.
 
+### `07f_extract_era5_ground_truth_points.py`
+Parses independently-downloaded ERA5-Land hourly GRIB files (pulled
+directly from the Copernicus CDS, not GEE) for the ground-truth stations,
+and aggregates each to an "ERA5-at-point" county-year-month value -- the
+ERA5 counterpart to PRISM's Data Explorer point lookup.
+- Independent of GEE and this repo's own extraction code: downloaded
+  straight from the CDS, so a bug shared with production wouldn't be
+  invisible to this check.
+- Uses `cfgrib.open_datasets()` (plural): ERA5-Land hourly downloads
+  bundle variables across incompatible GRIB groups (accumulated fields,
+  skin temperature, and snow depth each land in their own group) that
+  `open_dataset()` (singular) can't merge.
+- Precip/snowfall are ERA5's "accumulated since reference time" fields --
+  each day's total is the last available step of that day's own 24-step
+  block, not a diff of consecutive hours. The last day of a requested
+  month is often missing its final step (falls outside the requested
+  range); that row is flagged (`n_days_flagged`) rather than silently
+  under-counted.
+- tmin/tmax/tmean and wind speed follow production's exact order of
+  operations (`04`'s `add_derived_bands()`): temperatures are the day's
+  min/mean/max of 24 hourly readings; wind speed comes from the daily
+  mean u/v components, not the mean of hourly speeds.
+- Grid-cell selection uses nearest-neighbor with an explicit distance
+  check, and falls back to the nearest unmasked cell if the closest one
+  is land-sea-masked (see "ERA5-Land land-sea masking" below), flagging
+  the row (`used_fallback_grid_cell`) rather than returning all-NaN.
+- Can be rerun as each ground-truth station's download finishes rather
+  than requiring all of them at once -- reprocesses only the newly
+  available case(s) and leaves previously-computed rows untouched.
+
+### `07g_filter_era5_ground_truth_sample.py`
+Filters the production ERA5 county-month panel down to the exact
+county-year-month rows selected for the ground-truth comparison -- the
+ERA5 counterpart to `07e`.
+- Reuses the same three county-year-months already vetted for the PRISM
+  ground-truth check (Blackford County, IN 2021-12; Chowan County, NC
+  2000-01; Moore County, TN 1999-06) rather than re-running `07c`: the
+  station-density selection logic is dataset-agnostic, and reusing the
+  same sites gives a direct PRISM-vs-ERA5-vs-station comparison at
+  identical locations.
+- Keeps its `GROUND_TRUTH_CASES` list in sync by hand with `07f` and
+  `07h` -- same convention this repo uses elsewhere for values that must
+  match across scripts (e.g. `SCALE_METERS` between an extraction script
+  and its console-verification counterpart).
+- Does no aggregation or Earth Engine calls -- a pure row filter, same as
+  `07e`.
+- Reports (rather than silently drops) any requested row not found in
+  production, same "GEOID missing entirely" vs. "GEOID exists, wrong
+  year/month" distinction as `07e`.
+
+### `07h_compare_era5_ground_truth.py`
+Builds the three-way ground-truth decomposition for ERA5 -- joining real
+NOAA station readings, the independently-extracted ERA5-at-point values
+(`07f`), and the production ERA5 county-month panel (`07g`) -- the ERA5
+counterpart to the manually-built `ground_truth_spotcheck_summary.xlsx`
+used for PRISM.
+- Same two-step decomposition as the PRISM version: (a) station vs.
+  ERA5-at-point isolates ERA5-Land's own model behavior at that point;
+  (b) ERA5-at-point vs. production county-mean isolates the effect of our
+  own extraction/aggregation code. Step (a)'s interpretation differs from
+  PRISM's, though: ERA5-Land doesn't directly assimilate station
+  observations, so that gap reflects model/representativeness error, not
+  a station-interpolation algorithm's behavior -- a bigger gap here isn't
+  itself a red flag.
+- Reuses `07d`'s NOAA station-month values as-is (dataset-agnostic, real
+  station data); searches a short list of candidate paths since that file
+  may only exist wherever `07d` was actually run (e.g. Kodama), not on
+  every dev copy of this repo.
+- No fixed pass/fail tolerance, matching the PRISM methodology: leaves a
+  blank `notes` column for the same kind of human interpretation the
+  PRISM summary used, rather than automating that judgment call.
+
 ## Other data
 
 ### `08_population_data.py` -- not yet implemented
@@ -258,7 +371,7 @@ dataset-specific scripts only need to supply their own configuration.
 ### `01_verify_prism_gee_console.js`
 Manually recomputes one county's PRISM daily and monthly values directly
 in the Earth Engine Code Editor console, to check them against
-`01_test_prism_extract.py` / `05_aggregate_daily_to_monthly.py`'s CSV
+`01_test_prism_extract.py` / `05_aggregate_prism_daily_to_monthly.py`'s CSV
 output. Reduces each day separately and aggregates in JS, mirroring the
 Python pipeline's method (see the compositing discrepancy note under
 `02`), rather than compositing the ImageCollection first.
@@ -278,7 +391,7 @@ band selection.
 Fuller writeups of a few things that are referenced above but were too
 long to keep inline in the code.
 
-### Wisconsin county duplication (affects `05`, `07`)
+### Wisconsin county duplication (affects `05`, `05b`, `07`)
 18 WI counties (55001, 55003, 55005, 55007, 55023, 55041, 55065, 55067,
 55085, 55095, 55113, 55119, 55121, 55123, 55125, 55129, 55135, 55137) had
 every daily row duplicated, byte-for-byte identical, in both the 2020 and
@@ -292,6 +405,20 @@ written twice. **Net effect: harmless** -- the values are identical, so
 `05`'s automatic drop of byte-identical duplicates loses no information.
 Not investigated further since this is treated as a routine, safety-net
 case rather than something needing a fix at the extraction layer.
+
+### Duplicate-conflict detection fix (affects `05`, `05b`, `06`)
+`resolve_duplicate_rows()`'s original conflict check compared full rows
+pairwise (`dup_rows.duplicated(keep=False)`): a row was "conflicting" only
+if it had no exact match elsewhere in its geoid/date group. Blind spot: if
+a group had two distinct value-sets each appearing an even number of times
+(e.g. value A twice, value B twice), every row matches another row within
+its own subgroup, so the check found nothing wrong and `keep="first"`
+silently kept whichever value sorted first -- exactly the disagreement the
+check exists to catch. Not triggered by the WI case above (genuinely
+byte-identical), so this was a latent risk rather than an observed bug.
+Fixed by counting distinct values (incl. NaN) per non-key column within
+each geoid/date group (`groupby(...).nunique(dropna=False)`); any column
+with >1 distinct value raises the conflict error.
 
 ### Drive folder duplication (affects `gee_extract_utils.py`, `02`, `04`)
 The 2020/2021 CONUS PRISM validation run created two separate Drive
@@ -347,4 +474,19 @@ independent ground truth). The station-based comparison is the one that
 was carried through to a "passed" result; the GEE-reproduction approach
 was the first strategy tried and remains in the repo as a still-useful,
 independent check on processing logic, even though it wasn't the one that
-closed out the verification work.
+closed out the verification work. `07f`-`07h` extend the station-based
+approach to ERA5, reusing the same station-months and ground-truth sites
+`07d`/`07e` already established for PRISM.
+
+
+### ERA5-Land land-sea masking (affects `07f`)
+Unlike PRISM, ERA5-Land only produces values for land grid cells -- a
+cell sitting mostly over water is NaN for every variable, every hour.
+This affected the Chowan County, NC ground-truth case: the nearest grid
+cell to the Edenton station sits on Albemarle Sound and is masked
+entirely (confirmed by inspection: 100% NaN across all time/step
+combinations), the same water-dominated cell PRISM's own ground-truth
+notes flagged for this station. `07f` checks the nearest cell's NaN
+fraction first and, if it's masked, searches the rest of the downloaded
+box for the nearest valid cell, flagging the row
+(`used_fallback_grid_cell`) rather than returning all-NaN monthly stats.

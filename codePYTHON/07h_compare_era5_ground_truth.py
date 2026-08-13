@@ -4,31 +4,20 @@ NOAA station readings, the independently-extracted "ERA5-at-point" values
 (07f), and the production ERA5 county-month panel (07g) -- the ERA5
 counterpart to the (manually-built) PRISM ground_truth_spotcheck_summary.xlsx.
 
-- Same decomposition logic as the PRISM version, split into two
-  independent steps rather than one station-vs-county-mean comparison
-  (which would conflate two different effects):
-    (a) station vs. ERA5-at-point -- isolates ERA5-Land's own
-        reanalysis/land-surface-model behavior at that point.
-    (b) ERA5-at-point vs. production county-mean -- isolates the effect
-        of our own extraction/aggregation code (the county-averaging
-        step), same as PRISM's decomposition.
-  Note the interpretation of step (a) differs from PRISM's: ERA5-Land
-  doesn't directly assimilate station observations (see
-  https://confluence.ecmwf.int/display/CKB/ERA5-Land:+data+documentation),
-  so this gap reflects model/representativeness error, not a station-
-  interpolation algorithm's behavior the way PRISM's CAI does. A bigger
-  gap here than PRISM's equivalent step isn't itself a red flag.
-- Reuses the NOAA station-month values 07d_aggregate_noaa_station_daily.py
-  already computed for the PRISM check as-is (dataset-agnostic -- these
-  are real station readings, independent of both PRISM and ERA5).
-  Searches a short list of candidate paths for that file rather than
-  assuming it's on this machine, since it may only exist wherever 07d was
-  actually run (e.g. Kodama) and not be synced to every dev copy of this
-  repo.
+- Same two-step decomposition as the PRISM version (station vs.
+  ERA5-at-point isolates ERA5-Land's own model behavior; ERA5-at-point vs.
+  production county-mean isolates our own extraction/aggregation code) --
+  but step (a)'s interpretation differs: ERA5-Land doesn't directly
+  assimilate station observations, so that gap reflects model/
+  representativeness error, not a station-interpolation algorithm's
+  behavior the way PRISM's does. A bigger gap here isn't itself a red flag.
+- Reuses 07d_aggregate_noaa_station_daily.py's NOAA station-month values
+  as-is (dataset-agnostic, real station data); searches a short list of
+  candidate paths for that file since it may only exist wherever 07d was
+  actually run, not on every dev copy of this repo.
 - No fixed pass/fail tolerance, matching the PRISM methodology: leaves a
   blank `notes` column for the same kind of human interpretation the
-  PRISM summary used (e.g. tracing a gap to a station's coastal siting),
-  rather than trying to automate that judgment call.
+  PRISM summary used, rather than trying to automate that judgment call.
 """
 
 from pathlib import Path
@@ -48,11 +37,9 @@ GROUND_TRUTH_CASES = [
      "station_id": "USC00405525"},
 ]
 
-# First existing candidate wins, same pattern gee_extract_utils.py and
-# 05b_aggregate_era5_daily_to_monthly.py already use for cross-machine
-# paths. This file is produced by 07d_aggregate_noaa_station_daily.py,
-# which may have only ever been run wherever the PRISM ground-truth check
-# was done (e.g. Kodama), not on every dev copy of this repo.
+# First existing candidate wins, same cross-machine-path pattern used
+# elsewhere in this repo. Produced by 07d_aggregate_noaa_station_daily.py,
+# which may only have been run on one machine (e.g. Kodama).
 NOAA_STATION_MONTH_CANDIDATES = [
     REPO_ROOT / "dataCSV" / "PRISM" / "spot_check" / "noaa_station_daily_data" / "noaa_station_month.csv",
 ]
@@ -62,14 +49,9 @@ ERA5_SAMPLE_PATH = REPO_ROOT / "dataCSV" / "ERA5" / "spot_check" / "era5_ground_
 OUTPUT_PATH = REPO_ROOT / "dataCSV" / "ERA5" / "spot_check" / "era5_ground_truth_comparison.csv"
 
 # (07f/at-point column, station column, production column, output label).
-# The at-point and production columns are NOT the same string: 07f's
-# output uses bare names (precip_mm, tmean_c, ...), while the production
-# panel (era5_county_month.csv, filtered through by 07g) suffixes them
-# with how they were aggregated (_total for summed vars, _mean for
-# averaged vars) -- e.g. precip_mm_total, tmean_c_mean. Keep both sides
-# in sync with 07f_extract_era5_ground_truth_points.py's SUM_VARS/
-# MEAN_VARS and 05b_aggregate_era5_daily_to_monthly.py's actual output
-# columns if either changes.
+# At-point columns are bare names (precip_mm); production columns are
+# suffixed by aggregation type (_total/_mean) -- keep in sync with 07f's
+# SUM_VARS/MEAN_VARS and 05b's actual output columns if either changes.
 VARIABLES = [
     ("precip_mm", "ppt_total", "precip_mm_total", "precip_mm"),
     ("tmax_c", "tmax_mean", "tmax_c_mean", "tmax_c"),

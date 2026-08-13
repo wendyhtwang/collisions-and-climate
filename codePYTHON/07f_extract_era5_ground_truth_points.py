@@ -2,92 +2,30 @@
 Parses the independently-downloaded ERA5-Land hourly GRIB files (pulled
 directly from the Copernicus CDS, not GEE) for the ground-truth stations,
 and aggregates each to an "ERA5-at-point" county-year-month value -- the
-ERA5 counterpart to PRISM's Data Explorer point lookup used in
-ground_truth_spotcheck_summary.xlsx.
+ERA5 counterpart to PRISM's Data Explorer point lookup.
 
-- Independent of GEE and of this repo's own extraction code
-  (04_extract_era5_county.py / gee_extract_utils.py): the files here were
-  downloaded straight from https://cds.climate.copernicus.eu, so a bug
-  shared between the production pipeline and this check wouldn't be
-  invisible to it.
-- Matches each downloaded file to a ground-truth case by its EMBEDDED
-  bounding box and time range, not by its filename. A real mismatch was
-  found during development (a file named for Moore County, TN / 1999-06
-  actually contained Blackford County, IN / 2021-12 data -- almost
-  certainly a save-dialog mix-up when downloading from the CDS website).
-  Trusting filenames here would have silently corrupted the comparison,
-  so filenames are only used as a human-readable hint; the actual
-  station/period match is verified against the file's own coordinates
-  and dates, and the script errors loudly on any mismatch.
+- Independent of GEE and this repo's own extraction code: these files were
+  downloaded straight from the CDS, so a bug shared with the production
+  pipeline wouldn't be invisible to this check.
 - Uses `cfgrib.open_datasets()` (plural), not `open_dataset()`: ERA5-Land
-  hourly CDS downloads bundle variables with incompatible GRIB editions/
-  hypercubes (observed here: accumulated + most instantaneous variables
-  in one group, skin_temperature in a second, snow_depth in a third with
-  longitude in 0-360 convention instead of -180/180). `open_dataset()`
-  raises trying to merge these; `open_datasets()` returns them as
-  separate, internally-consistent groups.
-- Precipitation/snowfall are ERA5(-Land)'s classic "accumulated since the
-  reference time" fields: each day's own reference block (time=that day
-  00 UTC, step=1..24) accumulates from zero, so a day's total is the
-  step=24 value of ITS OWN block, not a diff-of-consecutive-hours
-  reconstruction. Confirmed empirically against the Blackford test file
-  (values were monotonically non-decreasing within a block, resetting at
-  each new reference day).
-- Known boundary gap: the last day of the requested month is often
-  missing its own step=24 value, because that value's valid time (next
-  month, 00:00) falls outside the requested day range and CDS doesn't
-  deliver it. Falls back to the latest available step for that day and
-  flags the row (`n_days_flagged` / per-day fractional-hour note) rather
-  than silently under-counting or dropping the day. Re-downloading with
-  one extra trailing day would remove this gap entirely if exact
-  precision on the last day matters more than avoiding a re-submit.
-- Instantaneous variables (temperature, dewpoint, skin temp, wind
-  components, surface pressure, snow depth) are bucketed by `valid_time`
-  (time + step), not by the raw `time` coordinate -- `time` is the
-  reference base, not the hour the value actually describes.
-- Daily tmin/tmax/tmean and wind speed follow production's exact order of
-  operations (04_extract_era5_county.py's add_derived_bands(), applied to
-  ECMWF/ERA5_LAND/DAILY_AGGR): tmin/tmax/tmean are the day's min/mean/max
-  of the 24 hourly readings; wind speed is computed from the DAILY MEAN
-  u/v components (speed-of-the-mean-vector), not the mean of hourly
-  speeds -- matching how add_derived_bands() operates on an
-  already-daily-aggregated image, not raw hourly images.
-- Grid-cell selection uses nearest-neighbor to the station's exact
-  coordinate, with an explicit distance check (errors if the nearest
-  point is more than ~1.5 grid cells away) -- xarray's `.sel(...,
-  method="nearest")` fails silently otherwise, which is exactly how the
-  file mislabeling above would have gone undetected.
-- ERA5-Land is LAND-ONLY: grid cells that are mostly open water are
-  masked as NaN for every variable, at every hour -- unlike PRISM, which
-  still produces an interpolated value everywhere in CONUS. This bit the
-  Chowan County, NC case: the nearest grid cell to the Edenton station
-  (36.0, -76.6) is masked entirely (confirmed by inspecting the raw
-  values -- 100% NaN across all 768 time/step combinations), because
-  that cell sits on Albemarle Sound, the same water-dominated cell
-  PRISM's own ground-truth notes already called out for this station.
-  `resolve_valid_point()` checks the nearest cell's NaN fraction against
-  `t2m` first and, if it's fully/mostly masked, searches the rest of the
-  downloaded box for the nearest cell with real data, flagging the
-  row (`used_fallback_grid_cell`, `fallback_distance_deg`) rather than
-  silently returning all-NaN monthly stats. The same resolved coordinate
-  is then reused for every variable for that case, so all bands come
-  from one consistent grid cell rather than each variable independently
-  picking its own.
-- Monthly aggregation convention matches 05b_aggregate_era5_daily_to_monthly.py
-  exactly: precip_mm/snowfall_mm summed, everything else averaged.
-- Suppresses (only around the cfgrib call) the xarray FutureWarning about
-  xr.merge's `compat` default changing from "no_conflicts" to "override".
-  Checked cfgrib 0.9.15.1's source directly: its internal merge call
-  (cfgrib/xarray_store.py, merge_datasets()) never passes `compat`
-  through at all, so there's no argument on our side to set explicitly --
-  this has to be fixed upstream in cfgrib, not here. Deliberately NOT
-  opting into the new "override" default in the meantime: "no_conflicts"
-  is the safer of the two (it checks overlapping variables actually
-  agree before merging; "override" silently keeps the first value
-  without checking), which matters for a pipeline that already caught
-  real problems (a mislabeled file, a masked grid cell) by not trusting
-  things silently. Revisit once cfgrib ships a release that sets
-  `compat` explicitly.
+  hourly downloads bundle variables across incompatible GRIB groups that
+  can't be merged into a single dataset.
+- Precip/snowfall are ERA5(-Land)'s "accumulated since reference time"
+  fields, so each day's total is the last available step of that day's
+  own block, not a diff of consecutive hours. The last day of a requested
+  month is often missing its final step; that row is flagged
+  (`n_days_flagged`) rather than silently under-counted.
+- tmin/tmax/tmean and wind speed follow production's exact order of
+  operations (04_extract_era5_county.py's `add_derived_bands()`): wind
+  speed comes from the daily mean u/v components, not the mean of hourly
+  speeds.
+- Grid-cell selection falls back to the nearest unmasked cell if the
+  closest one is land-sea-masked (see "ERA5-Land land-sea masking" in
+  SCRIPT_OVERVIEW.md), flagging the row (`used_fallback_grid_cell`)
+  rather than returning all-NaN monthly stats.
+- Monthly aggregation convention matches
+  05b_aggregate_era5_daily_to_monthly.py exactly: precip_mm/snowfall_mm
+  summed, everything else averaged.
 """
 
 from __future__ import annotations
@@ -102,14 +40,10 @@ import xarray as xr
 import cfgrib
 
 # ---------------------------------------------------------------------
-# Ground-truth cases -- keep in sync with 07g_filter_era5_ground_truth_sample.py,
-# 07h_compare_era5_ground_truth.py, and the PRISM version
-# (07e_filter_prism_ground_truth_sample.py) / ground_truth_spotcheck_summary.xlsx.
-# Coordinates are rounded to 1 decimal (from the PRISM ground-truth summary);
-# that's within one ERA5-Land grid cell (0.1 deg) of the true station
-# location, so nearest-neighbor selection below is robust to it, but swap
-# in exact coordinates from ghcnd-stations.txt if you want to remove that
-# margin entirely.
+# Ground-truth cases -- keep in sync with 07g_filter_era5_ground_truth_sample.py
+# and 07h_compare_era5_ground_truth.py. Coordinates rounded to 1 decimal
+# (from the PRISM ground-truth summary) -- within one ERA5-Land grid cell
+# (0.1 deg), so nearest-neighbor selection below is robust to it.
 # ---------------------------------------------------------------------
 
 GROUND_TRUTH_CASES = [
@@ -134,16 +68,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 INPUT_DIR = REPO_ROOT / "dataCSV" / "ERA5" / "spot_check" / "raw_hourly"
 OUTPUT_PATH = REPO_ROOT / "dataCSV" / "ERA5" / "spot_check" / "era5_at_point_month.csv"
 
-# How far (in degrees) the nearest grid point may sit from the station's
-# known coordinate before we treat it as a real mismatch rather than
-# rounding noise. ERA5-Land grid spacing is 0.1 deg, so 1.5x that catches
-# "wrong file" cases without flagging normal nearest-neighbor snapping.
+# How far (degrees) the nearest grid point may sit from the station's
+# known coordinate before treating it as a mismatch rather than rounding
+# noise. ERA5-Land grid spacing is 0.1 deg; 1.5x catches "wrong file" cases.
 MAX_POINT_DISTANCE_DEG = 0.15
 
-# When the nearest cell is masked (land-sea mask -- see module docstring),
-# how far we're willing to search the downloaded box for a valid one, and
-# how much NaN in a cell's time series counts as "masked" rather than just
-# the expected few missing hours at the request boundary.
+# When the nearest cell is masked (see "ERA5-Land land-sea masking" in
+# SCRIPT_OVERVIEW.md), how far to search for a valid one, and how much
+# NaN in a cell's series counts as "masked" vs. expected boundary gaps.
 MAX_FALLBACK_DISTANCE_DEG = 0.35
 MAX_ACCEPTABLE_NAN_FRACTION = 0.10
 
@@ -161,21 +93,18 @@ MEAN_VARS = [
 def load_groups(path: Path) -> list[xr.Dataset]:
     """
     Open all internally-consistent variable groups in one GRIB file, and
-    normalize any 0-360 longitude convention to -180/180 so every group
-    can be indexed the same way.
+    normalize any 0-360 longitude to -180/180 so every group indexes the
+    same way.
 
-    `indexpath=""` disables cfgrib's on-disk .idx sidecar cache -- in a
-    cloud-synced folder (iCloud/Dropbox/etc, which is where these
-    downloads land), a stale or permission-locked .idx file can make
-    cfgrib silently read garbage instead of re-parsing the actual GRIB
-    bytes. Re-parsing the file each run costs a little time but avoids
-    that failure mode entirely.
+    `indexpath=""` disables cfgrib's on-disk .idx cache: in a cloud-synced
+    folder, a stale/locked .idx file can make cfgrib read garbage instead
+    of the real GRIB bytes. Re-parsing each run avoids that at a small
+    time cost.
     """
     with warnings.catch_warnings():
-        # See module docstring: cfgrib doesn't expose xr.merge's `compat`
-        # argument, so this can't be fixed by passing something through --
-        # scoped narrowly to this call so unrelated FutureWarnings elsewhere
-        # still surface normally.
+        # cfgrib doesn't expose xr.merge's `compat` kwarg, so this can't be
+        # fixed by passing something through -- scoped narrowly here so
+        # unrelated FutureWarnings elsewhere still surface normally.
         warnings.filterwarnings(
             "ignore", category=FutureWarning,
             message=".*compat.*no_conflicts.*override.*",
@@ -198,87 +127,6 @@ def find_var(groups: list[xr.Dataset], short_name: str) -> xr.DataArray:
     raise KeyError(f"Variable '{short_name}' not found in any group of this file.")
 
 
-# ---------------------------------------------------------------------
-# Station/file matching -- by embedded content, not filename (see module
-# docstring for why filenames aren't trusted here)
-# ---------------------------------------------------------------------
-
-def file_matches_case(groups: list[xr.Dataset], case: dict) -> bool:
-    ds = groups[0]
-    lat, lon = ds.latitude.values, ds.longitude.values
-    lat_in_box = lat.min() - 0.01 <= case["station_lat"] <= lat.max() + 0.01
-    lon_in_box = lon.min() - 0.01 <= case["station_lon"] <= lon.max() + 0.01
-
-    times = pd.to_datetime(ds.time.values)
-    year_month_present = ((times.year == case["year"]) & (times.month == case["month"])).any()
-
-    return lat_in_box and lon_in_box and year_month_present
-
-
-def match_files_to_cases(paths: list[Path]) -> dict[str, tuple[Path, list[xr.Dataset]]]:
-    """
-    Return {geoid: (path, groups)}, matching each ground-truth case to
-    exactly one file by content. Returns the already-parsed groups
-    alongside the path so process_case() doesn't have to re-parse the
-    same ~1MB GRIB file a second time (cfgrib parsing is the slow part
-    here with on-disk index caching disabled -- see load_groups()).
-    """
-    matched: dict[str, tuple[Path, list[xr.Dataset]]] = {}
-    for path in paths:
-        try:
-            groups = load_groups(path)
-        except Exception as exc:
-            print(
-                f"  WARNING: couldn't read {path.name} ({type(exc).__name__}: {exc}) -- "
-                "skipping it. This usually means the download is still in progress/incomplete "
-                "(common with cloud-synced folders) or the file didn't finish downloading; "
-                "rerun once it's fully synced."
-            )
-            continue
-
-        hits = [case for case in GROUND_TRUTH_CASES if file_matches_case(groups, case)]
-
-        if len(hits) == 0:
-            print(f"  WARNING: {path.name} doesn't match any configured ground-truth case's "
-                  f"box/period -- skipping. (lat={groups[0].latitude.values}, "
-                  f"lon={groups[0].longitude.values}, "
-                  f"time={pd.to_datetime(groups[0].time.values).min()} to "
-                  f"{pd.to_datetime(groups[0].time.values).max()})")
-            continue
-        if len(hits) > 1:
-            raise ValueError(
-                f"{path.name} matches more than one ground-truth case's box/period "
-                f"({[h['geoid'] for h in hits]}) -- boxes may overlap; resolve manually."
-            )
-
-        case = hits[0]
-        claimed_station, claimed_year, claimed_month = parse_filename(path)
-        if claimed_station != case["station_id"] or claimed_year != case["year"] or claimed_month != case["month"]:
-            print(
-                f"  NOTE: {path.name}'s filename claims station={claimed_station} "
-                f"{claimed_year}-{claimed_month:02d}, but its embedded coordinates/dates "
-                f"actually match {case['county']} County, {case['state']} "
-                f"(station {case['station_id']}, {case['year']}-{case['month']:02d}). "
-                "Processing it as the latter -- consider renaming the file to avoid confusion."
-            )
-
-        if case["geoid"] in matched:
-            raise ValueError(
-                f"Both {matched[case['geoid']][0].name} and {path.name} match the same "
-                f"ground-truth case (GEOID {case['geoid']}) -- remove the stale/duplicate file."
-            )
-        matched[case["geoid"]] = (path, groups)
-
-    return matched
-
-
-def parse_filename(path: Path) -> tuple[str, int, int] | tuple[None, None, None]:
-    m = re.match(r"^([A-Za-z0-9]+)_(\d{4})_(\d{2})\.grib$", path.name)
-    if not m:
-        return (None, None, None)
-    station_id, year, month = m.groups()
-    return station_id, int(year), int(month)
-
 
 # ---------------------------------------------------------------------
 # Point selection
@@ -286,12 +134,10 @@ def parse_filename(path: Path) -> tuple[str, int, int] | tuple[None, None, None]
 
 def resolve_valid_point(groups: list[xr.Dataset], lat: float, lon: float) -> dict:
     """
-    Find the grid cell to actually use for this station: the nearest one
-    if it has real data, otherwise the nearest cell (within
-    MAX_FALLBACK_DISTANCE_DEG) that isn't masked out by ERA5-Land's
-    land-sea mask. Checked against `t2m` as a representative variable --
-    the mask is the same static land/sea field for every variable in a
-    given ERA5-Land file, so one check is enough.
+    Find the grid cell to use for this station: the nearest one if it has
+    real data, otherwise the nearest unmasked cell within
+    MAX_FALLBACK_DISTANCE_DEG (see SCRIPT_OVERVIEW.md). Checked against
+    `t2m` only -- the land-sea mask is the same for every variable.
     """
     da = find_var(groups, "t2m")
     lats = da.latitude.values
@@ -356,12 +202,11 @@ def select_point(da: xr.DataArray, lat: float, lon: float) -> xr.DataArray:
 
 def daily_accumulated_totals(da: xr.DataArray, year: int, month: int) -> pd.DataFrame:
     """
-    Daily totals for an accumulated field (precip, snowfall): each day's
-    own reference-time block accumulates from zero across its 24 steps,
-    so the day's total is that block's last available step. Flags days
-    where step=24 itself wasn't available (see module docstring -- this
-    is expected for the last day of the requested range) and falls back
-    to the latest step that IS available.
+    Daily total for an accumulated field (precip, snowfall): each day's
+    reference-time block accumulates from zero across 24 steps, so the
+    total is that block's last available step. Flags days missing
+    step=24 (expected for the last day of the range -- see
+    SCRIPT_OVERVIEW.md).
     """
     rows = []
     for i, t in enumerate(da.time.values):
@@ -448,9 +293,8 @@ def process_case(case: dict, path: Path, groups: list[xr.Dataset]) -> dict:
     surface_pressure = sp_daily["mean"].mean()
     snow_depth = sde_daily["mean"].mean()
 
-    # Wind speed from the DAILY MEAN u/v components (speed-of-the-mean-vector),
-    # matching production's add_derived_bands() order of operations -- not
-    # the mean of hourly speeds. See module docstring.
+    # Wind speed from the DAILY MEAN u/v components, matching production's
+    # add_derived_bands() order of operations -- not the mean of hourly speeds.
     daily_wind_speed = np.hypot(u10_daily["mean"], v10_daily["mean"])
     wind_speed_10m = daily_wind_speed.mean()
 
@@ -481,19 +325,16 @@ def main() -> None:
     """
     Processes whichever ground-truth GRIB files are currently present and
     merges the result into OUTPUT_PATH, rather than requiring all three at
-    once -- useful since these are large individual CDS downloads that
-    tend to finish one at a time. Rerunning after a new file lands
-    reprocesses only that file's case and leaves previously-computed rows
-    for other cases untouched.
+    once. Rerunning after a new file lands reprocesses only that file's
+    case and leaves other cases' rows untouched.
     """
     paths = sorted(INPUT_DIR.glob("*.grib"))
     if not paths:
         raise FileNotFoundError(f"No .grib files found in {INPUT_DIR}")
 
     # Optional: process only files whose name contains this substring
-    # (e.g. a station ID). Parsing each ~1MB file takes ~30s in this
-    # environment, so this is handy for reprocessing just one file
-    # without waiting on the others: SPOTCHECK_FILTER=USC00123777 python3 07f_...
+    # (e.g. a station ID) -- handy for reprocessing one file without
+    # waiting on the others: SPOTCHECK_FILTER=USC00123777 python3 07f_...
     name_filter = __import__("os").environ.get("SPOTCHECK_FILTER")
     if name_filter:
         paths = [p for p in paths if name_filter in p.name]
@@ -539,8 +380,8 @@ def main() -> None:
     flagged = result[(result["n_days_flagged"] > 0) | (result["n_hours_captured"] < result["expected_hours"])]
     if not flagged.empty:
         print(
-            "\nNote: incomplete coverage on these rows (see module docstring -- expected for "
-            "the last day of the requested range unless an extra trailing day was downloaded):"
+            "\nNote: incomplete coverage on these rows (expected for the last day of the "
+            "requested range unless an extra trailing day was downloaded):"
         )
         print(flagged[["geoid", "county", "year", "month", "n_days_flagged",
                         "n_hours_captured", "expected_hours"]].to_string(index=False))
