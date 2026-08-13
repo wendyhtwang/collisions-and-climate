@@ -127,7 +127,6 @@ def find_var(groups: list[xr.Dataset], short_name: str) -> xr.DataArray:
     raise KeyError(f"Variable '{short_name}' not found in any group of this file.")
 
 
-
 # ---------------------------------------------------------------------
 # Point selection
 # ---------------------------------------------------------------------
@@ -332,17 +331,14 @@ def main() -> None:
     if not paths:
         raise FileNotFoundError(f"No .grib files found in {INPUT_DIR}")
 
-    # Optional: process only files whose name contains this substring
-    # (e.g. a station ID) -- handy for reprocessing one file without
-    # waiting on the others: SPOTCHECK_FILTER=USC00123777 python3 07f_...
-    name_filter = __import__("os").environ.get("SPOTCHECK_FILTER")
-    if name_filter:
-        paths = [p for p in paths if name_filter in p.name]
-        print(f"SPOTCHECK_FILTER={name_filter!r} -- restricting to {len(paths)} file(s)")
-
     print(f"Found {len(paths)} downloaded GRIB file(s) in {INPUT_DIR}")
-    print("Matching files to ground-truth cases by embedded coordinates/dates (not filename):")
-    matched = match_files_to_cases(paths)
+
+    matched = {
+        case["geoid"]: path
+        for case in GROUND_TRUTH_CASES
+        for path in paths
+        if case["station_id"] in path.name
+    }
 
     missing = [c for c in GROUND_TRUTH_CASES if c["geoid"] not in matched]
     if missing:
@@ -357,7 +353,8 @@ def main() -> None:
     for case in GROUND_TRUTH_CASES:
         if case["geoid"] not in matched:
             continue
-        path, groups = matched[case["geoid"]]
+        path = matched[case["geoid"]]
+        groups = load_groups(path)
         rows.append(process_case(case, path, groups))
 
     if not rows:

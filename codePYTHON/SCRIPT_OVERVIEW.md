@@ -280,9 +280,6 @@ ERA5 counterpart to PRISM's Data Explorer point lookup.
   check, and falls back to the nearest unmasked cell if the closest one
   is land-sea-masked (see "ERA5-Land land-sea masking" below), flagging
   the row (`used_fallback_grid_cell`) rather than returning all-NaN.
-- Can be rerun as each ground-truth station's download finishes rather
-  than requiring all of them at once -- reprocesses only the newly
-  available case(s) and leaves previously-computed rows untouched.
 
 ### `07g_filter_era5_ground_truth_sample.py`
 Filters the production ERA5 county-month panel down to the exact
