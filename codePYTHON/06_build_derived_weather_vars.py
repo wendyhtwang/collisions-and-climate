@@ -37,8 +37,8 @@ scripts because their monthly-aggregation column sets differ more.
   matches 07d's project-wide missing-data convention.
 - Same completeness check as 05/05b (flags county-months whose day count
   doesn't match the calendar) and the same automatic-drop-if-identical /
-  error-if-conflicting handling of the WI-county duplicate rows (see
-  SCRIPT_OVERVIEW.md).
+  error-if-any-non-key-column-disagrees handling of the WI-county
+  duplicate rows (see SCRIPT_OVERVIEW.md).
 - Reads one year/file at a time per dataset, same memory-management
   reasoning as 05/05b.
 - Writes a combined variable-documentation CSV (name, label, unit,
@@ -336,9 +336,13 @@ def resolve_duplicate_rows(daily: pd.DataFrame, duplicate_mask: pd.Series, path:
     """Handle geoid/date rows that appear more than once in a single file, w/o hard-erroring."""
     dup_rows = daily[duplicate_mask]
 
-    conflicting_rows = dup_rows[~dup_rows.duplicated(keep=False)]
-    if not conflicting_rows.empty:
-        conflicting_pairs = conflicting_rows[["geoid", "date"]].drop_duplicates()
+    # Per geoid/date, count distinct values (incl. NaN) in every non-key column; 
+    # any column w/ >1 distinct value raises a conflict error.
+    value_cols = [c for c in daily.columns if c not in ("geoid", "date")]
+    n_distinct = dup_rows.groupby(["geoid", "date"])[value_cols].nunique(dropna=False)
+    conflicting_keys = n_distinct.index[(n_distinct > 1).any(axis=1)]
+    if len(conflicting_keys):
+        conflicting_pairs = pd.DataFrame(conflicting_keys.tolist(), columns=["geoid", "date"])
         raise ValueError(
             f"{path.name}: found {len(conflicting_pairs)} geoid/date "
             "combination(s) with CONFLICTING duplicate rows (same "
