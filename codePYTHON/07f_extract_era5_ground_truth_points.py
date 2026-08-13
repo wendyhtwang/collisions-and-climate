@@ -30,7 +30,6 @@ ERA5 counterpart to PRISM's Data Explorer point lookup.
 
 from __future__ import annotations
 
-import re
 import warnings
 from pathlib import Path
 
