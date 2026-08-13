@@ -218,9 +218,7 @@ against real station data.
   island microclimate effects), and a small city carved out of a
   well-instrumented metro area can look "isolated" by station count while
   actually sitting inside dense regional coverage -- a poor fit for the
-  isolated-rural-county case actually wanted. This is a name/LSAD-code
-  heuristic, not a guaranteed-correct classification, so candidates should
-  still be reviewed by eye.
+  isolated-rural-county case actually wanted.
 - Doesn't auto-pick a final county -- outputs a candidate list for manual
   review. No Earth Engine calls; needs real internet access, so run this
   locally (e.g. on Kodama), not from a network-restricted sandbox.

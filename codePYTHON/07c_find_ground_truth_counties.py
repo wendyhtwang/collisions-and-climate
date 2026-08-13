@@ -13,9 +13,7 @@ against real station data (per the 08.07.26 Fri team meeting).
 - Excludes independent cities (e.g. Baltimore city, VA cities) even
   though they're legitimate Census county-equivalents: their stations are
   often urban/microclimate sites sitting inside well-instrumented metro
-  areas, a poor fit for the isolated-rural-county case wanted. This is a
-  name/code heuristic, not a guaranteed-correct classification, so
-  candidates should still be reviewed by eye.
+  areas, a poor fit for the isolated-rural-county case wanted. 
 - Doesn't auto-pick a final county -- outputs a candidate list for manual
   review. No Earth Engine calls; needs real internet access, so run this
   locally (e.g. on Kodama), not from a network-restricted sandbox.
