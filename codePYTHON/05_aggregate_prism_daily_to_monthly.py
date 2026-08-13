@@ -20,7 +20,6 @@ variables averaged.
   memory at once.
 """
 
-import calendar
 import glob
 import re
 from pathlib import Path
@@ -239,10 +238,10 @@ def aggregate_file_to_month(daily: pd.DataFrame) -> pd.DataFrame:
 def flag_incomplete_months(monthly: pd.DataFrame) -> pd.DataFrame:
     """Add an `is_incomplete` column: day count vs. expected calendar days."""
     monthly = monthly.copy()
-    expected_days = monthly.apply(
-        lambda row: calendar.monthrange(int(row["year"]), int(row["month"]))[1], axis=1
-    )
-    monthly["expected_days"] = expected_days
+
+    monthly["expected_days"] = pd.PeriodIndex.from_fields(
+        year=monthly["year"].astype(int), month=monthly["month"].astype(int), freq="M"
+    ).days_in_month
     monthly["is_incomplete"] = monthly["n_days"] != monthly["expected_days"]
     return monthly
  
