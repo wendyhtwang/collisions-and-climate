@@ -8,7 +8,8 @@ PRISM variables, at daily resolution.
   Monthly aggregation instead happens client-side in
   05_aggregate_daily_to_monthly.py, which is validated correct.
 - One Drive export task per calendar year (~45 tasks). A local JSON
-  manifest tracks completed years so a rerun skips them.
+  manifest tracks completed years, updated as each task finishes, so a
+  rerun skips them.
 - Output destination is resolved from a candidate-path list (Kodama path
   first, personal dev repo fallback second), not hardcoded, so the same
   script works on either machine.
@@ -152,12 +153,12 @@ def main():
 
     logging.info("Monitoring %d export task(s)...", len(tasks))
     failed_task_ids = geeutil.monitor_export_tasks(
-        tasks, poll_interval_seconds=POLL_INTERVAL_SECONDS
+        tasks,
+        poll_interval_seconds=POLL_INTERVAL_SECONDS,
+        on_task_complete=lambda task_id: geeutil.mark_period_complete(
+            MANIFEST_PATH, task_year_by_id[task_id]
+        ),
     )
-
-    for task in tasks:
-        if task.id not in failed_task_ids:
-            geeutil.mark_period_complete(MANIFEST_PATH, task_year_by_id[task.id])
 
     if failed_task_ids:
         failed_years = sorted(task_year_by_id[tid] for tid in failed_task_ids)

@@ -11,9 +11,10 @@ so that dataset-specific scripts only need to supply their own configuration.
 - Cross-machine paths are resolved via a candidate-list pattern (try each
   path, use the first that exists) rather than hardcoding one machine's
   path.
-- Resumability is a simple local JSON manifest of completed periods --
-  it doesn't check Drive/GCS directly, so the manifest and the actual
-  exported files could in principle drift apart if a Drive file is
+- Resumability is a simple local JSON manifest of completed periods,
+  written incrementally as each export task completes (not batched at the
+  end) -- it doesn't check Drive/GCS directly, so the manifest and the
+  actual exported files could in principle drift apart if a Drive file is
   deleted by hand.
 - When multiple export tasks share one new Drive folder, the first task
   is submitted alone and the rest wait for it to leave the READY state --
@@ -306,15 +307,22 @@ def attach_to_tasks(task_ids):
     return matched
 
 
-def monitor_export_tasks(tasks, poll_interval_seconds=15, detail_log_every_n_polls=10):
+def monitor_export_tasks(
+    tasks, poll_interval_seconds=15, detail_log_every_n_polls=10, on_task_complete=None
+):
     """
     Poll Earth Engine until all export tasks finish, showing a progress
     bar and logging state transitions. Surfaces EECU-seconds (cumulative
     compute time) and running duration per task, since task state alone
     ("RUNNING") doesn't show whether a long export is stuck or progressing.
 
-    Returns task IDs that did NOT finish COMPLETED, so the caller can
-    skip marking those periods complete in the resumability manifest.
+    `on_task_complete`, if given, is called with a task's ID the moment
+    that task individually reaches COMPLETED, not after the whole batch
+    finishes -- lets the caller persist progress (e.g. a resumability
+    manifest) incrementally, so an interrupted run doesn't lose the record
+    of tasks that already finished.
+
+    Returns task IDs that did NOT finish COMPLETED.
     """
     terminal_states = {"COMPLETED", "FAILED", "CANCELLED"}
     remaining = {task.id: task for task in tasks}
@@ -348,6 +356,8 @@ def monitor_export_tasks(tasks, poll_interval_seconds=15, detail_log_every_n_pol
                             task_id,
                             status.get("error_message", "(no error_message provided)"),
                         )
+                    elif state == "COMPLETED" and on_task_complete:
+                        on_task_complete(task_id)
 
                 eecu_seconds = status.get("batch_eecu_usage_seconds")
                 if eecu_seconds:

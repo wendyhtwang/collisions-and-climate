@@ -42,8 +42,8 @@ variables, at daily resolution.
   instead happens client-side in `05_aggregate_prism_daily_to_monthly.py`, which
   is validated correct.
 - One Drive export task per calendar year (~45 tasks). A local JSON
-  manifest tracks completed years so a rerun skips them instead of
-  resubmitting.
+  manifest tracks completed years, updated as each task finishes, so a
+  rerun skips them instead of resubmitting.
 - Output destination is resolved from a candidate-path list (Kodama path
   first, personal dev repo fallback second), not hardcoded, so the same
   script works on either machine.
@@ -83,16 +83,9 @@ dataset.
   ERA5 variable list, after validating them in the small-scale test --
   worth confirming with the team whether this duplicates PRISM's own
   tmin/tmax.
-- Shares `gee_extract_utils.py`'s resumability-manifest and
-  shared-Drive-folder mechanics with the PRISM script.
-- **Operational note:** a run in Aug 2026 was interrupted after 1981-2009
-  completed but before the resumability manifest was written (the manifest
-  only writes after every task reaches a terminal state). Recovered by
-  manually trimming `YEARS` to the remaining range rather than rewriting
-  the manifest from Earth Engine's task history -- confirmed via the GEE
-  Tasks panel which years were actually done, and cancelled the
-  still-pending tasks for that range before rerunning so it didn't
-  resubmit duplicates. `YEARS` is back to the full 1981-2025 range now.
+- Shares `gee_extract_utils.py`'s resumability-manifest (written
+  incrementally as each task completes) and shared-Drive-folder mechanics
+  with the PRISM script.
 
 ### `04b_extract_era5_wma.py` -- not yet implemented
 Empty file. Placeholder for the ERA5 equivalent of `02b_extract_prism_wma.py`
@@ -356,10 +349,10 @@ dataset-specific scripts only need to supply their own configuration.
   path, use the first that exists, raise if none do) rather than
   hardcoding one machine's path -- mirrors the project's Stata style-guide
   convention.
-- Resumability is a simple local JSON manifest of completed periods -- it
-  doesn't check Drive/GCS directly, so the manifest and the actual
-  exported files could in principle drift apart if a Drive file is
-  deleted by hand.
+- Resumability is a simple local JSON manifest of completed periods,
+  written incrementally as each export task completes -- it doesn't check
+  Drive/GCS directly, so the manifest and the actual exported files could
+  in principle drift apart if a Drive file is deleted by hand.
 - Progress monitoring surfaces EECU-seconds (compute time) per task, not
   just task state, since "RUNNING" alone doesn't show whether a job is
   stalled or making progress.
@@ -435,21 +428,6 @@ waits for it to leave the READY state (proxy for "the folder now exists")
 before submitting the rest of a batch. This is a mitigation, not a
 guarantee -- for full certainty, create the destination folder by hand in
 Drive before the first run against a new folder name.
-
-### ERA5 interrupted run / manifest gap (affects `04`)
-`04_extract_era5_county.py` only writes its resumability manifest after
-every submitted task reaches a terminal state, not incrementally. A run in
-Aug 2026 had its terminal closed before all 45 tasks finished (1981-2009
-had completed; 2010-2025 were still running/queued), so the manifest was
-never written even though most of the work had succeeded. Recovered
-manually: confirmed completed years via checkmarks in the GEE Tasks panel,
-cancelled the still-pending 2010-2025 tasks so a rerun wouldn't submit
-duplicates alongside them, and temporarily trimmed `YEARS` to just the
-remaining range for the rerun. `YEARS` has since been reverted to the full
-1981-2025 range. (A `rebuild_era5_manifest_from_tasks.py` utility was
-written to automate this reconciliation but was ultimately not needed and
-was removed from the repo, since GEE tasks run server-side independent of
-the local machine and the manual fix above was sufficient.)
 
 ### PRISM daily-vs-composited aggregation discrepancy (affects `02`, `04`, `07`)
 Compositing a PRISM `ImageCollection` with `.sum()`/`.mean()` and then

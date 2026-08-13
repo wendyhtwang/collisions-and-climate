@@ -14,8 +14,9 @@ dataset.
 - Adds tmin_c/tmax_c (daily extremes), which weren't in the original ERA5
   variable list, after validating them in the small-scale test -- worth
   confirming with the team whether this duplicates PRISM's own tmin/tmax.
-- Shares gee_extract_utils.py's resumability-manifest and shared-Drive-
-  folder mechanics with the PRISM script.
+- Shares gee_extract_utils.py's resumability-manifest (written
+  incrementally as each task completes) and shared-Drive-folder mechanics
+  with the PRISM script.
 - Large job -- do not run against the full YEARS range without explicit
   sign-off; test with 1-2 years first.
 """
@@ -212,12 +213,12 @@ def main():
 
     logging.info("Monitoring %d export task(s)...", len(tasks))
     failed_task_ids = geeutil.monitor_export_tasks(
-        tasks, poll_interval_seconds=POLL_INTERVAL_SECONDS
+        tasks,
+        poll_interval_seconds=POLL_INTERVAL_SECONDS,
+        on_task_complete=lambda task_id: geeutil.mark_period_complete(
+            MANIFEST_PATH, task_year_by_id[task_id]
+        ),
     )
-
-    for task in tasks:
-        if task.id not in failed_task_ids:
-            geeutil.mark_period_complete(MANIFEST_PATH, task_year_by_id[task.id])
 
     if failed_task_ids:
         failed_years = sorted(task_year_by_id[tid] for tid in failed_task_ids)
