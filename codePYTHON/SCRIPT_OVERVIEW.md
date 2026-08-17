@@ -66,7 +66,9 @@ script.
   conversions, wind speed) before they're carried into the full-scale
   script.
 - Adds `tmin_c`/`tmax_c` as a test addition to check whether they're worth
-  keeping (PRISM already covers tmin/tmax, so this may be redundant).
+  keeping. PRISM already covers tmin/tmax, but PRISM is the main weather
+  dataset and ERA5 exists as a robustness check against it, so ERA5 needs
+  its own tmin/tmax for that comparison -- not redundant.
 - Output validated against manual Earth Engine Console calculations (see
   `03b_verify_era5_gee_console.js`).
 
@@ -83,9 +85,10 @@ dataset.
   ERA5-Land has no direct wind-speed band. `surface_pressure` is left in
   native Pa.
 - Adds `tmin_c`/`tmax_c` (daily extremes), which weren't in the original
-  ERA5 variable list, after validating them in the small-scale test --
-  worth confirming with the team whether this duplicates PRISM's own
-  tmin/tmax.
+  ERA5 variable list, after validating them in the small-scale test.
+  PRISM already covers tmin/tmax, but since PRISM is the main weather
+  dataset and ERA5 exists as a robustness check against it, ERA5 needs
+  its own tmin/tmax for that comparison -- not redundant.
 - Shares `gee_extract_utils.py`'s resumability-manifest (written
   incrementally as each task completes) and shared-Drive-folder mechanics
   with the PRISM script.
@@ -137,15 +140,15 @@ identical and only the column names/units differ.
   monthly output), so `mean_temp_c` here can be cross-checked against
   `05`'s `tmean_mean`/`tmean_c_mean` as an independent consistency
   check.
-- Derived variables: `days_below_freezing` (daily TMIN < 0C -- **flagged
-  assumption**, task doc doesn't specify min/max/mean), `freeze_thaw_days`
-  (daily TMIN < 0C AND TMAX > 0C -- given explicitly in the task doc),
-  `mean_temp_c`, `tmean_variance_c2` (sample variance, ddof=1, on daily
-  mean temp -- **flagged assumption** on which series), `days_precip_gt_
-  10mm` (threshold configurable via `PRECIP_THRESHOLD_MM` -- task doc's
-  example value), `heating_degree_days`/`cooling_degree_days` (base
-  65F/18.33C -- **flagged assumption**, standard US convention but not
-  specified in the task doc), and ERA5-only `total_snowfall_mm` (summed)
+- Derived variables: `days_extremely_cold` (daily TMIN < 0F/-17.8C -- deer
+  metabolic-stress threshold), `freeze_thaw_days`
+  (daily TMIN < 0C AND TMAX > 0C),
+  `mean_temp_c`, `tmean_variance_c2`/`tmin_variance_c2`/`tmax_variance_c2`
+  (sample variance, ddof=1, on daily mean/min/max temp)
+  `days_precip_above_10mm` (threshold configurable via
+  `PRECIP_THRESHOLD_MM` -- task doc's example value),
+  `heating_degree_days`/`cooling_degree_days` (base 65F/18.33C, per
+  NOAA's degree-day definition), and ERA5-only `total_snowfall_mm` (summed)
   /`mean_snow_depth` (averaged, since it's a stock not a flux, native
   ERA5-Land meters -- same reasoning as `05`'s `snow_depth_mean`).
 - Same completeness check and WI-county duplicate-row handling (per-column,
@@ -193,8 +196,7 @@ county-month, within a numeric tolerance.
   doesn't pass, rather than just printing a warning.
 - **Result:** this GEE-reproduction approach was superseded by the
   ground-truth station comparison (`07c`-`07e`) as the check that actually
-  passed and closed out the spot-check work (see git history / team
-  discussion, 08.07.26).
+  passed and closed out the spot-check work.
 
 ### `07c_find_ground_truth_counties.py`
 Identifies candidate CONUS counties served by only one (or very few) NOAA

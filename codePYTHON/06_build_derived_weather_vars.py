@@ -120,13 +120,10 @@ def compute_month_derived_vars(daily: pd.DataFrame, config: DatasetConfig) -> pd
     daily = daily.copy()
     daily["month"] = daily["date"].dt.month
 
-    # Per-day boolean/numeric helper columns, computed once so the
-    # groupby-agg below is fully vectorized. NaN inputs propagate to NaN
-    # comparisons (treated as False by pandas boolean ops here), which
-    # means a missing daily reading is excluded from these counts rather
-    # than counted as "not below freezing" / "not above threshold" --
-    # matches 05's missing-data convention (also applied independently
-    # by 07d to NOAA station data).
+    # Per-day helper columns for a vectorized groupby-agg. NaN comparisons
+    # evaluate False (not skipna), so a missing reading is excluded from
+    # these sums rather than counted "not extreme" -- same convention as
+    # 05/07d, via a different mechanism than their skipna sum/mean.
     daily["_extremely_cold"] = daily[config.tmin_col] < EXTREME_COLD
     daily["_freeze_thaw"] = (daily[config.tmin_col] < 0.0) & (daily[config.tmax_col] > 0.0)
     daily["_precip_above_threshold"] = daily[config.precip_col] > PRECIP_THRESHOLD_MM

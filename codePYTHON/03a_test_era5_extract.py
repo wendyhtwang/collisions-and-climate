@@ -8,9 +8,9 @@ full-scale ERA5 script.
   converting Kelvin->Celsius and precip/snowfall meters->mm inline (a new
   pattern for this project -- PRISM needed no such conversion), and
   computing wind speed from u/v components.
-- Adds tmin_c/tmax_c daily extremes as a test addition, to check whether
-  they're worth carrying into the full pipeline (PRISM already covers
-  tmin/tmax, so this may be redundant -- flagged for the team).
+- Includes tmin_c/tmax_c daily extremes; PRISM already covers
+  tmin/tmax, but still included here so ERA5 can server as a robustness check
+  to the main PRISM dataset.
 - Run this before 04a_extract_era5_county.py; don't launch
   a full-scale run until a small test run succeeds.
 """

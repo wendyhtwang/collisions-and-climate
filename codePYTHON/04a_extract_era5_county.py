@@ -11,9 +11,9 @@ dataset.
   conventions. Wind speed is computed from u/v components since
   ERA5-Land has no direct wind-speed band. `surface_pressure` is left in
   native Pa.
-- Adds tmin_c/tmax_c (daily extremes), which weren't in the original ERA5
-  variable list, after validating them in the small-scale test -- worth
-  confirming with the team whether this duplicates PRISM's own tmin/tmax.
+- Includes tmin_c/tmax_c daily extremes; PRISM already covers
+  tmin/tmax, but still included here so ERA5 can server as a robustness check
+  to the main PRISM dataset.
 - Shares gee_extract_utils.py's resumability-manifest (written
   incrementally as each task completes) and shared-Drive-folder mechanics
   with the PRISM script.
