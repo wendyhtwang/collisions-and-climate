@@ -20,13 +20,22 @@ variables averaged.
   group, since that needs a human look.
 - Reads one year/file at a time rather than loading all 45 years into
   memory at once.
+- File discovery, year-conflict checking, duplicate-row resolution, and
+  the completeness check are shared with 05/06 -- see aggregation_utils.py.
 """
 
-import glob
 import re
 from pathlib import Path
 
 import pandas as pd
+
+from aggregation_utils import (
+    check_for_year_conflicts,
+    discover_input_files,
+    flag_incomplete_months,
+    load_daily_extract,
+    resolve_data_root,
+)
 
 # ---------------------------------------------------------------------
 # Configuration
@@ -85,134 +94,8 @@ FILENAME_YEAR_RE = re.compile(r"^era5_county_daily_(\d{4})_")
 
 
 # ---------------------------------------------------------------------
-# Paths
+# Aggregate one file's daily county rows to county-year-month
 # ---------------------------------------------------------------------
-
-def resolve_data_root(candidates):
-    """Return the first existing directory from `candidates`, in order."""
-    for candidate in candidates:
-        path = Path(candidate)
-        if path.exists():
-            return path
-
-    raise FileNotFoundError(
-        "None of the candidate data roots exist on this machine: "
-        f"{[str(c) for c in candidates]}. Add this machine's path to "
-        "INPUT_DIR_CANDIDATES."
-    )
-
-
-def discover_input_files(input_dir: Path, pattern: str) -> list[Path]:
-    """Return sorted paths to daily extract files matching `pattern`."""
-    paths = sorted(Path(p) for p in glob.glob(str(input_dir / pattern)))
-
-    if not paths:
-        raise FileNotFoundError(f"No files matching '{pattern}' found in {input_dir}")
-
-    return paths
-
-
-def check_for_year_conflicts(paths: list[Path]) -> None:
-    """
-    Raise if any file doesn't match the expected <year> naming convention
-    (e.g. a small-scale test file sitting in the same folder), or if more
-    than one input file claims the same year (e.g. a rerun produced a
-    second CSV) -- stops rather than silently guessing which file to use.
-    """
-    years_to_files: dict[str, list[Path]] = {}
-    unparsed = []
-
-    for path in paths:
-        match = FILENAME_YEAR_RE.match(path.name)
-        if not match:
-            unparsed.append(path)
-            continue
-        years_to_files.setdefault(match.group(1), []).append(path)
-
-    if unparsed:
-        raise ValueError(
-            "The following file(s) don't match the expected "
-            "'era5_county_daily_<year>_<run_timestamp>.csv' naming "
-            f"convention -- check before proceeding: {[p.name for p in unparsed]}"
-        )
-
-    conflicts = {year: fs for year, fs in years_to_files.items() if len(fs) > 1}
-    if conflicts:
-        lines = "\n".join(
-            f"  {year}: {[p.name for p in fs]}" for year, fs in sorted(conflicts.items())
-        )
-        raise ValueError(
-            "Multiple input files claim the same year -- resolve which "
-            f"to keep before aggregating:\n{lines}"
-        )
-
-    found_years = {int(y) for y in years_to_files}
-    missing = sorted(EXPECTED_YEARS - found_years)
-    unexpected = sorted(found_years - EXPECTED_YEARS)
-    if missing:
-        print(f"Note: {len(missing)} expected year(s) not found among input files: {missing}")
-    if unexpected:
-        print(f"Note: {len(unexpected)} input year(s) outside the expected 1981-2025 range: {unexpected}")
-
-
-# ---------------------------------------------------------------------
-# Load + aggregate one year/file at a time, without holding all years of
-# daily rows in memory at once.
-# ---------------------------------------------------------------------
-
-# Same known duplicate-row case as PRISM (18 WI counties with a
-# source-data duplicate county feature -- see SCRIPT_OVERVIEW.md).
-def resolve_duplicate_rows(daily: pd.DataFrame, duplicate_mask: pd.Series, path: Path) -> pd.DataFrame:
-    """Handle geoid/date rows that appear more than once in a single file, w/o hard-erroring."""
-    dup_rows = daily[duplicate_mask]
-
-    # Per geoid/date, count distinct values (incl. NaN) in every non-key column; 
-    # any column w/ >1 distinct value raises a conflict error.
-    value_cols = [c for c in daily.columns if c not in ("geoid", "date")]
-    n_distinct = dup_rows.groupby(["geoid", "date"])[value_cols].nunique(dropna=False)
-    conflicting_keys = n_distinct.index[(n_distinct > 1).any(axis=1)]
-    if len(conflicting_keys):
-        conflicting_pairs = pd.DataFrame(conflicting_keys.tolist(), columns=["geoid", "date"])
-        raise ValueError(
-            f"{path.name}: found {len(conflicting_pairs)} geoid/date "
-            "combination(s) with CONFLICTING duplicate rows (same "
-            "geoid+date, but values disagree elsewhere) -- this is NOT "
-            "the known byte-identical-duplicate case and needs manual "
-            f"review before aggregating:\n{conflicting_pairs.to_string(index=False)}"
-        )
-
-    # Everything remaining is a confirmed byte-identical duplicate --
-    # safe to collapse to one row per geoid/date.
-    n_pairs_affected = dup_rows[["geoid", "date"]].drop_duplicates().shape[0]
-    n_rows_dropped = int(duplicate_mask.sum()) - n_pairs_affected
-    affected_geoids = sorted(dup_rows["geoid"].unique())
-    print(
-        f"  Note: {path.name} had {n_rows_dropped} exact-duplicate row(s) "
-        f"across {n_pairs_affected} geoid/date combination(s) -- confirmed "
-        f"byte-identical, dropped automatically. Affected geoid(s): {affected_geoids}"
-    )
-
-    return daily.drop_duplicates(subset=["geoid", "date"], keep="first")
-
-
-def load_daily_extract(path: Path) -> pd.DataFrame:
-    """Read one daily extraction CSV (one calendar year)."""
-    # dtype=str on the FIPS/geoid columns matters: without it, pandas
-    # infers these as integers and silently drops leading zeros (e.g.
-    # county_fips "005" -> 5, geoid "01001" -> 1001), which would corrupt
-    # merges for any state whose FIPS code starts with 0.
-    daily = pd.read_csv(
-        path,
-        parse_dates=["date"],
-        dtype={"geoid": str, "state_fips": str, "county_fips": str},
-    )
-
-    duplicate_mask = daily.duplicated(subset=["geoid", "date"], keep=False)
-    if duplicate_mask.any():
-        daily = resolve_duplicate_rows(daily, duplicate_mask, path)
-
-    return daily
-
 
 def aggregate_file_to_month(daily: pd.DataFrame) -> pd.DataFrame:
     """Collapse one file's daily county rows to county-year-month."""
@@ -231,23 +114,6 @@ def aggregate_file_to_month(daily: pd.DataFrame) -> pd.DataFrame:
 
 
 # ---------------------------------------------------------------------
-# Completeness check: flag county-months with fewer/more days than the
-# calendar expects (leap years included), so partial data isn't silently
-# aggregated as if it were a full month.
-# ---------------------------------------------------------------------
-
-def flag_incomplete_months(monthly: pd.DataFrame) -> pd.DataFrame:
-    """Add an `is_incomplete` column: day count vs. expected calendar days."""
-    monthly = monthly.copy()
-
-    monthly["expected_days"] = pd.PeriodIndex.from_fields(
-        year=monthly["year"].astype(int), month=monthly["month"].astype(int), freq="M"
-    ).days_in_month
-    monthly["is_incomplete"] = monthly["n_days"] != monthly["expected_days"]
-    return monthly
-
-
-# ---------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------
 
@@ -257,7 +123,10 @@ def main() -> None:
 
     paths = discover_input_files(input_dir, INPUT_PATTERN)
     print(f"Found {len(paths)} daily extract file(s).")
-    check_for_year_conflicts(paths)
+    check_for_year_conflicts(
+        paths, FILENAME_YEAR_RE, EXPECTED_YEARS,
+        naming_hint="era5_county_daily_<year>_<run_timestamp>.csv",
+    )
 
     monthly_frames = []
     total_daily_rows = 0
