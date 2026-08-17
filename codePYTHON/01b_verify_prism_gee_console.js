@@ -1,7 +1,7 @@
 /**
  * Manually recomputes one county's PRISM daily and monthly values
  * directly in the Earth Engine Code Editor, to check them against
- * 01_test_prism_extract.py / 05_aggregate_daily_to_monthly.py's CSV
+ * 01a_test_prism_extract.py / 05_aggregate_daily_to_monthly.py's CSV
  * output.
  *
  * - Defaults are pre-filled with Marion County, IL (GEOID 17121), Jan
@@ -46,7 +46,7 @@ print('Days of daily imagery found for this month (should match n_days):',
       prismMonth.size());
 
 // Same scale/tileScale as SCALE_METERS / tileScale in the Python script --
-// keep these in sync with 01_test_prism_extract.py if you ever change them.
+// keep these in sync with 01a_test_prism_extract.py if you ever change them.
 var SCALE_METERS = 4638.3;
 var TILE_SCALE = 4;
 

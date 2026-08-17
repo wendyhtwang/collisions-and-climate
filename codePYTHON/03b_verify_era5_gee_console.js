@@ -1,10 +1,10 @@
 /**
  * Manually recomputes one county-day's ERA5-Land derived values directly
  * in the Earth Engine Code Editor, to check them against
- * 03_test_era5_extract.py's CSV output.
+ * 03a_test_era5_extract.py's CSV output.
  *
  * - Recomputes the same derived bands as add_derived_bands() in
- *   03_test_era5_extract.py (Kelvin->Celsius, wind speed from u/v,
+ *   03a_test_era5_extract.py (Kelvin->Celsius, wind speed from u/v,
  *   meters->mm) -- unlike PRISM's console check, this is testing real
  *   conversion math, not just band selection. Keep in sync if
  *   add_derived_bands() changes.
@@ -40,7 +40,7 @@ print('County:', county.get('NAME'), '| GEOID:', county.get('GEOID'));
 var startDate = ee.Date(DATE);
 var endDate = startDate.advance(1, 'day');
 
-// Same raw bands read in 03_test_era5_extract.py, before conversion.
+// Same raw bands read in 03a_test_era5_extract.py, before conversion.
 var RAW_BANDS = [
   'temperature_2m', 'temperature_2m_min', 'temperature_2m_max',
   'dewpoint_temperature_2m', 'skin_temperature',
@@ -65,7 +65,7 @@ var TILE_SCALE = 4;
 
 // ---------------------------------------------------------------------
 // 2) Recompute the derived bands, mirroring add_derived_bands() in
-//    03_test_era5_extract.py exactly.
+//    03a_test_era5_extract.py exactly.
 // ---------------------------------------------------------------------
 var tmean_c = image.select('temperature_2m').subtract(273.15).rename('tmean_c');
 var tmin_c = image.select('temperature_2m_min').subtract(273.15).rename('tmin_c');

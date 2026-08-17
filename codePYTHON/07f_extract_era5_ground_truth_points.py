@@ -16,7 +16,7 @@ ERA5 counterpart to PRISM's Data Explorer point lookup.
   month is often missing its final step; that row is flagged
   (`n_days_flagged`) rather than silently under-counted.
 - tmin/tmax/tmean and wind speed follow production's exact order of
-  operations (04_extract_era5_county.py's `add_derived_bands()`): wind
+  operations (04a_extract_era5_county.py's `add_derived_bands()`): wind
   speed comes from the daily mean u/v components, not the mean of hourly
   speeds.
 - Grid-cell selection falls back to the nearest unmasked cell if the

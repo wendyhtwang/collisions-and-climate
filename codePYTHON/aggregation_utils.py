@@ -1,9 +1,9 @@
 """
 Shared validation/IO helpers for the daily-to-monthly aggregation scripts --
-05_aggregate_prism_daily_to_monthly.py, 05b_aggregate_era5_daily_to_monthly.py,
-and 06_build_derived_weather_vars.py. All three read one year's daily county
-extract at a time and roll it up to county-year-month, so they were
-independently carrying near-identical copies of the same data-quality
+05_aggregate_daily_to_monthly.py and 06_build_derived_weather_vars.py. Both
+read one year's daily county extract at a time and roll it up to
+county-year-month, so they were independently carrying near-identical
+copies of the same data-quality
 checks: locating/validating input files, resolving the known WI-county
 duplicate rows, and flagging incomplete months. Extracted here so a fix or
 review of this logic only has to happen once -- see SCRIPT_OVERVIEW.md.
@@ -12,7 +12,7 @@ Dataset-specific logic (which columns to sum vs. average, unit conversions,
 derived variables) stays in the calling script; this module only assumes
 the columns every daily extract shares (`geoid`, `date`, `year`, `month`).
 Mirrors gee_extract_utils.py's role for the extraction-stage scripts
-(00/02/02b/03/04/04b) -- this is the equivalent shared module for the
+(00/02a/02b/03a/04a/04b) -- this is the equivalent shared module for the
 aggregation stage.
 """
 

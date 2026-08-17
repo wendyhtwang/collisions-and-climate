@@ -1,6 +1,6 @@
 """
 Full-scale ERA5-Land extraction for all CONUS counties, 1981-2025 --
-mirrors 02_extract_prism_county.py's structure for the parallel weather
+mirrors 02a_extract_prism_county.py's structure for the parallel weather
 dataset.
 
 - Uses `ECMWF/ERA5_LAND/DAILY_AGGR`, not plain `ERA5/DAILY`: only the
@@ -10,7 +10,7 @@ dataset.
   meters->mm **inline during extraction**, to match PRISM's Celsius/mm
   conventions. Wind speed is computed from u/v components since
   ERA5-Land has no direct wind-speed band. `surface_pressure` is left in
-  native Pa. 
+  native Pa.
 - Adds tmin_c/tmax_c (daily extremes), which weren't in the original ERA5
   variable list, after validating them in the small-scale test -- worth
   confirming with the team whether this duplicates PRISM's own tmin/tmax.
@@ -34,8 +34,8 @@ from era5_extract_utils import ERA5_COLLECTION, RAW_BANDS, FINAL_BANDS, add_deri
 EE_PROJECT = "collisions-and-climate"
 
 # ERA5_COLLECTION, RAW_BANDS, FINAL_BANDS, and add_derived_bands() are
-# shared with 03_test_era5_extract.py -- see era5_extract_utils.py. Both
-# scripts must run the exact same conversion/derived-band logic, since 03
+# shared with 03a_test_era5_extract.py -- see era5_extract_utils.py. Both
+# scripts must run the exact same conversion/derived-band logic, since 03a
 # exists to validate this logic before it runs here at full CONUS scale.
 
 # ERA5-Land's native pixel size is approximately 11.1 km.

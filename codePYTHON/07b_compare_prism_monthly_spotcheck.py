@@ -1,5 +1,5 @@
 """
-Compares the independent GEE panel from 07_export_prism_monthly_spotcheck.py
+Compares the independent GEE panel from 07a_export_prism_monthly_spotcheck.py
 against the production prism_county_month.csv, county-month by
 county-month, within a numeric tolerance.
 

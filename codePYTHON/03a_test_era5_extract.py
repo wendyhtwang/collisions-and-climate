@@ -3,7 +3,7 @@ Small-scale ERA5-Land extraction test (IL/IN, 2020-2021), used to
 validate unit-conversion decisions before they're carried into the
 full-scale ERA5 script.
 
-- Validates several decisions before applying them in 03: using
+- Validates several decisions before applying them in 03a: using
   ECMWF/ERA5_LAND/DAILY_AGGR (only dataset with all required bands),
   converting Kelvin->Celsius and precip/snowfall meters->mm inline (a new
   pattern for this project -- PRISM needed no such conversion), and
@@ -27,7 +27,7 @@ from era5_extract_utils import ERA5_COLLECTION, RAW_BANDS, FINAL_BANDS, add_deri
 
 EE_PROJECT = "collisions-and-climate"
 
-# Illinois = 17; Indiana = 18 -- same states as 01_test_prism_extract.py,
+# Illinois = 17; Indiana = 18 -- same states as 01a_test_prism_extract.py,
 # so results are directly comparable to the already-validated PRISM test.
 STATE_FIPS = ["17", "18"]
 

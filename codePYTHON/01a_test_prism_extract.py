@@ -8,7 +8,7 @@ extraction method before running it at full CONUS scale.
   gee_extract_utils.py (the shared extraction module) changes, before
   trusting a full-scale run.
 - Output has been validated against manual Earth Engine Console
-  calculations -- see 01_verify_prism_gee_console.js.
+  calculations -- see 01b_verify_prism_gee_console.js.
 """
 
 import logging
@@ -38,7 +38,7 @@ YEARS = [2020, 2021]
 
 PRISM_COLLECTION = "OREGONSTATE/PRISM/ANd"
 
-# Start small. These can be expanded later -- see 02_extract_prism_county.py
+# Start small. These can be expanded later -- see 02a_extract_prism_county.py
 # for the full 7-band version.
 BANDS = ["ppt", "tmean", "tmin", "tmax"]
 

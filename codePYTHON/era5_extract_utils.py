@@ -1,6 +1,6 @@
 """
 Shared ERA5-Land-specific extraction logic used by both the small-scale
-test (03_test_era5_extract.py) and full-scale (04_extract_era5_county.py)
+test (03a_test_era5_extract.py) and full-scale (04a_extract_era5_county.py)
 extraction scripts -- 03 exists specifically to validate this logic at
 small scale before 04 runs it at full CONUS scale, so the two need to run
 the exact same code, not two independently-maintained copies of it.

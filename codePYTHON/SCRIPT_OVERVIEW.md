@@ -6,12 +6,15 @@ Each script's opening docstring now carries a condensed version of this same
 1-sentence-purpose + key-decisions format; this doc includes more detailed
 explanations regarding decisions that were not included in the code itself.
 
-Scripts are numbered in pipeline order: 
-`01` = small-scale PRISM test, `02` = full-scale PRISM extraction (`b` suffix = WMA-polygon
-variant). `05` = aggregation, `06` = derived vars, `07` = spot-checks, `08` = population data (not yet
+Scripts are numbered in pipeline order, with an `a`/`b`/... letter suffix
+whenever a number has more than one script (the first script gets `a`,
+never a bare number): `01a` = small-scale PRISM test, `02a` = full-scale
+PRISM extraction, `02b` = its WMA-polygon variant (same pattern for
+`03a`/`04a`/`04b`, the ERA5 counterparts). `05` = aggregation, `06` =
+derived vars, `07a`-`07h` = spot-checks, `08` = population data (not yet
 built). `gee_extract_utils.py` = shared library (unnumbered).
-`0X_verify_*_gee_console.js` = manual Earth Engine Console checks to verify 
-small-scale test extractions
+`01b`/`03b` (`0X_verify_*_gee_console.js`) = manual Earth Engine Console
+checks to verify the matching small-scale test extraction.
 
 ## Setup
 
@@ -22,7 +25,7 @@ Authenticates to Earth Engine and confirms the connection works.
 
 ## PRISM extraction
 
-### `01_test_prism_extract.py`
+### `01a_test_prism_extract.py`
 Small-scale PRISM extraction test (IL/IN, 2020-2021), used to validate the
 extraction method before running it at full CONUS scale.
 - Tests only 4 of PRISM's 7 bands and 2 states/2 years -- same states/years
@@ -30,9 +33,9 @@ extraction method before running it at full CONUS scale.
 - Kept in the repo as a fast sanity check to rerun whenever
   `gee_extract_utils.py` changes, before trusting a full-scale run.
 - Output validated against manual Earth Engine Console calculations (see
-  `01_verify_prism_gee_console.js`).
+  `01b_verify_prism_gee_console.js`).
 
-### `02_extract_prism_county.py`
+### `02a_extract_prism_county.py`
 Full-scale PRISM extraction for all CONUS counties, 1981-2025, all 7 PRISM
 variables, at daily resolution.
 - Extracts at **daily** resolution even though the end target is monthly:
@@ -55,21 +58,21 @@ yet.
 
 ## ERA5 extraction
 
-### `03_test_era5_extract.py`
+### `03a_test_era5_extract.py`
 Small-scale ERA5-Land extraction test (IL/IN, 2020-2021), used to validate
 unit-conversion decisions before they're carried into the full-scale ERA5
 script.
-- Validates the same decisions listed below for `04` (dataset choice, unit
+- Validates the same decisions listed below for `04a` (dataset choice, unit
   conversions, wind speed) before they're carried into the full-scale
   script.
 - Adds `tmin_c`/`tmax_c` as a test addition to check whether they're worth
   keeping (PRISM already covers tmin/tmax, so this may be redundant).
 - Output validated against manual Earth Engine Console calculations (see
-  `03_verify_era5_gee_console.js`).
+  `03b_verify_era5_gee_console.js`).
 
-### `04_extract_era5_county.py`
+### `04a_extract_era5_county.py`
 Full-scale ERA5-Land extraction for all CONUS counties, 1981-2025 --
-mirrors `02_extract_prism_county.py`'s structure for the parallel weather
+mirrors `02a_extract_prism_county.py`'s structure for the parallel weather
 dataset.
 - Uses `ECMWF/ERA5_LAND/DAILY_AGGR`, not plain `ERA5/DAILY`: only the
   -Land version has snowfall, snow depth, and skin temperature bands, at
@@ -154,7 +157,7 @@ identical and only the column names/units differ.
 
 ## Spot-checks
 
-### `07_export_prism_monthly_spotcheck.py`
+### `07a_export_prism_monthly_spotcheck.py`
 Independently reproduces a small PRISM county-month panel directly in
 Earth Engine, without using any of this repo's own extraction/aggregation
 code, so it can be compared against the production panel as a check on the
@@ -164,7 +167,7 @@ production pipeline's logic.
   invisible to this check.
 - Reduces each daily image to county means first, then aggregates to
   monthly inside GEE -- matches production's order of operations (see the
-  1-2% compositing discrepancy noted under `02`).
+  1-2% compositing discrepancy noted under `02a`).
 - Samples 8 explicit counties across 5 years (including the 2020/2021
   PRISM vintage boundary), not the full CONUS panel, to keep the check
   fast and its scope transparent/repeatable.
@@ -173,7 +176,7 @@ production pipeline's logic.
   duplication note below).
 
 ### `07b_compare_prism_monthly_spotcheck.py`
-Compares the independent GEE panel from `07_export_prism_monthly_spotcheck.py`
+Compares the independent GEE panel from `07a_export_prism_monthly_spotcheck.py`
 against the production `prism_county_month.csv`, county-month by
 county-month, within a numeric tolerance.
 - Left-joins the small GEE sample onto production (not an outer join), so
@@ -244,7 +247,7 @@ county-year-month rows selected for the ground-truth station comparison.
   exists, just not for that year/month."
 - Does no aggregation or Earth Engine calls -- a pure row filter, so it
   can't introduce any of the independent-reimplementation concerns the
-  07/07b scripts were built to avoid.
+  07a/07b scripts were built to avoid.
 
 ### `07f_extract_era5_ground_truth_points.py`
 Parses independently-downloaded ERA5-Land hourly GRIB files (pulled
@@ -265,7 +268,7 @@ ERA5 counterpart to PRISM's Data Explorer point lookup.
   range); that row is flagged (`n_days_flagged`) rather than silently
   under-counted.
 - tmin/tmax/tmean and wind speed follow production's exact order of
-  operations (`04`'s `add_derived_bands()`): temperatures are the day's
+  operations (`04a`'s `add_derived_bands()`): temperatures are the day's
   min/mean/max of 24 hourly readings; wind speed comes from the daily
   mean u/v components, not the mean of hourly speeds.
 - Grid-cell selection uses nearest-neighbor with an explicit distance
@@ -348,18 +351,18 @@ dataset-specific scripts only need to supply their own configuration.
 
 ## Manual verification (Earth Engine Console, not part of the pipeline)
 
-### `01_verify_prism_gee_console.js`
+### `01b_verify_prism_gee_console.js`
 Manually recomputes one county's PRISM daily and monthly values directly
 in the Earth Engine Code Editor console, to check them against
-`01_test_prism_extract.py` / `05_aggregate_daily_to_monthly.py`'s CSV
+`01a_test_prism_extract.py` / `05_aggregate_daily_to_monthly.py`'s CSV
 output. Reduces each day separately and aggregates in JS, mirroring the
 Python pipeline's method (see the compositing discrepancy note under
-`02`), rather than compositing the ImageCollection first.
+`02a`), rather than compositing the ImageCollection first.
 
-### `03_verify_era5_gee_console.js`
+### `03b_verify_era5_gee_console.js`
 Manually recomputes one county-day's ERA5-Land derived values directly in
 the Earth Engine Code Editor console, to check them against
-`03_test_era5_extract.py`'s CSV output. Unlike the PRISM console check,
+`03a_test_era5_extract.py`'s CSV output. Unlike the PRISM console check,
 this recomputes real conversion math (Kelvin->Celsius, wind speed from
 u/v, meters->mm), so it's testing `add_derived_bands()`'s logic, not just
 band selection.
@@ -371,7 +374,7 @@ band selection.
 Fuller writeups of a few things that are referenced above but were too
 long to keep inline in the code.
 
-### Wisconsin county duplication (affects `05`, `07`)
+### Wisconsin county duplication (affects `05`, `07a`)
 18 WI counties (55001, 55003, 55005, 55007, 55023, 55041, 55065, 55067,
 55085, 55095, 55113, 55119, 55121, 55123, 55125, 55129, 55135, 55137) had
 every daily row duplicated, byte-for-byte identical, in both the 2020 and
@@ -400,7 +403,7 @@ Fixed by counting distinct values (incl. NaN) per non-key column within
 each geoid/date group (`groupby(...).nunique(dropna=False)`); any column
 with >1 distinct value raises the conflict error.
 
-### Drive folder duplication (affects `gee_extract_utils.py`, `02`, `04`)
+### Drive folder duplication (affects `gee_extract_utils.py`, `02a`, `04a`)
 The 2020/2021 CONUS PRISM validation run created two separate Drive
 folders both named "earth_engine_prism_full" instead of reusing one, even
 though both years' export tasks used the exact same `drive_folder`
@@ -416,7 +419,7 @@ before submitting the rest of a batch. This is a mitigation, not a
 guarantee -- for full certainty, create the destination folder by hand in
 Drive before the first run against a new folder name.
 
-### PRISM daily-vs-composited aggregation discrepancy (affects `02`, `04`, `07`)
+### PRISM daily-vs-composited aggregation discrepancy (affects `02a`, `04a`, `07a`)
 Compositing a PRISM `ImageCollection` with `.sum()`/`.mean()` and then
 reducing once to county means gives values ~1-2% off from reducing each
 day independently and then summing/averaging the per-day results, even
@@ -430,7 +433,7 @@ manual console checks) reduces day-by-day and aggregates afterward, never
 composite-then-reduce.
 
 ### GEE spot-check vs. ground-truth spot-check
-Two different verification strategies exist in this repo: `07`/`07b`
+Two different verification strategies exist in this repo: `07a`/`07b`
 independently reproduce PRISM values in Earth Engine and compare them to
 production (a check on the pipeline's *processing* logic, since both
 sides derive from the same PRISM source). `07c`-`07e` instead compare

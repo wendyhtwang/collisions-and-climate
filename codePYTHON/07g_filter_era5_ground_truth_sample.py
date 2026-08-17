@@ -44,7 +44,7 @@ def main() -> None:
     if not PRODUCTION_PATH.exists():
         raise FileNotFoundError(
             f"Production ERA5 monthly file not found: {PRODUCTION_PATH}\n"
-            "This means the full-CONUS ERA5 extraction (04_extract_era5_county.py) and/or "
+            "This means the full-CONUS ERA5 extraction (04a_extract_era5_county.py) and/or "
             "its monthly aggregation (05_aggregate_daily_to_monthly.py) haven't been "
             "run yet, or their output hasn't been synced to this machine."
         )

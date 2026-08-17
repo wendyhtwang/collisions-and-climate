@@ -30,10 +30,10 @@ from aggregation_utils import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# Column names produced by 02_extract_prism_county.py / 04_extract_era5_county.py.
+# Column names produced by 02a_extract_prism_county.py / 04a_extract_era5_county.py.
 ID_COLS = ["geoid", "state_fips", "county_fips", "county_name"]
 
-# Expected extraction years, per 02/04's YEARS config (1981-2025 inclusive
+# Expected extraction years, per 02a/04a's YEARS config (1981-2025 inclusive
 # = 45 years). Used only to report missing/unexpected years -- not to
 # filter input files.
 EXPECTED_YEARS = set(range(1981, 2026))
