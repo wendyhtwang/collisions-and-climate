@@ -55,24 +55,6 @@ POLL_INTERVAL_SECONDS = 15
 
 
 # ---------------------------------------------------------------------
-# PRISM-specific: build one year's image collection
-# ---------------------------------------------------------------------
-
-def build_year_image_collection(year):
-    """Return the PRISM ImageCollection for one calendar year, band-selected."""
-    import ee  # local import: only needed here, keeps module-level imports light
-
-    start_date = ee.Date.fromYMD(year, 1, 1)
-    end_date = start_date.advance(1, "year")
-
-    return (
-        ee.ImageCollection(PRISM_COLLECTION)
-        .filterDate(start_date, end_date)
-        .select(BANDS)
-    )
-
-
-# ---------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------
 
@@ -97,7 +79,7 @@ def main():
         for year in YEARS:
             logging.info("Building extraction for %s %d...", state_abbrev, year)
 
-            image_collection = build_year_image_collection(year)
+            image_collection = geeutil.build_year_image_collection(PRISM_COLLECTION, year, BANDS)
             annual_results = geeutil.build_period_collection(
                 image_collection=image_collection,
                 counties=state_counties,

@@ -191,6 +191,31 @@ def build_period_collection(
     return ee.FeatureCollection(nested_results).flatten()
 
 
+def build_year_image_collection(collection_id, year, bands, raw_bands=None, preprocess_fn=None):
+    """
+    Return one calendar year's band-selected ImageCollection from
+    `collection_id`.
+
+    If `preprocess_fn` is given (e.g. ERA5's Kelvin->Celsius/derived-band
+    step), the collection is first selected down to `raw_bands` (the bands
+    `preprocess_fn` needs as input), mapped through `preprocess_fn`, and
+    only then selected down to the final `bands`. If `preprocess_fn` is
+    None, `raw_bands` is ignored and the collection is selected straight to
+    `bands` (PRISM's case -- no preprocessing needed). Dataset-specific
+    band lists and preprocessing stay in the calling script/module; this
+    function only knows how to assemble them.
+    """
+    start_date = ee.Date.fromYMD(year, 1, 1)
+    end_date = start_date.advance(1, "year")
+
+    collection = ee.ImageCollection(collection_id).filterDate(start_date, end_date)
+
+    if preprocess_fn is not None:
+        collection = collection.select(raw_bands).map(preprocess_fn)
+
+    return collection.select(bands)
+
+
 # ---------------------------------------------------------------------
 # Export
 # ---------------------------------------------------------------------

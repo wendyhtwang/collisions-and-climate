@@ -24,9 +24,8 @@ dataset.
 import logging
 from pathlib import Path
 
-import ee
-
 import gee_extract_utils as geeutil
+from era5_extract_utils import ERA5_COLLECTION, RAW_BANDS, FINAL_BANDS, add_derived_bands
 
 # ---------------------------------------------------------------------
 # Configuration
@@ -34,37 +33,10 @@ import gee_extract_utils as geeutil
 
 EE_PROJECT = "collisions-and-climate"
 
-ERA5_COLLECTION = "ECMWF/ERA5_LAND/DAILY_AGGR"
-
-# Raw bands read from the collection before derived-band preprocessing.
-RAW_BANDS = [
-    "temperature_2m",
-    "temperature_2m_min",
-    "temperature_2m_max",
-    "dewpoint_temperature_2m",
-    "skin_temperature",
-    "u_component_of_wind_10m",
-    "v_component_of_wind_10m",
-    "snow_depth",
-    "snowfall_sum",
-    "surface_pressure",
-    "total_precipitation_sum",
-]
-
-# Final band names after unit conversion / derived-band computation (see
-# module docstring for the reasoning behind each choice).
-FINAL_BANDS = [
-    "tmean_c",
-    "tmin_c",
-    "tmax_c",
-    "dewpoint_c",
-    "skin_temp_c",
-    "wind_speed_10m",
-    "snow_depth",
-    "snowfall_mm",
-    "surface_pressure",
-    "precip_mm",
-]
+# ERA5_COLLECTION, RAW_BANDS, FINAL_BANDS, and add_derived_bands() are
+# shared with 03_test_era5_extract.py -- see era5_extract_utils.py. Both
+# scripts must run the exact same conversion/derived-band logic, since 03
+# exists to validate this logic before it runs here at full CONUS scale.
 
 # ERA5-Land's native pixel size is approximately 11.1 km.
 SCALE_METERS = 11132.0
@@ -92,64 +64,6 @@ MOVE_DESTINATION_CANDIDATES = [
 ]
 
 POLL_INTERVAL_SECONDS = 30
-
-
-# ---------------------------------------------------------------------
-# ERA5-specific: unit conversion + derived bands
-# ---------------------------------------------------------------------
-
-def add_derived_bands(image):
-    """
-    Convert temperature bands Kelvin -> Celsius, precip/snowfall
-    meters -> mm, and compute wind speed from the u/v components. See
-    module docstring for why these conversions happen here vs. left for
-    a later harmonization step.
-    """
-    image = ee.Image(image)
-
-    tmean_c = image.select("temperature_2m").subtract(273.15).rename("tmean_c")
-    tmin_c = image.select("temperature_2m_min").subtract(273.15).rename("tmin_c")
-    tmax_c = image.select("temperature_2m_max").subtract(273.15).rename("tmax_c")
-    dewpoint_c = (
-        image.select("dewpoint_temperature_2m").subtract(273.15).rename("dewpoint_c")
-    )
-    skin_temp_c = image.select("skin_temperature").subtract(273.15).rename("skin_temp_c")
-
-    wind_speed_10m = (
-        image.select("u_component_of_wind_10m")
-        .pow(2)
-        .add(image.select("v_component_of_wind_10m").pow(2))
-        .sqrt()
-        .rename("wind_speed_10m")
-    )
-
-    precip_mm = (
-        image.select("total_precipitation_sum").multiply(1000).rename("precip_mm")
-    )
-    snowfall_mm = image.select("snowfall_sum").multiply(1000).rename("snowfall_mm")
-
-    # addBands() on `image` preserves image-level metadata (including
-    # system:time_start), so no explicit copyProperties() is needed.
-    return image.addBands(
-        [
-            tmean_c, tmin_c, tmax_c, dewpoint_c, skin_temp_c,
-            wind_speed_10m, precip_mm, snowfall_mm,
-        ]
-    )
-
-
-def build_year_image_collection(year):
-    """Return the ERA5-Land ImageCollection for one calendar year, prepped."""
-    start_date = ee.Date.fromYMD(year, 1, 1)
-    end_date = start_date.advance(1, "year")
-
-    return (
-        ee.ImageCollection(ERA5_COLLECTION)
-        .filterDate(start_date, end_date)
-        .select(RAW_BANDS)
-        .map(add_derived_bands)
-        .select(FINAL_BANDS)
-    )
 
 
 # ---------------------------------------------------------------------
@@ -189,7 +103,10 @@ def main():
     for year in years_to_run:
         logging.info("Building ERA5 extraction for %d...", year)
 
-        image_collection = build_year_image_collection(year)
+        image_collection = geeutil.build_year_image_collection(
+            ERA5_COLLECTION, year, FINAL_BANDS,
+            raw_bands=RAW_BANDS, preprocess_fn=add_derived_bands,
+        )
         annual_results = geeutil.build_period_collection(
             image_collection=image_collection,
             counties=counties,

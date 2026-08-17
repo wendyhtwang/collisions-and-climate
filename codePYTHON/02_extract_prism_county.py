@@ -20,8 +20,6 @@ PRISM variables, at daily resolution.
 import logging
 from pathlib import Path
 
-import ee
-
 import gee_extract_utils as geeutil
 
 # ---------------------------------------------------------------------
@@ -75,22 +73,6 @@ POLL_INTERVAL_SECONDS = 30
 
 
 # ---------------------------------------------------------------------
-# PRISM-specific: build one year's image collection
-# ---------------------------------------------------------------------
-
-def build_year_image_collection(year):
-    """Return the PRISM ImageCollection for one calendar year, band-selected."""
-    start_date = ee.Date.fromYMD(year, 1, 1)
-    end_date = start_date.advance(1, "year")
-
-    return (
-        ee.ImageCollection(PRISM_COLLECTION)
-        .filterDate(start_date, end_date)
-        .select(BANDS)
-    )
-
-
-# ---------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------
 
@@ -129,7 +111,7 @@ def main():
     for year in years_to_run:
         logging.info("Building PRISM extraction for %d...", year)
 
-        image_collection = build_year_image_collection(year)
+        image_collection = geeutil.build_year_image_collection(PRISM_COLLECTION, year, BANDS)
         annual_results = geeutil.build_period_collection(
             image_collection=image_collection,
             counties=counties,
