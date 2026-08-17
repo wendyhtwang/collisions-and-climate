@@ -23,6 +23,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from ground_truth_utils import filter_to_target_rows
+
 # Keep in sync with 07f_extract_era5_ground_truth_points.py and
 # 07h_compare_era5_ground_truth.py.
 GROUND_TRUTH_CASES = [
@@ -43,7 +45,7 @@ def main() -> None:
         raise FileNotFoundError(
             f"Production ERA5 monthly file not found: {PRODUCTION_PATH}\n"
             "This means the full-CONUS ERA5 extraction (04_extract_era5_county.py) and/or "
-            "its monthly aggregation (05b_aggregate_era5_daily_to_monthly.py) haven't been "
+            "its monthly aggregation (05_aggregate_daily_to_monthly.py) haven't been "
             "run yet, or their output hasn't been synced to this machine."
         )
 
@@ -52,26 +54,8 @@ def main() -> None:
     production["year"] = production["year"].astype(int)
     production["month"] = production["month"].astype(int)
 
-    target_triples = {(c["geoid"], c["year"], c["month"]) for c in GROUND_TRUTH_CASES}
-    row_key = list(zip(production["geoid"], production["year"], production["month"]))
-    selected = production[[key in target_triples for key in row_key]].copy()
-
-    found_triples = set(zip(selected["geoid"], selected["year"], selected["month"]))
-    geoids_in_production = set(production["geoid"].unique())
-    missing = [
-        (c["geoid"], c["year"], c["month"]) for c in GROUND_TRUTH_CASES
-        if (c["geoid"], c["year"], c["month"]) not in found_triples
-    ]
-    if missing:
-        for geoid, year, month in missing:
-            reason = (
-                "GEOID not in production at all"
-                if geoid not in geoids_in_production
-                else "GEOID exists, but not for this year/month"
-            )
-            print(f"Warning: no row for {geoid} {year}-{month:02d} -- {reason}.")
-
-    selected = selected.sort_values(ID_COLS + ["year", "month"]).reset_index(drop=True)
+    target_triples = [(c["geoid"], c["year"], c["month"]) for c in GROUND_TRUTH_CASES]
+    selected = filter_to_target_rows(production, target_triples, ID_COLS)
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     selected.to_csv(OUTPUT_PATH, index=False)

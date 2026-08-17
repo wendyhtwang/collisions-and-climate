@@ -17,6 +17,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from ground_truth_utils import filter_to_target_rows
+
 # ---------------------------------------------------------------------
 # Configuration -- edit for the exact county-year-months you're checking
 # ---------------------------------------------------------------------
@@ -53,23 +55,7 @@ def main() -> None:
     production["month"] = production["month"].astype(int)
 
     requested_geoids = {geoid for geoid, _, _ in TARGET_COUNTY_MONTHS}
-    row_key = list(zip(production["geoid"], production["year"], production["month"]))
-    selected = production[[key in set(TARGET_COUNTY_MONTHS) for key in row_key]].copy()
-
-    # Report any requested (geoid, year, month) with no matching row.
-    found_triples = set(zip(selected["geoid"], selected["year"], selected["month"]))
-    geoids_in_production = set(production["geoid"].unique())
-    missing = [t for t in TARGET_COUNTY_MONTHS if t not in found_triples]
-    if missing:
-        for geoid, year, month in missing:
-            reason = (
-                "GEOID not in production at all"
-                if geoid not in geoids_in_production
-                else "GEOID exists, but not for this year/month"
-            )
-            print(f"Warning: no row for {geoid} {year}-{month:02d} -- {reason}.")
-
-    selected = selected.sort_values(ID_COLS + ["year", "month"]).reset_index(drop=True)
+    selected = filter_to_target_rows(production, TARGET_COUNTY_MONTHS, ID_COLS)
 
     OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     selected.to_csv(OUTPUT_PATH, index=False)
