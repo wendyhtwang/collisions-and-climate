@@ -14,15 +14,17 @@ compared to PRISM's county-month values.
   treated as zero), and each variable's missing-day count is reported in
   its own column rather than silently dropped.
 - Flags station-months whose day count doesn't match the calendar, same
-  completeness check as production.
+  completeness check as production (imported from aggregation_utils.py,
+  not reimplemented here).
 - No Earth Engine calls, no dependency on this repo's PRISM scripts --
   this is real station data, not a re-derivation of PRISM.
 """
 
-import calendar
 from pathlib import Path
 
 import pandas as pd
+
+from aggregation_utils import flag_incomplete_months
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 NOAA_STATION_DIR = REPO_ROOT / "dataCSV" / "PRISM" / "spot_check" / "noaa_station_daily_data"
@@ -78,16 +80,6 @@ def aggregate_station_month(df: pd.DataFrame) -> pd.DataFrame:
 
     monthly = df.groupby(group_cols, as_index=False).agg(**agg_kwargs)
     return monthly.rename(columns={"STATION": "station_id"})
-
-
-def flag_incomplete_months(monthly: pd.DataFrame) -> pd.DataFrame:
-    """Same completeness check as 05_aggregate_daily_to_monthly.py: n_days vs calendar days."""
-    monthly = monthly.copy()
-    monthly["expected_days"] = monthly.apply(
-        lambda row: calendar.monthrange(int(row["year"]), int(row["month"]))[1], axis=1
-    )
-    monthly["is_incomplete"] = monthly["n_days"] != monthly["expected_days"]
-    return monthly
 
 
 # ---------------------------------------------------------------------
