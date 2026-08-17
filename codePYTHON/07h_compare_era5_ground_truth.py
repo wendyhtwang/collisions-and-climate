@@ -39,7 +39,7 @@ GROUND_TRUTH_CASES = [
 
 # First existing candidate wins, same cross-machine-path pattern used
 # elsewhere in this repo. Produced by 07d_aggregate_noaa_station_daily.py,
-# which writes to a REPO_ROOT-relative path -- so unlike 05/05b's
+# which writes to a REPO_ROOT-relative path -- so unlike 05's
 # INPUT_DIR_CANDIDATES (an external raw-data mount), what's missing here
 # isn't a shared mount but simply having run 07d on *this* machine's
 # checkout. If 07d was only run elsewhere (e.g. Kodama's shared project
@@ -57,7 +57,7 @@ OUTPUT_PATH = REPO_ROOT / "dataCSV" / "ERA5" / "spot_check" / "era5_ground_truth
 # (07f/at-point column, station column, production column, output label).
 # At-point columns are bare names (precip_mm); production columns are
 # suffixed by aggregation type (_total/_mean) -- keep in sync with 07f's
-# SUM_VARS/MEAN_VARS and 05b's actual output columns if either changes.
+# SUM_VARS/MEAN_VARS and 05's actual output columns if either changes.
 VARIABLES = [
     ("precip_mm", "ppt_total", "precip_mm_total", "precip_mm"),
     ("tmax_c", "tmax_mean", "tmax_c_mean", "tmax_c"),

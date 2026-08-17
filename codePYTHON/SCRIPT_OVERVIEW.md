@@ -39,7 +39,7 @@ variables, at daily resolution.
   compositing images with `.sum()`/`.mean()` before reducing to county
   means was found to shift results ~1-2% from reducing each day
   independently (root cause not fully diagnosed). Monthly aggregation
-  instead happens client-side in `05_aggregate_prism_daily_to_monthly.py`, which
+  instead happens client-side in `05_aggregate_daily_to_monthly.py`, which
   is validated correct.
 - One Drive export task per calendar year (~45 tasks). A local JSON
   manifest tracks completed years, updated as each task finishes, so a
@@ -93,54 +93,46 @@ Empty file. Placeholder for the ERA5 equivalent of `02b_extract_prism_wma.py`
 
 ## Aggregation
 
-### `05_aggregate_prism_daily_to_monthly.py`
-Aggregates the daily county-level PRISM CSVs into one county-year-month
-panel (the final PRISM output): `ppt` summed to a monthly total, all other
-variables averaged.
-- `ppt` is summed; `tmean`, `tmin`, `tmax`, `tdmean`, `vpdmin`, `vpdmax` are
-  averaged -- matches PRISM's own documented convention (PRISM's
+### `05_aggregate_daily_to_monthly.py`
+Aggregates the daily county-level PRISM and ERA5-Land CSVs into
+county-year-month panels for both datasets -- one script parameterized by
+a per-dataset `DatasetConfig` (same pattern as `06`), since the two
+datasets' aggregation logic is identical and only the column
+names/sum-vs-mean lists differ.
+- PRISM: `ppt` is summed, `tmean`/`tmin`/`tmax`/`tdmean`/`vpdmin`/`vpdmax`
+  are averaged -- matches PRISM's own documented convention (PRISM's
   documentation notes monthly grids aren't a pure average of the dailies,
   since the monthlies use more stations than the dailies do).
-- Flags (doesn't silently average over) any county-month mixing PRISM's
-  AN81/AN91 vintages, which happens at the 2020/2021 boundary.
+- ERA5: `precip_mm`/`snowfall_mm` are summed, everything else (temps,
+  wind speed, `snow_depth`, `surface_pressure`) is averaged --
+  `snow_depth` is a stock (snow currently on the ground), not a flux, so
+  a mean is the meaningful summary, not a sum.
+- PRISM-only: flags (doesn't silently average over) any county-month
+  mixing PRISM's AN81/AN91 vintages, which happens at the 2020/2021
+  boundary. No such vintage flag for ERA5-Land, which is a single
+  reanalysis product with no vintage boundary in this period.
 - Flags, and writes to a separate file, any county-month whose day count
   doesn't match the expected calendar days, rather than silently
   aggregating a partial month.
-- Drops confirmed byte-identical duplicate rows automatically; raises an
-  error instead if any non-key column disagrees within a geoid/date group,
-  since that needs a human look. **See "Wisconsin county duplication"
-  below** for the root cause and "Duplicate-conflict detection fix" for
-  the check itself.
-- Reads one year/file at a time rather than loading all 45 years into
-  memory at once (~9GB across all years).
-
-### `05b_aggregate_era5_daily_to_monthly.py`
-Aggregates the daily county-level ERA5-Land CSVs into one county-year-month
-panel (the ERA5 counterpart to `05`): `precip_mm`/`snowfall_mm` summed to
-monthly totals, all other variables averaged.
-- `precip_mm`/`snowfall_mm` are summed; `tmean_c`, `tmin_c`, `tmax_c`,
-  `dewpoint_c`, `skin_temp_c`, `wind_speed_10m`, `snow_depth`,
-  `surface_pressure` are averaged -- `snow_depth` is a stock (snow
-  currently on the ground), not a flux, so a mean is the meaningful
-  summary, not a sum.
-- No dataset-vintage flag: unlike PRISM's AN81/AN91, ERA5-Land is a single
-  reanalysis product with no vintage boundary in this period.
-- Same completeness check as `05` (flags county-months whose day count
-  doesn't match the calendar) and the same automatic-drop-if-identical /
-  error-if-any-non-key-column-disagrees handling of the WI-county
-  duplicate rows (see "Wisconsin county duplication" below -- confirmed to
-  affect ERA5 too, since it draws counties from the same TIGER source as
-  PRISM).
-- Reads one year/file at a time, same memory-management reasoning as `05`.
+- Drops confirmed byte-identical duplicate rows automatically (confirmed
+  to affect both datasets, since they draw counties from the same TIGER
+  source); raises an error instead if any non-key column disagrees within
+  a geoid/date group, since that needs a human look. **See "Wisconsin
+  county duplication" below** for the root cause and "Duplicate-conflict
+  detection fix" for the check itself.
+- Reads one year/file at a time per dataset rather than loading all 45
+  years into memory at once (~9GB across all years).
+- File discovery, year-conflict checking, duplicate-row resolution, and
+  the completeness check are shared with `06` -- see `aggregation_utils.py`.
 
 ### `06_build_derived_weather_vars.py`
 Computes derived weather variables (per Phase 3 of the task doc) from the
 raw daily PRISM/ERA5 county extracts -- one script for both datasets,
-unlike 05/05b, since the derivation logic is identical and only the
-column names/units differ.
-- Reads the same raw daily extracts as 05/05b directly (not 05/05b's own
+same `DatasetConfig` pattern as `05`, since the derivation logic is
+identical and only the column names/units differ.
+- Reads the same raw daily extracts as `05` directly (not `05`'s own
   monthly output), so `mean_temp_c` here can be cross-checked against
-  05/05b's `tmean_mean`/`tmean_c_mean` as an independent consistency
+  `05`'s `tmean_mean`/`tmean_c_mean` as an independent consistency
   check.
 - Derived variables: `days_below_freezing` (daily TMIN < 0C -- **flagged
   assumption**, task doc doesn't specify min/max/mean), `freeze_thaw_days`
@@ -152,9 +144,9 @@ column names/units differ.
   65F/18.33C -- **flagged assumption**, standard US convention but not
   specified in the task doc), and ERA5-only `total_snowfall_mm` (summed)
   /`mean_snow_depth` (averaged, since it's a stock not a flux, native
-  ERA5-Land meters -- same reasoning as 05b's `snow_depth_mean`).
+  ERA5-Land meters -- same reasoning as `05`'s `snow_depth_mean`).
 - Same completeness check and WI-county duplicate-row handling (per-column,
-  see "Duplicate-conflict detection fix" below) as 05/05b.
+  see "Duplicate-conflict detection fix" below) as `05`.
 - Writes a standalone `derived_weather_vars_data_dictionary.csv`
   (variable/label/unit/source/notes) for Charvi's data dictionary, rather
   than leaving documentation only in code comments.
@@ -359,7 +351,7 @@ dataset-specific scripts only need to supply their own configuration.
 ### `01_verify_prism_gee_console.js`
 Manually recomputes one county's PRISM daily and monthly values directly
 in the Earth Engine Code Editor console, to check them against
-`01_test_prism_extract.py` / `05_aggregate_prism_daily_to_monthly.py`'s CSV
+`01_test_prism_extract.py` / `05_aggregate_daily_to_monthly.py`'s CSV
 output. Reduces each day separately and aggregates in JS, mirroring the
 Python pipeline's method (see the compositing discrepancy note under
 `02`), rather than compositing the ImageCollection first.
@@ -379,7 +371,7 @@ band selection.
 Fuller writeups of a few things that are referenced above but were too
 long to keep inline in the code.
 
-### Wisconsin county duplication (affects `05`, `05b`, `07`)
+### Wisconsin county duplication (affects `05`, `07`)
 18 WI counties (55001, 55003, 55005, 55007, 55023, 55041, 55065, 55067,
 55085, 55095, 55113, 55119, 55121, 55123, 55125, 55129, 55135, 55137) had
 every daily row duplicated, byte-for-byte identical, in both the 2020 and
@@ -394,7 +386,7 @@ written twice. **Net effect: harmless** -- the values are identical, so
 Not investigated further since this is treated as a routine, safety-net
 case rather than something needing a fix at the extraction layer.
 
-### Duplicate-conflict detection fix (affects `05`, `05b`, `06`)
+### Duplicate-conflict detection fix (affects `05`, `06`)
 `resolve_duplicate_rows()`'s original conflict check compared full rows
 pairwise (`dup_rows.duplicated(keep=False)`): a row was "conflicting" only
 if it had no exact match elsewhere in its geoid/date group. Blind spot: if

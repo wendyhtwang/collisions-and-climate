@@ -24,7 +24,7 @@ ERA5 counterpart to PRISM's Data Explorer point lookup.
   SCRIPT_OVERVIEW.md), flagging the row (`used_fallback_grid_cell`)
   rather than returning all-NaN monthly stats.
 - Monthly aggregation convention matches
-  05b_aggregate_era5_daily_to_monthly.py exactly: precip_mm/snowfall_mm
+  05_aggregate_daily_to_monthly.py exactly: precip_mm/snowfall_mm
   summed, everything else averaged.
 """
 
