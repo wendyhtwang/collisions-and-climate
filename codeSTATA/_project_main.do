@@ -21,6 +21,12 @@ if r(confirmdir) == "0" {
 
 global path "`rootDir'/AnimalCollisionsWeather"
 
+/* Python interpreter used for all `python script` calls below.
+   Uncomment and point at the project environment so the version that produced
+   the results is documented. Run `python query` to see what is currently set. */
+
+* python set exec "C:/Users/<user>/miniconda3/envs/acw/python.exe", permanently
+
 /*
 
     Add files in the order they need to run, especially in the data building part
@@ -31,9 +37,13 @@ global path "`rootDir'/AnimalCollisionsWeather"
 
         rscript using "$path/codeSTATA/<script_name>.R"
 
-        shell python.exe do "$path/codeSTATA/<script_name>.py"
+        python script "$path/codePYTHON/<script_name>.py"
 
         where <script_name> is the file name you're trying to run
+
+    Note: do NOT use `shell python.exe ...` -- Stata ignores the exit code of a
+    shelled command, so a failed Python script will not stop this do-file.
+    `python script` raises a Stata error on any uncaught Python exception.
 
 */
 
@@ -83,13 +93,17 @@ global path "`rootDir'/AnimalCollisionsWeather"
 
 /* Weather pipeline (PRISM/ERA5 extraction, aggregation, derived vars) */
 
-shell python.exe do "$path/codePYTHON/02a_extract_prism_county.py"
+python script "$path/codePYTHON/02a_extract_prism_county.py"
+python clear
 
-shell python.exe do "$path/codePYTHON/04a_extract_era5_county.py"
+python script "$path/codePYTHON/04a_extract_era5_county.py"
+python clear
 
-shell python.exe do "$path/codePYTHON/05_aggregate_daily_to_monthly.py"
+python script "$path/codePYTHON/05_aggregate_daily_to_monthly.py"
+python clear
 
-shell python.exe do "$path/codePYTHON/06_build_derived_weather_vars.py"
+python script "$path/codePYTHON/06_build_derived_weather_vars.py"
+python clear
 
 
 ********************************************************************************
