@@ -81,6 +81,16 @@ global path "`rootDir'/AnimalCollisionsWeather"
 ***************************** Preparing Data ***********************************
 ********************************************************************************
 
+/* Weather pipeline (PRISM/ERA5 extraction, aggregation, derived vars) */
+
+shell python.exe do "$path/codePYTHON/02a_extract_prism_county.py"
+
+shell python.exe do "$path/codePYTHON/04a_extract_era5_county.py"
+
+shell python.exe do "$path/codePYTHON/05_aggregate_daily_to_monthly.py"
+
+shell python.exe do "$path/codePYTHON/06_build_derived_weather_vars.py"
+
 
 ********************************************************************************
 ************************ Descriptive Data Analysis *****************************
