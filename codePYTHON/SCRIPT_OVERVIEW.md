@@ -141,7 +141,11 @@ identical and only the column names/units differ.
   `05`'s `tmean_mean`/`tmean_c_mean` as an independent consistency
   check.
 - Derived variables: `days_extremely_cold` (daily TMIN < 0F/-17.8C -- deer
-  metabolic-stress threshold), `freeze_thaw_days`
+  metabolic-stress threshold, lagged population-prediction instrument),
+  `days_below_freezing_32f` (daily TMIN < 32F/0C -- contemporaneous
+  road-conditions covariate; resolved as a separate variable from
+  `days_extremely_cold` at the 2026-08-14 team meeting, since the two serve
+  different purposes and use different thresholds), `freeze_thaw_days`
   (daily TMIN < 0C AND TMAX > 0C),
   `mean_temp_c`, `tmean_variance_c2`/`tmin_variance_c2`/`tmax_variance_c2`
   (sample variance, ddof=1, on daily mean/min/max temp)
@@ -153,9 +157,6 @@ identical and only the column names/units differ.
   ERA5-Land meters -- same reasoning as `05`'s `snow_depth_mean`).
 - Same completeness check and WI-county duplicate-row handling (per-column,
   see "Duplicate-conflict detection fix" below) as `05`.
-- Writes a standalone `derived_weather_vars_data_dictionary.csv`
-  (variable/label/unit/source/notes) for Charvi's data dictionary, rather
-  than leaving documentation only in code comments.
 
 
 ## Spot-checks

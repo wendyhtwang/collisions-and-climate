@@ -41,6 +41,9 @@ EXPECTED_YEARS = set(range(1981, 2026))
 # Temperature threshold (0F) in Celsius, for metabolic stress in deer:
 EXTREME_COLD = (0.0 - 32) * 5 / 9
 
+# Temperature threshold (32F) in Celsius, for icy/slippery road conditions.
+FREEZING_32F = 0.0
+
 # Precipitation-above-threshold cutoff. Task doc gives 10mm as example.
 PRECIP_THRESHOLD_MM = 10.0
 
@@ -125,6 +128,7 @@ def compute_month_derived_vars(daily: pd.DataFrame, config: DatasetConfig) -> pd
     # these sums rather than counted "not extreme" -- same convention as
     # 05/07d, via a different mechanism than their skipna sum/mean.
     daily["_extremely_cold"] = daily[config.tmin_col] < EXTREME_COLD
+    daily["_below_freezing_32f"] = daily[config.tmin_col] < FREEZING_32F
     daily["_freeze_thaw"] = (daily[config.tmin_col] < 0.0) & (daily[config.tmax_col] > 0.0)
     daily["_precip_above_threshold"] = daily[config.precip_col] > PRECIP_THRESHOLD_MM
     daily["_hdd"] = (HDD_CDD_BASE_C - daily[config.tmean_col]).clip(lower=0)
@@ -136,6 +140,7 @@ def compute_month_derived_vars(daily: pd.DataFrame, config: DatasetConfig) -> pd
     agg_kwargs = {
         "n_days": ("date", "count"),
         "days_extremely_cold": ("_extremely_cold", "sum"),
+        "days_below_freezing_32f": ("_below_freezing_32f", "sum"),
         "freeze_thaw_days": ("_freeze_thaw", "sum"),
         precip_col_name: ("_precip_above_threshold", "sum"),
         "heating_degree_days": ("_hdd", "sum"),
