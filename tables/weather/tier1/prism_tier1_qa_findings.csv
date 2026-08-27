@@ -1,0 +1,6 @@
+check,result,status
+Duplicate county-year-month keys,0,PASS
+Rows appearing in only one merge source,0,PASS
+Incomplete county-months,0,PASS
+Excluded incomplete county-winters,9324,INFO
+County-variable mean flags (|z| ≥ 5),23,REVIEW
