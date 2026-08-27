@@ -16,10 +16,10 @@ qa_mismatch_expected_days,0
 qa_mismatch_is_incomplete,0
 qa_mismatch_dataset_types,0
 candidate_county_winters,9324
-complete_county_winters,0
-excluded_incomplete_county_winters,9324
-first_complete_winter,
-last_complete_winter,
+complete_county_winters,3108
+excluded_incomplete_county_winters,6216
+first_complete_winter,2021
+last_complete_winter,2021
 expected_calendar_years,1981–2025
 observed_calendar_years,2020–2021
-observed_complete_winters,nan–nan
+observed_complete_winters,2021–2021
