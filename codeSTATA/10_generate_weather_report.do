@@ -43,6 +43,13 @@ cap mkdir "$path/reports/WeatherData/report_`string_sysdate'"
 local outdir "$path/reports/WeatherData/report_`string_sysdate'"
 local file_name "`outdir'/report_`string_sysdate'.tex"
 
+* Exhibits are COPIED into the report folder rather than linked by absolute
+* path. Three reasons: the folder stays renderable after a later notebook run
+* overwrites figures/ (Eyal wants old reports to stay comparable); it can be
+* compiled on any machine, including Overleaf, without editing paths; and it
+* survives being moved or zipped.
+cap mkdir "`outdir'/exhibits"
+
 *------------------------------------------------------------------------------
 * 1. Verify every exhibit this report expects is actually on disk, and warn
 *    about any Tier 2 exhibit on disk that this report does not include.
@@ -68,6 +75,10 @@ if "`missing'" != "" {
     di as error "Missing Tier 2 exhibits:`missing'"
     di as error "Run 09_descriptive_weather_full.ipynb to completion first."
     exit 601
+}
+
+foreach f of local expected {
+    copy "$fig2/`f'" "`outdir'/exhibits/`f'", replace
 }
 
 local ondisk : dir "$fig2" files "*.pdf"
@@ -124,9 +135,8 @@ tex \captionsetup{font=small, labelfont=bf, justification=raggedright, singlelin
 tex \setlength{\parskip}{6pt}
 tex \setlength{\parindent}{0pt}
 tex %
-tex \newcommand*{\rootDir}{$path}%
-tex \newcommand*{\figOne}{\rootDir/figures/weather/tier1}%
-tex \newcommand*{\figTwo}{\rootDir/figures/weather/tier2}%
+tex % Exhibits live beside this .tex, so the folder compiles anywhere.
+tex \newcommand*{\figTwo}{exhibits}%
 tex %
 tex \begin{document}
 
@@ -372,15 +382,26 @@ texdoc close
 *    -interaction=nonstopmode matters: without it a LaTeX error makes pdflatex
 *    wait for keyboard input and Stata hangs with no visible reason.
 *------------------------------------------------------------------------------
+* A one-command compile script, so the folder can be built on any machine
+* with LaTeX if this server has none.
+file open sh using "`outdir'/compile.sh", write replace
+file write sh "#!/bin/sh" _n "cd \"$(dirname \"$0\")\"" _n ///
+    "pdflatex -interaction=nonstopmode report_`string_sysdate'.tex" _n ///
+    "pdflatex -interaction=nonstopmode report_`string_sysdate'.tex" _n
+file close sh
+
 cd "`outdir'"
-shell pdflatex -interaction=nonstopmode "`file_name'"
-shell pdflatex -interaction=nonstopmode "`file_name'"
+shell pdflatex -interaction=nonstopmode "report_`string_sysdate'.tex"
+shell pdflatex -interaction=nonstopmode "report_`string_sysdate'.tex"
 
 cap confirm file "`outdir'/report_`string_sysdate'.pdf"
 if _rc {
-    di as error "No PDF produced. Either pdflatex is not installed on this server,"
-    di as error "or LaTeX errored -- check `outdir'/report_`string_sysdate'.log."
-    di as error "The .tex is complete and can be compiled anywhere (e.g. Overleaf)."
+    di as error "No PDF produced. Either pdflatex is not installed on this server"
+    di as error "(check: which pdflatex), or LaTeX errored -- see report_`string_sysdate'.log."
+    di as error ""
+    di as error "The report folder is self-contained: .tex plus every exhibit it needs."
+    di as error "Copy `outdir' to any machine with LaTeX and run compile.sh,"
+    di as error "or upload the folder to Overleaf."
 }
 else {
     di as result "Report written to `outdir'/report_`string_sysdate'.pdf"
