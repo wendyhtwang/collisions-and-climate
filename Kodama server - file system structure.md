@@ -11,58 +11,72 @@
   
   
   
-## wendy-wang@Kodama:/mnt/data_d/Dropbox/Research/AnimalCollisionsWeather$ tree
+wendy-wang@Kodama:/mnt/data_d/Dropbox/Research/AnimalCollisionsWeather$ tree
 .
 ├── codePYTHON
 │   ├── 00_setup_earth_engine.py
-│   ├── 01_test_prism_extract.py
-│   ├── 02c_diagnose_county_duplication.py
-│   ├── 02d_diagnose_reduceregions_duplication_proposed.py
-│   ├── 02e_diagnose_county_geometry_parts_proposed.py
-│   ├── 02_extract_prism_county.py
-│   ├── 02f_diagnose_get_counties_output_proposed.py
-│   ├── 02g_diagnose_get_counties_full_audit_proposed.py
-│   ├── 02h_diagnose_get_counties_determinism_proposed.py
-│   ├── 03_extract_era5_county.py
-│   ├── 04_aggregate_daily_to_monthly.py
-│   ├── 04b_spot_check_prism_aggregates.py
-│   ├── 06b_compare_prism_spotcheck.py
-│   ├── 06b_gpt_compare_prism_monthly_spotcheck.py
-│   ├── 06c_find_ground_truth_counties.py
-│   ├── 06d_aggregate_noaa_station_daily.py
-│   ├── 06e_filter_prism_ground_truth_sample.py
-│   ├── 06_gpt_export_prism_monthly_spotcheck.py
-│   ├── 06_verify_against_published.py
+│   ├── 01a_test_prism_extract.py
+│   ├── 01b_verify_prism_gee_console.js
+│   ├── 02a_extract_prism_county.py
+│   ├── 02b_extract_prism_wma.py
+│   ├── 03a_test_era5_extract.py
+│   ├── 03b_verify_era5_gee_console.js
+│   ├── 04a_extract_era5_county.py
+│   ├── 04b_extract_era5_wma.py
+│   ├── 05_aggregate_daily_to_monthly.py
+│   ├── 06_build_derived_weather_vars.py
+│   ├── 07a_export_prism_monthly_spotcheck.py
+│   ├── 07b_compare_prism_monthly_spotcheck.py
+│   ├── 07c_find_ground_truth_counties.py
+│   ├── 07d_aggregate_noaa_station_daily.py
+│   ├── 07e_filter_prism_ground_truth_sample.py
+│   ├── 07_export_prism_monthly_spotcheck.py
+│   ├── 07f_extract_era5_ground_truth_points.py
+│   ├── 07g_filter_era5_ground_truth_sample.py
+│   ├── 07h_compare_era5_ground_truth.py
+│   ├── 08_population_data.py
+│   ├── 09_descriptive_weather_full.ipynb
+│   ├── 09_descriptive_weather.html
+│   ├── 09_descriptive_weather.ipynb
+│   ├── 09_descriptive_weather.py
+│   ├── aggregation_utils.py
+│   ├── era5_extract_utils.py
 │   ├── gee_extract_utils.py
+│   ├── ground_truth_utils.py
 │   ├── __pycache__
 │   │   ├── 04_aggregate_daily_to_monthly.cpython-314.pyc
+│   │   ├── aggregation_utils.cpython-314.pyc
 │   │   └── gee_extract_utils.cpython-314.pyc
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── SCRIPT_OVERVIEW.md
 ├── codeSTATA
 │   ├── _project_main.do
 │   └── set_figure_fonts_colors.do
 ├── dataCSV
 │   ├── ERA5
-│   │   └── logs
-│   │       ├── era5_full_extract_20260805_100350.log
-│   │       └── era5_full_extract_20260806_161249.log
+│   │   ├── era5_county_month.csv
+│   │   ├── era5_derived_weather_vars.csv
+│   │   ├── logs
+│   │   │   ├── era5_full_extract_20260805_100350.log
+│   │   │   └── era5_full_extract_20260806_161249.log
+│   │   └── spot_check
+│   │       ├── era5_at_point_month.csv
+│   │       ├── era5_ground_truth_comparison.csv
+│   │       ├── era5_ground_truth_sample.csv
+│   │       └── raw_hourly
+│   │           ├── USC00123777_2021_12.grib
+│   │           ├── USC00312635_2000_01.grib
+│   │           └── USC00405525_1999_06.grib
 │   └── PRISM
 │       ├── prism_county_month.csv
 │       ├── prism_county_month_sample.csv
+│       ├── prism_derived_weather_vars.csv
 │       ├── prism_spotcheck_monthly_20260806_140936.csv
 │       └── spot_check
 │           ├── ground_truth_candidate_counties.csv
 │           ├── monthly_gee
 │           │   └── results
-│           │       ├── prism_monthly_spotcheck_comparison_20260806_153655.csv
-│           │       ├── prism_monthly_spotcheck_comparison_20260806_154703.csv
-│           │       ├── prism_monthly_spotcheck_comparison_20260806_155530.csv
 │           │       ├── prism_monthly_spotcheck_comparison_20260806_160734.csv
-│           │       ├── prism_monthly_spotcheck_failed_20260806_153655.csv
-│           │       ├── prism_monthly_spotcheck_failed_20260806_154703.csv
-│           │       ├── prism_monthly_spotcheck_summary_20260806_153655.csv
-│           │       ├── prism_monthly_spotcheck_summary_20260806_154703.csv
-│           │       ├── prism_monthly_spotcheck_summary_20260806_155530.csv
 │           │       └── prism_monthly_spotcheck_summary_20260806_160734.csv
 │           ├── noaa_station_daily_data
 │           │   ├── noaa_station_month.csv
@@ -73,6 +87,7 @@
 ├── dataGIS
 ├── dataPYTHON
 ├── dataRAW
+│   └── data_dictionary_DVCs.xlsx
 ├── dataSTATA
 ├── documentation
 │   ├── FromJen
@@ -84,14 +99,88 @@
 │   │   └── Reference Summaries_DVC.xlsx
 │   └── wildlife_passages_top22_papers.xlsx
 ├── figures
+│   └── weather
+│       ├── era5_sanity_county_spaghetti_mean_temp_c_state17.png
+│       ├── era5_sanity_national_trend_days_below_freezing_32f.png
+│       ├── era5_sanity_national_trend_freeze_thaw_days.png
+│       ├── era5_sanity_national_trend_mean_temp_c.png
+│       ├── era5_sanity_state_small_multiples_days_below_freezing_32f.png
+│       ├── era5_sanity_state_small_multiples_freeze_thaw_days.png
+│       ├── era5_sanity_state_small_multiples_mean_temp_c.png
+│       ├── prism_sanity_county_spaghetti_mean_temp_c_state17.png
+│       ├── prism_sanity_county_spaghetti_multipanel_mean_temp_c.png
+│       ├── prism_sanity_national_trend_days_below_freezing_32f.png
+│       ├── prism_sanity_national_trend_days_extremely_cold.png
+│       ├── prism_sanity_national_trend_freeze_thaw_days.png
+│       ├── prism_sanity_national_trend_mean_temp_c.png
+│       ├── prism_sanity_state_small_multiples_days_below_freezing_32f.png
+│       ├── prism_sanity_state_small_multiples_days_extremely_cold.png
+│       ├── prism_sanity_state_small_multiples_freeze_thaw_days.png
+│       ├── prism_sanity_state_small_multiples_mean_temp_c.png
+│       ├── tier1
+│       │   ├── prism_county_spaghetti_mean_temp_c.pdf
+│       │   ├── prism_interannual_variability_choropleth.pdf
+│       │   ├── prism_national_trend_days_below_freezing_32f.pdf
+│       │   ├── prism_national_trend_days_extremely_cold.pdf
+│       │   ├── prism_national_trend_freeze_thaw_days.pdf
+│       │   ├── prism_national_trend_mean_temp_c.pdf
+│       │   ├── prism_state_decade_distributions_mean_temp_c.pdf
+│       │   ├── prism_state_trends_days_below_freezing_32f.pdf
+│       │   ├── prism_state_trends_days_extremely_cold.pdf
+│       │   ├── prism_state_trends_freeze_thaw_days.pdf
+│       │   └── prism_state_trends_mean_temp_c.pdf
+│       └── tier2
+│           ├── prism_anomalous_warm_winter_frequency_provisional.pdf
+│           ├── prism_anomalous_warm_winter_time_series_provisional.pdf
+│           ├── prism_era5_national_winter_temperature_comparison.pdf
+│           ├── prism_extreme_cold_day_count.pdf
+│           ├── prism_national_long_run_warming.pdf
+│           ├── prism_national_winter_temperature_distributions_by_decade.pdf
+│           ├── prism_state_long_run_warming.pdf
+│           ├── prism_winter_temperature_change.pdf
+│           └── prism_winter_temperature_early_vs_recent.pdf
 ├── grants
 │   └── ICSG_Summer_RA
 │       └── Award Letter - Frank.pdf
 ├── paper
 ├── slides
 └── tables
+    └── weather
+        ├── era5_summary_by_county.csv
+        ├── era5_summary_by_month.csv
+        ├── era5_summary_pooled.csv
+        ├── prism_summary_by_county.csv
+        ├── prism_summary_by_month.csv
+        ├── prism_summary_pooled.csv
+        ├── tier1
+        │   ├── prism_county_interannual_variability.csv
+        │   ├── prism_interannual_variability_by_state.csv
+        │   ├── prism_interannual_variability_by_state.pdf
+        │   ├── prism_summary_by_calendar_month.csv
+        │   ├── prism_summary_by_calendar_month.pdf
+        │   ├── prism_summary_by_county.csv
+        │   ├── prism_summary_by_county_review_flags.csv
+        │   ├── prism_summary_by_county_review_flags.pdf
+        │   ├── prism_summary_pooled.csv
+        │   ├── prism_summary_pooled.pdf
+        │   ├── prism_tier1_coverage_integrity.csv
+        │   ├── prism_tier1_coverage_integrity.pdf
+        │   ├── prism_tier1_qa_findings.csv
+        │   └── prism_tier1_qa_findings.pdf
+        └── tier2
+            ├── prism_annual_anomalous_warm_winter_frequency_provisional.csv
+            ├── prism_anomaly_definition_provisional.csv
+            ├── prism_county_anomalous_warm_winter_frequency_provisional.csv
+            ├── prism_county_extreme_cold_days.csv
+            ├── prism_county_temperature_early_recent.csv
+            ├── prism_county_winter_warm_anomalies_provisional.csv
+            ├── prism_era5_national_winter_temperature_comparison.csv
+            ├── prism_tier2_decisions_for_eyal.csv
+            ├── prism_tier2_exhibit_index.csv
+            └── prism_tier2_output_manifest.csv
 
-24 directories, 54 files
+32 directories, 134 files
+
 
 
   
