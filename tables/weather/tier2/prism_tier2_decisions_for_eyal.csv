@@ -1,0 +1,6 @@
+decision,current_choice,status
+Anomaly definition,Detrended county residual > 1.5 SD; minimum 30 winters,CONFIRM
+Geographic weighting,Unweighted mean across counties,CONFIRM
+Comparison periods,1982-1991 versus 2016-2025,CONFIRM
+Extreme-cold exhibit,Mean days with TMIN < 0°F; not labeled WSI,DOCUMENTED
+ERA5 robustness exhibit,Targeted national comparison only when full inputs exist,OPTIONAL

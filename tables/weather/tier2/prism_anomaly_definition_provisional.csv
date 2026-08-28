@@ -1,0 +1,2 @@
+status,metric,reference_distribution,trend_treatment,threshold,minimum_complete_winters,frequency_measure
+PROVISIONAL - requires Eyal's confirmation,county-winter mean temperature,county-specific full sample,linear county trend removed,> 1.5 residual SD,30,share of eligible winters
