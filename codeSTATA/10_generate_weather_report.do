@@ -98,8 +98,9 @@ tex \usepackage[utf8]{inputenc}
 tex \usepackage{textcomp}
 tex \usepackage{lmodern}
 tex \usepackage{graphicx}
-tex \usepackage{pdfpages}
 tex \usepackage[usenames,dvipsnames,table]{xcolor}
+tex % xcolor must come before pdfpages, which loads it with no options.
+tex \usepackage{pdfpages}
 tex \usepackage[margin=0.9in]{geometry}
 tex \usepackage{babel}
 tex \usepackage{caption}
@@ -178,7 +179,7 @@ tex complete, not unexplained missingness.
 tex \par
 
 import delimited using "$tab1/prism_tier1_coverage_integrity.csv", ///
-    varnames(1) stringcols(_all) bindquote(strict) clear
+    varnames(1) stringcols(_all) bindquote(strict) encoding("utf-8") clear
 
 tex \begin{longtable}{@{}lr@{}}
 tex \caption{Coverage and integrity diagnostics}\\
@@ -194,7 +195,7 @@ forvalues i = 1/`=_N' {
 tex \end{longtable}
 
 import delimited using "$tab1/prism_tier1_qa_findings.csv", ///
-    varnames(1) stringcols(_all) bindquote(strict) clear
+    varnames(1) stringcols(_all) bindquote(strict) encoding("utf-8") clear
 
 tex \begin{longtable}{@{}lrl@{}}
 tex \caption{Tier 1 QA findings}\\
@@ -281,7 +282,7 @@ tex \clearpage
 tex \subsection*{Known properties of the provisional definition}
 
 import delimited using "$tab2/prism_anomaly_definition_caveats.csv", ///
-    varnames(1) stringcols(_all) bindquote(strict) clear
+    varnames(1) stringcols(_all) bindquote(strict) encoding("utf-8") clear
 
 tex \begin{enumerate}[leftmargin=*]
 forvalues i = 1/`=_N' {
@@ -330,7 +331,7 @@ tex \section{Decisions requested}
 tex \label{sec:decisions}
 
 import delimited using "$tab2/prism_tier2_decisions_for_eyal.csv", ///
-    varnames(1) stringcols(_all) bindquote(strict) clear
+    varnames(1) stringcols(_all) bindquote(strict) encoding("utf-8") clear
 
 forvalues i = 1/`=_N' {
     local d = decision[`i']
@@ -385,9 +386,11 @@ texdoc close
 * A one-command compile script, so the folder can be built on any machine
 * with LaTeX if this server has none.
 file open sh using "`outdir'/compile.sh", write replace
-file write sh "#!/bin/sh" _n "cd \"$(dirname \"$0\")\"" _n ///
-    "pdflatex -interaction=nonstopmode report_`string_sysdate'.tex" _n ///
-    "pdflatex -interaction=nonstopmode report_`string_sysdate'.tex" _n
+file write sh "#!/bin/sh" _n
+file write sh "# Run this from inside this folder. Twice: pass 1 writes the .aux," _n
+file write sh "# pass 2 resolves the contents page and cross-references." _n
+file write sh "pdflatex -interaction=nonstopmode report_`string_sysdate'.tex" _n
+file write sh "pdflatex -interaction=nonstopmode report_`string_sysdate'.tex" _n
 file close sh
 
 cd "`outdir'"

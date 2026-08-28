@@ -1,0 +1,11 @@
+\babel@toc {english}{}\relax 
+\contentsline {section}{\numberline {1}Coverage and data integrity}{3}{section.1}%
+\contentsline {section}{\numberline {2}Long-run winter warming}{5}{section.2}%
+\contentsline {section}{\numberline {3}Where winters have warmed}{6}{section.3}%
+\contentsline {section}{\numberline {4}Cold extremes}{8}{section.4}%
+\contentsline {section}{\numberline {5}Anomalously warm winters}{9}{section.5}%
+\contentsline {section}{\numberline {6}Distributional shift}{12}{section.6}%
+\contentsline {section}{\numberline {7}Robustness: PRISM versus ERA5}{14}{section.7}%
+\contentsline {section}{\numberline {8}Decisions requested}{15}{section.8}%
+\contentsline {section}{\numberline {A}State-level winter-temperature trends}{16}{section.A}%
+\contentsline {section}{\numberline {B}Tier 1 QA artefacts (not reproduced)}{23}{section.B}%
