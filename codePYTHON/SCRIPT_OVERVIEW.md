@@ -11,8 +11,12 @@ whenever a number has more than one script (the first script gets `a`,
 never a bare number): `01a` = small-scale PRISM test, `02a` = full-scale
 PRISM extraction, `02b` = its WMA-polygon variant (same pattern for
 `03a`/`04a`/`04b`, the ERA5 counterparts). `05` = aggregation, `06` =
-derived vars, `07a`-`07h` = spot-checks, `08` = population data (not yet
-built). `gee_extract_utils.py` = shared library (unnumbered).
+derived vars, `07a`-`07h` = spot-checks, `08a`/`08b` = population data
+(not yet built; `08a` = general county-level pull, `08b` = CT-specific
+town-level reaggregation -- see "Other data" below for why CT needed its
+own script rather than just another `08a` source config).
+`gee_extract_utils.py` / `population_utils.py` = shared libraries
+(unnumbered).
 `01b`/`03b` (`0X_verify_*_gee_console.js`) = manual Earth Engine Console
 checks to verify the matching small-scale test extraction.
 
@@ -323,11 +327,59 @@ used for PRISM.
 
 ## Other data
 
-### `08_population_data.py` -- not yet implemented
+### `08a_population_county.py` -- not yet implemented
 Placeholder for pulling county population data from Census/ICPSR (not a
-Google Earth Engine extraction). No code written yet.
+Google Earth Engine extraction). No code written yet -- scaffolding only
+(function stubs, `raise NotImplementedError`).
+- Population is the only variable extracted -- no age/sex/race/ethnicity,
+  since the sole downstream use is a collisions-per-100k denominator.
+- County FIPS codes are not stable 1980-2025 (~20 CONUS changes: county
+  splits, mergers, renames). Handled via a static crosswalk table
+  (`dataCSV/Population/fips_crosswalk_1980_2025.csv`, see the TEMPLATE)
+  and `population_utils.apply_fips_crosswalk` -- renames/mergers get
+  relabeled/summed onto the 2018 FIPS, splits (population not separable
+  pre-change) get flagged rather than fabricated via areal apportionment,
+  since this is a rate denominator, not a primary regression variable.
+- Does NOT fetch Connecticut directly -- see `08b` below. Consumes 08b's
+  output as a `SOURCES` entry with `priority=0` so it overrides whatever
+  this script's own Census-based fetch would otherwise return for CT's 8
+  geoids, without touching any other state's rows.
+
+### `08b_population_ct_towns.py` -- not yet implemented
+Reconstructs CT county-year population under the 8 legacy counties
+(09001-09015, matching the weather panel's `TIGER/2018/Counties`) for
+the full 1981-2025 span, by pulling town-level population and
+aggregating up via a static, pre-2022 town->county mapping. Scaffolding
+only.
+- Why its own script rather than a branch inside 08a: Census's Vintage
+  2022 population estimates (released 2023) switched CT to 9 planning
+  regions (09110-09190), which do not nest inside the 8 legacy counties
+  -- no clean region->county crosswalk exists. But CT's counties were
+  never an operating government unit; both schemes are just different
+  aggregations of the same 169 towns, whose identity has been stable
+  throughout. Going through towns sidesteps the non-nesting problem, but
+  it's a genuinely different fetch method (different source, different
+  crosswalk, different aggregation step) from anything else in 08a --
+  same reasoning as the PRISM/ERA5 `_county`/`_wma` split.
+- Produces all 45 years, not just the 4 affected ones (2022-2025), so
+  1981-2021 can cross-check against 08a's regular Census-sourced CT rows
+  for those years where the two methods should agree
+  (`cross_check_against_direct_county_pull`).
+- Collision data (Charvi's CT pipeline) was checked separately and
+  confirmed to already key to the legacy 8 counties throughout
+  1995-2025 -- no fix needed there. This script exists solely because
+  Census's own population product, not anything else in the project,
+  changed vintage in 2022. See project memory: county-geometry-vintage.
 
 ## Shared library
+
+### `population_utils.py`
+Shared library for the population scripts (08a/08b): FIPS crosswalk
+mechanics (`load_fips_crosswalk`, `apply_fips_crosswalk`) for
+reconciling county identity across 1980-2025, plus `resolve_data_root`
+re-exported from `aggregation_utils.py` (identical logic, not
+duplicated). Mirrors `aggregation_utils.py`'s role for the aggregation
+stage. Not yet implemented -- scaffolding only.
 
 ### `gee_extract_utils.py`
 Shared library of Earth Engine extraction mechanics (auth, county
