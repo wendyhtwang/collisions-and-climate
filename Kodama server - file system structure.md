@@ -14,173 +14,430 @@
 wendy-wang@Kodama:/mnt/data_d/Dropbox/Research/AnimalCollisionsWeather$ tree
 .
 ├── codePYTHON
-│   ├── 00_setup_earth_engine.py
-│   ├── 01a_test_prism_extract.py
-│   ├── 01b_verify_prism_gee_console.js
-│   ├── 02a_extract_prism_county.py
-│   ├── 02b_extract_prism_wma.py
-│   ├── 03a_test_era5_extract.py
-│   ├── 03b_verify_era5_gee_console.js
-│   ├── 04a_extract_era5_county.py
-│   ├── 04b_extract_era5_wma.py
-│   ├── 05_aggregate_daily_to_monthly.py
-│   ├── 06_build_derived_weather_vars.py
-│   ├── 07a_export_prism_monthly_spotcheck.py
-│   ├── 07b_compare_prism_monthly_spotcheck.py
-│   ├── 07c_find_ground_truth_counties.py
-│   ├── 07d_aggregate_noaa_station_daily.py
-│   ├── 07e_filter_prism_ground_truth_sample.py
-│   ├── 07_export_prism_monthly_spotcheck.py
-│   ├── 07f_extract_era5_ground_truth_points.py
-│   ├── 07g_filter_era5_ground_truth_sample.py
-│   ├── 07h_compare_era5_ground_truth.py
-│   ├── 08_population_data.py
-│   ├── 09_descriptive_weather_full.ipynb
-│   ├── 09_descriptive_weather.html
-│   ├── 09_descriptive_weather.ipynb
-│   ├── 09_descriptive_weather.py
-│   ├── aggregation_utils.py
-│   ├── era5_extract_utils.py
-│   ├── gee_extract_utils.py
-│   ├── ground_truth_utils.py
-│   ├── __pycache__
-│   │   ├── 04_aggregate_daily_to_monthly.cpython-314.pyc
-│   │   ├── aggregation_utils.cpython-314.pyc
-│   │   └── gee_extract_utils.cpython-314.pyc
-│   ├── requirements.txt
-│   └── SCRIPT_OVERVIEW.md
+│   ├── 00_setup_earth_engine.py
+│   ├── 01a_test_prism_extract.py
+│   ├── 01b_verify_prism_gee_console.js
+│   ├── 02a_extract_prism_county.py
+│   ├── 02b_extract_prism_wma.py
+│   ├── 03a_test_era5_extract.py
+│   ├── 03b_verify_era5_gee_console.js
+│   ├── 04a_extract_era5_county.py
+│   ├── 04b_extract_era5_wma.py
+│   ├── 05_aggregate_daily_to_monthly.py
+│   ├── 06_build_derived_weather_vars.py
+│   ├── 07a_export_prism_monthly_spotcheck.py
+│   ├── 07b_compare_prism_monthly_spotcheck.py
+│   ├── 07c_find_ground_truth_counties.py
+│   ├── 07d_aggregate_noaa_station_daily.py
+│   ├── 07e_filter_prism_ground_truth_sample.py
+│   ├── 07_export_prism_monthly_spotcheck.py
+│   ├── 07f_extract_era5_ground_truth_points.py
+│   ├── 07g_filter_era5_ground_truth_sample.py
+│   ├── 07h_compare_era5_ground_truth.py
+│   ├── 08a_population_county.py
+│   ├── 08b_population_ct_towns.py
+│   ├── 08_population_data.py
+│   ├── 09_descriptive_weather_full.ipynb
+│   ├── 09_descriptive_weather.html
+│   ├── 09_descriptive_weather.ipynb
+│   ├── 09_descriptive_weather.py
+│   ├── aggregation_utils.py
+│   ├── era5_extract_utils.py
+│   ├── gee_extract_utils.py
+│   ├── ground_truth_utils.py
+│   ├── population_utils.py
+│   ├── __pycache__
+│   │   ├── 04_aggregate_daily_to_monthly.cpython-314.pyc
+│   │   ├── aggregation_utils.cpython-314.pyc
+│   │   ├── gee_extract_utils.cpython-314.pyc
+│   │   └── population_utils.cpython-314.pyc
+│   ├── requirements.txt
+│   ├── SCRIPT_OVERVIEW.md
+│   └── test_population_logic.py
 ├── codeSTATA
-│   ├── _project_main.do
-│   └── set_figure_fonts_colors.do
+│   ├── 10_generate_weather_report.do
+│   ├── 10_generate_weather_report.log
+│   ├── _project_main.do
+│   └── set_figure_fonts_colors.do
 ├── dataCSV
-│   ├── ERA5
-│   │   ├── era5_county_month.csv
-│   │   ├── era5_derived_weather_vars.csv
-│   │   ├── logs
-│   │   │   ├── era5_full_extract_20260805_100350.log
-│   │   │   └── era5_full_extract_20260806_161249.log
-│   │   └── spot_check
-│   │       ├── era5_at_point_month.csv
-│   │       ├── era5_ground_truth_comparison.csv
-│   │       ├── era5_ground_truth_sample.csv
-│   │       └── raw_hourly
-│   │           ├── USC00123777_2021_12.grib
-│   │           ├── USC00312635_2000_01.grib
-│   │           └── USC00405525_1999_06.grib
-│   └── PRISM
-│       ├── prism_county_month.csv
-│       ├── prism_county_month_sample.csv
-│       ├── prism_derived_weather_vars.csv
-│       ├── prism_spotcheck_monthly_20260806_140936.csv
-│       └── spot_check
-│           ├── ground_truth_candidate_counties.csv
-│           ├── monthly_gee
-│           │   └── results
-│           │       ├── prism_monthly_spotcheck_comparison_20260806_160734.csv
-│           │       └── prism_monthly_spotcheck_summary_20260806_160734.csv
-│           ├── noaa_station_daily_data
-│           │   ├── noaa_station_month.csv
-│           │   ├── USC00123777_2021_12.csv
-│           │   ├── USC00312635_2000_01.csv
-│           │   └── USC00405525_1999_06.csv
-│           └── prism_ground_truth_sample.csv
+│   ├── ERA5
+│   │   ├── era5_county_month.csv
+│   │   ├── era5_derived_weather_vars.csv
+│   │   ├── logs
+│   │   │   ├── era5_full_extract_20260805_100350.log
+│   │   │   └── era5_full_extract_20260806_161249.log
+│   │   └── spot_check
+│   │       ├── era5_at_point_month.csv
+│   │       ├── era5_ground_truth_comparison.csv
+│   │       ├── era5_ground_truth_sample.csv
+│   │       └── raw_hourly
+│   │           ├── USC00123777_2021_12.grib
+│   │           ├── USC00312635_2000_01.grib
+│   │           └── USC00405525_1999_06.grib
+│   ├── Population
+│   │   ├── ct_population_county_from_towns.csv
+│   │   ├── fips_crosswalk_1980_2025.csv
+│   │   ├── logs
+│   │   │   ├── 08a_population_2026-09-04.log
+│   │   │   └── 08b_ct_towns_2026-09-04.log
+│   │   ├── population_county_year_1990_2025.csv
+│   │   ├── population_county_year_1990_2025.dta
+│   │   └── population_county_year_1990_2025_review_flags.csv
+│   └── PRISM
+│       ├── prism_county_month.csv
+│       ├── prism_county_month_sample.csv
+│       ├── prism_derived_weather_vars.csv
+│       ├── prism_spotcheck_monthly_20260806_140936.csv
+│       └── spot_check
+│           ├── ground_truth_candidate_counties.csv
+│           ├── monthly_gee
+│           │   └── results
+│           │       ├── prism_monthly_spotcheck_comparison_20260806_160734.csv
+│           │       └── prism_monthly_spotcheck_summary_20260806_160734.csv
+│           ├── noaa_station_daily_data
+│           │   ├── noaa_station_month.csv
+│           │   ├── USC00123777_2021_12.csv
+│           │   ├── USC00312635_2000_01.csv
+│           │   └── USC00405525_1999_06.csv
+│           └── prism_ground_truth_sample.csv
 ├── dataGIS
 ├── dataPYTHON
 ├── dataRAW
-│   └── data_dictionary_DVCs.xlsx
+│   ├── Collisions
+│   │   ├── collisions_CONUS_county_year_1985_2020.dta
+│   │   └── source.txt
+│   ├── data_dictionary_DVCs.xlsx
+│   └── Population
+│       ├── census_intercensal_2000s
+│       │   ├── co-est00int-alldata-01.csv
+│       │   ├── co-est00int-alldata-04.csv
+│       │   ├── co-est00int-alldata-05.csv
+│       │   ├── co-est00int-alldata-06.csv
+│       │   ├── co-est00int-alldata-08.csv
+│       │   ├── co-est00int-alldata-09.csv
+│       │   ├── co-est00int-alldata-10.csv
+│       │   ├── co-est00int-alldata-11.csv
+│       │   ├── co-est00int-alldata-12.csv
+│       │   ├── co-est00int-alldata-13.csv
+│       │   ├── co-est00int-alldata-16.csv
+│       │   ├── co-est00int-alldata-17.csv
+│       │   ├── co-est00int-alldata-18.csv
+│       │   ├── co-est00int-alldata-19.csv
+│       │   ├── co-est00int-alldata-20.csv
+│       │   ├── co-est00int-alldata-21.csv
+│       │   ├── co-est00int-alldata-22.csv
+│       │   ├── co-est00int-alldata-23.csv
+│       │   ├── co-est00int-alldata-24.csv
+│       │   ├── co-est00int-alldata-25.csv
+│       │   ├── co-est00int-alldata-26.csv
+│       │   ├── co-est00int-alldata-27.csv
+│       │   ├── co-est00int-alldata-28.csv
+│       │   ├── co-est00int-alldata-29.csv
+│       │   ├── co-est00int-alldata-30.csv
+│       │   ├── co-est00int-alldata-31.csv
+│       │   ├── co-est00int-alldata-32.csv
+│       │   ├── co-est00int-alldata-33.csv
+│       │   ├── co-est00int-alldata-34.csv
+│       │   ├── co-est00int-alldata-35.csv
+│       │   ├── co-est00int-alldata-36.csv
+│       │   ├── co-est00int-alldata-37.csv
+│       │   ├── co-est00int-alldata-38.csv
+│       │   ├── co-est00int-alldata-39.csv
+│       │   ├── co-est00int-alldata-40.csv
+│       │   ├── co-est00int-alldata-41.csv
+│       │   ├── co-est00int-alldata-42.csv
+│       │   ├── co-est00int-alldata-44.csv
+│       │   ├── co-est00int-alldata-45.csv
+│       │   ├── co-est00int-alldata-46.csv
+│       │   ├── co-est00int-alldata-47.csv
+│       │   ├── co-est00int-alldata-48.csv
+│       │   ├── co-est00int-alldata-49.csv
+│       │   ├── co-est00int-alldata-50.csv
+│       │   ├── co-est00int-alldata-51.csv
+│       │   ├── co-est00int-alldata-53.csv
+│       │   ├── co-est00int-alldata-54.csv
+│       │   ├── co-est00int-alldata-55.csv
+│       │   ├── co-est00int-alldata-56.csv
+│       │   └── source.txt
+│       ├── census_intercensal_2010s
+│       │   ├── cc-est2020int-alldata-01.csv
+│       │   ├── cc-est2020int-alldata-04.csv
+│       │   ├── cc-est2020int-alldata-05.csv
+│       │   ├── cc-est2020int-alldata-06.csv
+│       │   ├── cc-est2020int-alldata-08.csv
+│       │   ├── cc-est2020int-alldata-09.csv
+│       │   ├── cc-est2020int-alldata-10.csv
+│       │   ├── cc-est2020int-alldata-11.csv
+│       │   ├── cc-est2020int-alldata-12.csv
+│       │   ├── cc-est2020int-alldata-13.csv
+│       │   ├── cc-est2020int-alldata-16.csv
+│       │   ├── cc-est2020int-alldata-17.csv
+│       │   ├── cc-est2020int-alldata-18.csv
+│       │   ├── cc-est2020int-alldata-19.csv
+│       │   ├── cc-est2020int-alldata-20.csv
+│       │   ├── cc-est2020int-alldata-21.csv
+│       │   ├── cc-est2020int-alldata-22.csv
+│       │   ├── cc-est2020int-alldata-23.csv
+│       │   ├── cc-est2020int-alldata-24.csv
+│       │   ├── cc-est2020int-alldata-25.csv
+│       │   ├── cc-est2020int-alldata-26.csv
+│       │   ├── cc-est2020int-alldata-27.csv
+│       │   ├── cc-est2020int-alldata-28.csv
+│       │   ├── cc-est2020int-alldata-29.csv
+│       │   ├── cc-est2020int-alldata-30.csv
+│       │   ├── cc-est2020int-alldata-31.csv
+│       │   ├── cc-est2020int-alldata-32.csv
+│       │   ├── cc-est2020int-alldata-33.csv
+│       │   ├── cc-est2020int-alldata-34.csv
+│       │   ├── cc-est2020int-alldata-35.csv
+│       │   ├── cc-est2020int-alldata-36.csv
+│       │   ├── cc-est2020int-alldata-37.csv
+│       │   ├── cc-est2020int-alldata-38.csv
+│       │   ├── cc-est2020int-alldata-39.csv
+│       │   ├── cc-est2020int-alldata-40.csv
+│       │   ├── cc-est2020int-alldata-41.csv
+│       │   ├── cc-est2020int-alldata-42.csv
+│       │   ├── cc-est2020int-alldata-44.csv
+│       │   ├── cc-est2020int-alldata-45.csv
+│       │   ├── cc-est2020int-alldata-46.csv
+│       │   ├── cc-est2020int-alldata-47.csv
+│       │   ├── cc-est2020int-alldata-48.csv
+│       │   ├── cc-est2020int-alldata-49.csv
+│       │   ├── cc-est2020int-alldata-50.csv
+│       │   ├── cc-est2020int-alldata-51.csv
+│       │   ├── cc-est2020int-alldata-53.csv
+│       │   ├── cc-est2020int-alldata-54.csv
+│       │   ├── cc-est2020int-alldata-55.csv
+│       │   ├── cc-est2020int-alldata-56.csv
+│       │   └── source.txt
+│       ├── census_intercensal_api_1990s
+│       │   ├── int_charagegroups_01.json
+│       │   ├── int_charagegroups_04.json
+│       │   ├── int_charagegroups_05.json
+│       │   ├── int_charagegroups_06.json
+│       │   ├── int_charagegroups_08.json
+│       │   ├── int_charagegroups_09.json
+│       │   ├── int_charagegroups_10.json
+│       │   ├── int_charagegroups_11.json
+│       │   ├── int_charagegroups_12.json
+│       │   ├── int_charagegroups_13.json
+│       │   ├── int_charagegroups_16.json
+│       │   ├── int_charagegroups_17.json
+│       │   ├── int_charagegroups_18.json
+│       │   ├── int_charagegroups_19.json
+│       │   ├── int_charagegroups_20.json
+│       │   ├── int_charagegroups_21.json
+│       │   ├── int_charagegroups_22.json
+│       │   ├── int_charagegroups_23.json
+│       │   ├── int_charagegroups_24.json
+│       │   ├── int_charagegroups_25.json
+│       │   ├── int_charagegroups_26.json
+│       │   ├── int_charagegroups_27.json
+│       │   ├── int_charagegroups_28.json
+│       │   ├── int_charagegroups_29.json
+│       │   ├── int_charagegroups_30.json
+│       │   ├── int_charagegroups_31.json
+│       │   ├── int_charagegroups_32.json
+│       │   ├── int_charagegroups_33.json
+│       │   ├── int_charagegroups_34.json
+│       │   ├── int_charagegroups_35.json
+│       │   ├── int_charagegroups_36.json
+│       │   ├── int_charagegroups_37.json
+│       │   ├── int_charagegroups_38.json
+│       │   ├── int_charagegroups_39.json
+│       │   ├── int_charagegroups_40.json
+│       │   ├── int_charagegroups_41.json
+│       │   ├── int_charagegroups_42.json
+│       │   ├── int_charagegroups_44.json
+│       │   ├── int_charagegroups_45.json
+│       │   ├── int_charagegroups_46.json
+│       │   ├── int_charagegroups_47.json
+│       │   ├── int_charagegroups_48.json
+│       │   ├── int_charagegroups_49.json
+│       │   ├── int_charagegroups_50.json
+│       │   ├── int_charagegroups_51.json
+│       │   ├── int_charagegroups_53.json
+│       │   ├── int_charagegroups_54.json
+│       │   ├── int_charagegroups_55.json
+│       │   ├── int_charagegroups_56.json
+│       │   └── source.txt
+│       ├── census_postcensal_2020s
+│       │   ├── cc-est2025-alldata-01.csv
+│       │   ├── cc-est2025-alldata-04.csv
+│       │   ├── cc-est2025-alldata-05.csv
+│       │   ├── cc-est2025-alldata-06.csv
+│       │   ├── cc-est2025-alldata-08.csv
+│       │   ├── cc-est2025-alldata-09.csv
+│       │   ├── cc-est2025-alldata-10.csv
+│       │   ├── cc-est2025-alldata-11.csv
+│       │   ├── cc-est2025-alldata-12.csv
+│       │   ├── cc-est2025-alldata-13.csv
+│       │   ├── cc-est2025-alldata-16.csv
+│       │   ├── cc-est2025-alldata-17.csv
+│       │   ├── cc-est2025-alldata-18.csv
+│       │   ├── cc-est2025-alldata-19.csv
+│       │   ├── cc-est2025-alldata-20.csv
+│       │   ├── cc-est2025-alldata-21.csv
+│       │   ├── cc-est2025-alldata-22.csv
+│       │   ├── cc-est2025-alldata-23.csv
+│       │   ├── cc-est2025-alldata-24.csv
+│       │   ├── cc-est2025-alldata-25.csv
+│       │   ├── cc-est2025-alldata-26.csv
+│       │   ├── cc-est2025-alldata-27.csv
+│       │   ├── cc-est2025-alldata-28.csv
+│       │   ├── cc-est2025-alldata-29.csv
+│       │   ├── cc-est2025-alldata-30.csv
+│       │   ├── cc-est2025-alldata-31.csv
+│       │   ├── cc-est2025-alldata-32.csv
+│       │   ├── cc-est2025-alldata-33.csv
+│       │   ├── cc-est2025-alldata-34.csv
+│       │   ├── cc-est2025-alldata-35.csv
+│       │   ├── cc-est2025-alldata-36.csv
+│       │   ├── cc-est2025-alldata-37.csv
+│       │   ├── cc-est2025-alldata-38.csv
+│       │   ├── cc-est2025-alldata-39.csv
+│       │   ├── cc-est2025-alldata-40.csv
+│       │   ├── cc-est2025-alldata-41.csv
+│       │   ├── cc-est2025-alldata-42.csv
+│       │   ├── cc-est2025-alldata-44.csv
+│       │   ├── cc-est2025-alldata-45.csv
+│       │   ├── cc-est2025-alldata-46.csv
+│       │   ├── cc-est2025-alldata-47.csv
+│       │   ├── cc-est2025-alldata-48.csv
+│       │   ├── cc-est2025-alldata-49.csv
+│       │   ├── cc-est2025-alldata-50.csv
+│       │   ├── cc-est2025-alldata-51.csv
+│       │   ├── cc-est2025-alldata-53.csv
+│       │   ├── cc-est2025-alldata-54.csv
+│       │   ├── cc-est2025-alldata-55.csv
+│       │   ├── cc-est2025-alldata-56.csv
+│       │   └── source.txt
+│       └── CT_towns
+│           ├── 2018_gaz_cousubs_09.txt
+│           ├── ct_town_to_legacy_county_crosswalk.csv
+│           ├── source.txt
+│           ├── sub-est2019_9.csv
+│           └── sub-est2025_9.csv
 ├── dataSTATA
+│   └── estimates
+│       ├── collisions_weahter
+│       └── wildlife_weather
 ├── documentation
-│   ├── FromJen
-│   │   ├── Deer Economics.pdf
-│   │   ├── DVC literature.xls
-│   │   ├── Management workbook for WTD_full.pdf
-│   │   ├── raynor-DVC chapter.pdf
-│   │   ├── readme.txt
-│   │   └── Reference Summaries_DVC.xlsx
-│   └── wildlife_passages_top22_papers.xlsx
+│   ├── FromJen
+│   │   ├── Deer Economics.pdf
+│   │   ├── DVC literature.xls
+│   │   ├── Management workbook for WTD_full.pdf
+│   │   ├── raynor-DVC chapter.pdf
+│   │   ├── readme.txt
+│   │   └── Reference Summaries_DVC.xlsx
+│   └── wildlife_passages_top22_papers.xlsx
 ├── figures
-│   └── weather
-│       ├── era5_sanity_county_spaghetti_mean_temp_c_state17.png
-│       ├── era5_sanity_national_trend_days_below_freezing_32f.png
-│       ├── era5_sanity_national_trend_freeze_thaw_days.png
-│       ├── era5_sanity_national_trend_mean_temp_c.png
-│       ├── era5_sanity_state_small_multiples_days_below_freezing_32f.png
-│       ├── era5_sanity_state_small_multiples_freeze_thaw_days.png
-│       ├── era5_sanity_state_small_multiples_mean_temp_c.png
-│       ├── prism_sanity_county_spaghetti_mean_temp_c_state17.png
-│       ├── prism_sanity_county_spaghetti_multipanel_mean_temp_c.png
-│       ├── prism_sanity_national_trend_days_below_freezing_32f.png
-│       ├── prism_sanity_national_trend_days_extremely_cold.png
-│       ├── prism_sanity_national_trend_freeze_thaw_days.png
-│       ├── prism_sanity_national_trend_mean_temp_c.png
-│       ├── prism_sanity_state_small_multiples_days_below_freezing_32f.png
-│       ├── prism_sanity_state_small_multiples_days_extremely_cold.png
-│       ├── prism_sanity_state_small_multiples_freeze_thaw_days.png
-│       ├── prism_sanity_state_small_multiples_mean_temp_c.png
-│       ├── tier1
-│       │   ├── prism_county_spaghetti_mean_temp_c.pdf
-│       │   ├── prism_interannual_variability_choropleth.pdf
-│       │   ├── prism_national_trend_days_below_freezing_32f.pdf
-│       │   ├── prism_national_trend_days_extremely_cold.pdf
-│       │   ├── prism_national_trend_freeze_thaw_days.pdf
-│       │   ├── prism_national_trend_mean_temp_c.pdf
-│       │   ├── prism_state_decade_distributions_mean_temp_c.pdf
-│       │   ├── prism_state_trends_days_below_freezing_32f.pdf
-│       │   ├── prism_state_trends_days_extremely_cold.pdf
-│       │   ├── prism_state_trends_freeze_thaw_days.pdf
-│       │   └── prism_state_trends_mean_temp_c.pdf
-│       └── tier2
-│           ├── prism_anomalous_warm_winter_frequency_provisional.pdf
-│           ├── prism_anomalous_warm_winter_time_series_provisional.pdf
-│           ├── prism_era5_national_winter_temperature_comparison.pdf
-│           ├── prism_extreme_cold_day_count.pdf
-│           ├── prism_national_long_run_warming.pdf
-│           ├── prism_national_winter_temperature_distributions_by_decade.pdf
-│           ├── prism_state_long_run_warming.pdf
-│           ├── prism_winter_temperature_change.pdf
-│           └── prism_winter_temperature_early_vs_recent.pdf
+│   └── weather
+│       ├── era5_sanity_county_spaghetti_mean_temp_c_state17.png
+│       ├── era5_sanity_national_trend_days_below_freezing_32f.png
+│       ├── era5_sanity_national_trend_freeze_thaw_days.png
+│       ├── era5_sanity_national_trend_mean_temp_c.png
+│       ├── era5_sanity_state_small_multiples_days_below_freezing_32f.png
+│       ├── era5_sanity_state_small_multiples_freeze_thaw_days.png
+│       ├── era5_sanity_state_small_multiples_mean_temp_c.png
+│       ├── prism_sanity_county_spaghetti_mean_temp_c_state17.png
+│       ├── prism_sanity_county_spaghetti_multipanel_mean_temp_c.png
+│       ├── prism_sanity_national_trend_days_below_freezing_32f.png
+│       ├── prism_sanity_national_trend_days_extremely_cold.png
+│       ├── prism_sanity_national_trend_freeze_thaw_days.png
+│       ├── prism_sanity_national_trend_mean_temp_c.png
+│       ├── prism_sanity_state_small_multiples_days_below_freezing_32f.png
+│       ├── prism_sanity_state_small_multiples_days_extremely_cold.png
+│       ├── prism_sanity_state_small_multiples_freeze_thaw_days.png
+│       ├── prism_sanity_state_small_multiples_mean_temp_c.png
+│       ├── tier1
+│       │   ├── prism_county_spaghetti_mean_temp_c.pdf
+│       │   ├── prism_interannual_variability_choropleth.pdf
+│       │   ├── prism_national_trend_days_below_freezing_32f.pdf
+│       │   ├── prism_national_trend_days_extremely_cold.pdf
+│       │   ├── prism_national_trend_freeze_thaw_days.pdf
+│       │   ├── prism_national_trend_mean_temp_c.pdf
+│       │   ├── prism_state_decade_distributions_mean_temp_c.pdf
+│       │   ├── prism_state_trends_days_below_freezing_32f.pdf
+│       │   ├── prism_state_trends_days_extremely_cold.pdf
+│       │   ├── prism_state_trends_freeze_thaw_days.pdf
+│       │   └── prism_state_trends_mean_temp_c.pdf
+│       └── tier2
+│           ├── prism_anomalous_warm_winter_frequency_provisional.pdf
+│           ├── prism_anomalous_warm_winter_time_series_provisional.pdf
+│           ├── prism_era5_national_winter_temperature_comparison.pdf
+│           ├── prism_extreme_cold_day_count.pdf
+│           ├── prism_national_long_run_warming.pdf
+│           ├── prism_national_winter_temperature_deviations_by_decade.pdf
+│           ├── prism_national_winter_temperature_distributions_by_decade.pdf
+│           ├── prism_state_long_run_warming.pdf
+│           ├── prism_winter_temperature_change.pdf
+│           └── prism_winter_temperature_early_vs_recent.pdf
 ├── grants
-│   └── ICSG_Summer_RA
-│       └── Award Letter - Frank.pdf
+│   └── ICSG_Summer_RA
+│       └── Award Letter - Frank.pdf
 ├── paper
+├── reports
+│   └── WeatherData
+│       └── report_2026_08_28
+│           ├── compile.sh
+│           ├── exhibits
+│           │   ├── prism_anomalous_warm_winter_frequency_provisional.pdf
+│           │   ├── prism_anomalous_warm_winter_time_series_provisional.pdf
+│           │   ├── prism_era5_national_winter_temperature_comparison.pdf
+│           │   ├── prism_extreme_cold_day_count.pdf
+│           │   ├── prism_national_long_run_warming.pdf
+│           │   ├── prism_national_winter_temperature_deviations_by_decade.pdf
+│           │   ├── prism_national_winter_temperature_distributions_by_decade.pdf
+│           │   ├── prism_state_long_run_warming.pdf
+│           │   ├── prism_winter_temperature_change.pdf
+│           │   └── prism_winter_temperature_early_vs_recent.pdf
+│           ├── report_2026_08_28.log
+│           ├── report_2026_08_28.pdf
+│           ├── report_2026_08_28.synctex.gz
+│           ├── report_2026_08_28.tex
+│           └── report_2026_08_28.toc
 ├── slides
 └── tables
-    └── weather
-        ├── era5_summary_by_county.csv
-        ├── era5_summary_by_month.csv
-        ├── era5_summary_pooled.csv
-        ├── prism_summary_by_county.csv
-        ├── prism_summary_by_month.csv
-        ├── prism_summary_pooled.csv
-        ├── tier1
-        │   ├── prism_county_interannual_variability.csv
-        │   ├── prism_interannual_variability_by_state.csv
-        │   ├── prism_interannual_variability_by_state.pdf
-        │   ├── prism_summary_by_calendar_month.csv
-        │   ├── prism_summary_by_calendar_month.pdf
-        │   ├── prism_summary_by_county.csv
-        │   ├── prism_summary_by_county_review_flags.csv
-        │   ├── prism_summary_by_county_review_flags.pdf
-        │   ├── prism_summary_pooled.csv
-        │   ├── prism_summary_pooled.pdf
-        │   ├── prism_tier1_coverage_integrity.csv
-        │   ├── prism_tier1_coverage_integrity.pdf
-        │   ├── prism_tier1_qa_findings.csv
-        │   └── prism_tier1_qa_findings.pdf
-        └── tier2
-            ├── prism_annual_anomalous_warm_winter_frequency_provisional.csv
-            ├── prism_anomaly_definition_provisional.csv
-            ├── prism_county_anomalous_warm_winter_frequency_provisional.csv
-            ├── prism_county_extreme_cold_days.csv
-            ├── prism_county_temperature_early_recent.csv
-            ├── prism_county_winter_warm_anomalies_provisional.csv
-            ├── prism_era5_national_winter_temperature_comparison.csv
-            ├── prism_tier2_decisions_for_eyal.csv
-            ├── prism_tier2_exhibit_index.csv
-            └── prism_tier2_output_manifest.csv
+    ├── collisions_weather
+    ├── weather
+    │   ├── era5_summary_by_county.csv
+    │   ├── era5_summary_by_month.csv
+    │   ├── era5_summary_pooled.csv
+    │   ├── prism_summary_by_county.csv
+    │   ├── prism_summary_by_month.csv
+    │   ├── prism_summary_pooled.csv
+    │   ├── tier1
+    │   │   ├── prism_county_interannual_variability.csv
+    │   │   ├── prism_interannual_variability_by_state.csv
+    │   │   ├── prism_interannual_variability_by_state.pdf
+    │   │   ├── prism_summary_by_calendar_month.csv
+    │   │   ├── prism_summary_by_calendar_month.pdf
+    │   │   ├── prism_summary_by_county.csv
+    │   │   ├── prism_summary_by_county_review_flags.csv
+    │   │   ├── prism_summary_by_county_review_flags.pdf
+    │   │   ├── prism_summary_pooled.csv
+    │   │   ├── prism_summary_pooled.pdf
+    │   │   ├── prism_tier1_coverage_integrity.csv
+    │   │   ├── prism_tier1_coverage_integrity.pdf
+    │   │   ├── prism_tier1_qa_findings.csv
+    │   │   └── prism_tier1_qa_findings.pdf
+    │   └── tier2
+    │       ├── prism_annual_anomalous_warm_winter_frequency_provisional.csv
+    │       ├── prism_anomaly_definition_caveats.csv
+    │       ├── prism_anomaly_definition_provisional.csv
+    │       ├── prism_county_anomalous_warm_winter_frequency_provisional.csv
+    │       ├── prism_county_extreme_cold_days.csv
+    │       ├── prism_county_temperature_early_recent.csv
+    │       ├── prism_county_winter_warm_anomalies_provisional.csv
+    │       ├── prism_decade_distribution_sample_sizes.csv
+    │       ├── prism_era5_national_winter_temperature_comparison.csv
+    │       ├── prism_tier2_decisions_for_eyal.csv
+    │       ├── prism_tier2_exhibit_index.csv
+    │       └── prism_tier2_output_manifest.csv
+    └── wildlife_weather
 
-32 directories, 134 files
-
+50 directories, 374 files
 
 
   
@@ -296,218 +553,307 @@ wendy-wang@Kodama:/mnt/data_d/Dropbox/Research/AnimalCollisionsWeather$ tree
 ## wendy-wang@Kodama:/mnt/data_d/Dropbox/Research/UngulatePopulationDataRepo$ tree -L 3
 .
 ├── codeSTATA
-│   ├── logs
-│   │   └── VA_deer_harmonization.log
-│   ├── MO
-│   │   └── MO_deer_harmonization.do
-│   ├── NC
-│   │   └── NC_deer_harmonization.do
-│   ├── OH
-│   │   └── OH_deer_harmonization.do
-│   ├── VA
-│   │   ├── VA_deer_harmonization.do
-│   │   └── VA_deer_harmonization_trimmed.do
-│   └── WI
-│       └── WI_deer_harmonization.do
+│   ├── AR
+│   │   └── AR_deer_harmonization.do
+│   ├── CA
+│   │   └── CA_deer_harmonization.do
+│   ├── CWD_deer_harmonization.do
+│   ├── DE
+│   │   └── DE_deer_harmonization.do
+│   ├── deer_harvest_national_append.do
+│   ├── IN
+│   │   └── IN_deer_harmonization.do
+│   ├── KY
+│   │   └── KY_deer_harmonization.do
+│   ├── logs
+│   │   ├── DE_deer_harmonization.log
+│   │   ├── deer_harvest_national_append.log
+│   │   └── VA_deer_harmonization.log
+│   ├── MD
+│   │   └── MD_deer_harmonization.do
+│   ├── MO
+│   │   └── MO_deer_harmonization.do
+│   ├── NC
+│   │   └── NC_deer_harmonization.do
+│   ├── NY
+│   │   ├── NY_deer_harmonization.do
+│   │   └── NY_deer_harmonization_updated.do
+│   ├── OH
+│   │   └── OH_deer_harmonization.do
+│   ├── TN
+│   │   └── TN_deer_harmonization.do
+│   ├── VA
+│   │   ├── VA_deer_harmonization.do
+│   │   └── VA_deer_harmonization_trimmed.do
+│   ├── WI
+│   │   └── WI_deer_harmonization.do
+│   └── WV
+│       └── WV_deer_harmonization.do
 ├── dataCLEAN
-│   ├── MO
-│   │   └── MO_deer_harmonized_county_year_2002-2014.dta
-│   ├── NC
-│   │   └── NC_deer_harmonized_county_year_1976-2014.dta
-│   ├── OH
-│   │   └── OH_deer_harmonized_county_year_1980-2014.dta
-│   ├── VA
-│   │   └── VA_deer_harmonized_county_year_1947-2014.dta
-│   └── WI
+│   ├── AR
+│   │   └── AR_deer_harmonized_county_year_1988-2014.dta
+│   ├── CA
+│   │   └── CA_deer_harmonized_county_year_1927-2009.dta
+│   ├── CWD_deer_harmonized_county_year_2000-2021.dta
+│   ├── DE
+│   │   └── DE_deer_harmonized_county_year_2010-2025.dta
+│   ├── IN
+│   │   └── IN_deer_harmonized_county_year_2005-2016.dta
+│   ├── KY
+│   │   └── KY_deer_harmonized_county_year_1990-2015.dta
+│   ├── MD
+│   │   └── MD_deer_harmonized_county_year_1931-2014.dta
+│   ├── MO
+│   │   └── MO_deer_harmonized_county_year_2002-2014.dta
+│   ├── NC
+│   │   └── NC_deer_harmonized_county_year_1976-2014.dta
+│   ├── NY
+│   │   ├── NY_deer_harmonized_county_year_1954-2014.dta
+│   │   └── NY_deer_harmonized_county_year_1954-2023.dta
+│   ├── OH
+│   │   └── OH_deer_harmonized_county_year_1980-2014.dta
+│   ├── TN
+│   │   └── TN_deer_harmonized_county_year_2005-2015.dta
+│   ├── US_deer_harvest_county_year.dta
+│   ├── VA
+│   │   └── VA_deer_harmonized_county_year_1947-2014.dta
+│   ├── WI
+│   │   └── WI_deer_harmonized_county_year_1960-2015.dta
+│   └── WV
+│       └── WV_deer_harmonized_county_year_2001-2020.dta
 ├── dataRAW
-│   ├── auto_inventory_deer_harvest.csv
-│   ├── auto_inventory_deer_population.csv
-│   ├── Data sources and contacts summary.xlsx
-│   ├── Deer, Elk, Turkey Data.zip
-│   ├── Deer_Harvest
-│   │   ├── AL
-│   │   ├── AL.Harvest.1963-2014.StateSex.Cook.xlsx
-│   │   ├── AR
-│   │   ├── AZ
-│   │   ├── CA
-│   │   ├── CA.Harvest.1927-09.CountySex.Web.docx
-│   │   ├── CA.Harvest.1927-09.CountySex.Web.pdf
-│   │   ├── CA.Harvest.1927-09.CountySex.Web.xlsx
-│   │   ├── CO
-│   │   ├── CT
-│   │   ├── DE
-│   │   ├── Deer Harvest by State.xlsx
-│   │   ├── DE.Harvest.2010-2015.CountySex.Boyd(1).xlsx
-│   │   ├── DE.Harvest.2010-2015.CountySex.Boyd.xlsx
-│   │   ├── FL
-│   │   ├── ID
-│   │   ├── IL
-│   │   ├── IN.Harvest.05-15.CountySex.Caudell.xlsx
-│   │   ├── KY
-│   │   ├── LA
-│   │   ├── MA.Harvest.1985-2014.DMUSex.Stainbrook.xlsx
-│   │   ├── MA.Harvest.2014.DMUDetailed.Stainbrook.pdf
-│   │   ├── MD.Harvest.1931-2014.CountySex.Eyler(1).xls
-│   │   ├── MD.Harvest.1931-2014.CountySex.Eyler.xls
-│   │   ├── ME
-│   │   ├── MI.Harvest.1931-2015.StateSex.Stewart.xlsx
-│   │   ├── MN.Murkowski
-│   │   ├── MO
-│   │   ├── MT
-│   │   ├── NC
-│   │   ├── NE
-│   │   ├── NH.Harvest.1980-2014.WMUSex.Bergeron.xlsx
-│   │   ├── NJ
-│   │   ├── NJ.Harvest.1986-2015.CountySex.Roberts.xlsx
-│   │   ├── NM
-│   │   ├── NV
-│   │   ├── NY.Harvest.1954-2014.CountyTownSex.Kelly.csv
-│   │   ├── OH.Harvest.80-14.CountySex.McCoy.xlsx
-│   │   ├── OK.Harvest.92-15.StateSex.Bartholomew.xlsx
-│   │   ├── OR
-│   │   ├── OR.Harvest.12-20.WMUSexSpecies.12-20.Dion.xlsx
-│   │   ├── PA
-│   │   ├── RI
-│   │   ├── SC
-│   │   ├── SD
-│   │   ├── SD.Harvest.97-15.StateSpecies.Huxoll.xlsx
-│   │   ├── TN
-│   │   ├── TX
-│   │   ├── UT
-│   │   ├── UT.Harvest.pdf
-│   │   ├── VA
-│   │   ├── VT
-│   │   ├── WA
-│   │   ├── WI
-│   │   ├── WV
-│   │   ├── WV.Harvest.2011-15.CountySex.Web.docx
-│   │   ├── WV.Harvest.2011-15.CountySex.Web.pdf
-│   │   ├── WY
-│   │   └── WY.Harvest.1994-2015.StateSex.Frost.xlsx
-│   ├── deer_harvest_data_inventory.R
-│   ├── Deer_Population
-│   │   ├── AL
-│   │   ├── AZ
-│   │   ├── CA
-│   │   ├── CO
-│   │   ├── CO.Deer Pop Plans.webloc
-│   │   ├── CT
-│   │   ├── DE
-│   │   ├── Deer Population 1450+ Methods.pdf
-│   │   ├── Deer Population 1450+.xlsx
-│   │   ├── GA.PopHarvest.2005-2015.State.Killmaster.xlsx
-│   │   ├── ID
-│   │   ├── ID.DeerPlan.2005-2014.Ackerman.pdf
-│   │   ├── KY.Pop.99-15.State.Sams.xlsx
-│   │   ├── MD.Pop.1988-2014.State.Eyler.xlsx
-│   │   ├── ME
-│   │   ├── MI.Pop.1938-2015.Region.Stewart.xls
-│   │   ├── MN
-│   │   ├── MO.Pop.02-15.County.Lombardo.xlsx
-│   │   ├── MT
-│   │   ├── NC.PopHarvest.1976-2014.CountySex.Shaw.xlsx
-│   │   ├── ND
-│   │   ├── NH
-│   │   ├── NJ.Pop.1986-2015.State.Roberts.xlsx
-│   │   ├── OH.PopHarvest.80-14.CountySex.McCoy.xlsx
-│   │   ├── OR
-│   │   ├── PA
-│   │   ├── QDMA data _ maps
-│   │   ├── QDMA deer population.pdf
-│   │   ├── SC
-│   │   ├── TX
-│   │   ├── USA
-│   │   ├── UT
-│   │   ├── VA
-│   │   ├── VT.Pop.2000-15.State.Fortin.xlsx
-│   │   ├── WesternUS.MD_BTD.Stoner.pdf
-│   │   ├── WesternUS.MonitoringMDPopulations.Stoner.pdf
-│   │   ├── White-tailed Deer Ecology and Management.pdf
-│   │   ├── WI
-│   │   └── WY
-│   ├── deer_population_data_inventory.R
-│   ├── Elk_Harvest
-│   │   ├── AZ
-│   │   ├── CO
-│   │   ├── CT
-│   │   ├── ID
-│   │   ├── ME
-│   │   ├── MT
-│   │   ├── NV
-│   │   ├── OR
-│   │   ├── UT
-│   │   ├── VT
-│   │   ├── WA
-│   │   └── WY
-│   ├── Elk_Population
-│   │   ├── AZ
-│   │   ├── CO
-│   │   ├── CT
-│   │   ├── ID
-│   │   ├── ME
-│   │   ├── MT
-│   │   ├── UT
-│   │   ├── VT
-│   │   ├── WA
-│   │   └── WY
-│   ├── NAWA_CWD
-│   │   ├── NA_wildlife_agency_CWD_surveillance_data_2000_2022_v2.csv
-│   │   ├── readme.txt
-│   │   └── source.txt
-│   ├── Turkey_Harvest
-│   │   ├── AL
-│   │   ├── AZ
-│   │   ├── CT
-│   │   ├── ID
-│   │   ├── ME
-│   │   ├── MT
-│   │   ├── NJ
-│   │   ├── OR
-│   │   ├── RI
-│   │   ├── SC
-│   │   ├── TX
-│   │   ├── UT
-│   │   ├── VT
-│   │   ├── WA
-│   │   └── WY
-│   └── Turkey_Population
-│       ├── AL
-│       ├── AZ
-│       ├── CT
-│       ├── ID
-│       ├── ME
-│       ├── MT
-│       ├── VT
-│       ├── WA
-│       └── WY
+│   ├── auto_inventory_deer_harvest.csv
+│   ├── auto_inventory_deer_population.csv
+│   ├── Data sources and contacts summary August 14 2024.xlsx
+│   ├── Data sources and contacts summary.xlsx
+│   ├── Deer, Elk, Turkey Data.zip
+│   ├── Deer_Harvest
+│   │   ├── AL
+│   │   ├── AR
+│   │   ├── AZ
+│   │   ├── CA
+│   │   ├── CO
+│   │   ├── CT
+│   │   ├── DE
+│   │   ├── FL
+│   │   ├── IA
+│   │   ├── ID
+│   │   ├── IL
+│   │   ├── IN
+│   │   ├── KY
+│   │   ├── LA
+│   │   ├── MA
+│   │   ├── MD
+│   │   ├── ME
+│   │   ├── MI
+│   │   ├── MN.Murkowski
+│   │   ├── MO
+│   │   ├── MS
+│   │   ├── MT
+│   │   ├── NC
+│   │   ├── NE
+│   │   ├── NH
+│   │   ├── NJ
+│   │   ├── NM
+│   │   ├── NV
+│   │   ├── NY
+│   │   ├── OH
+│   │   ├── OK
+│   │   ├── OR
+│   │   ├── PA
+│   │   ├── RI
+│   │   ├── SC
+│   │   ├── SD
+│   │   ├── TN
+│   │   ├── TX
+│   │   ├── UT
+│   │   ├── VA
+│   │   ├── VT
+│   │   ├── WA
+│   │   ├── WI
+│   │   ├── WV
+│   │   └── WY
+│   ├── deer_harvest_data_inventory.R
+│   ├── Deer_Population
+│   │   ├── AZ
+│   │   ├── CA
+│   │   ├── CO
+│   │   ├── CT
+│   │   ├── DE
+│   │   ├── Deer Population 1450+ Methods.pdf
+│   │   ├── Deer Population 1450+.xlsx
+│   │   ├── GA
+│   │   ├── IA
+│   │   ├── ID
+│   │   ├── KY
+│   │   ├── MD
+│   │   ├── ME
+│   │   ├── MI
+│   │   ├── MN
+│   │   ├── MO
+│   │   ├── MT
+│   │   ├── NC
+│   │   ├── ND
+│   │   ├── NH
+│   │   ├── NJ
+│   │   ├── OH
+│   │   ├── OR
+│   │   ├── PA
+│   │   ├── QDMA data _ maps
+│   │   ├── QDMA deer population.pdf
+│   │   ├── SC
+│   │   ├── TX
+│   │   ├── USA
+│   │   ├── UT
+│   │   ├── VA
+│   │   ├── VT
+│   │   ├── WesternUS.MD_BTD.Stoner.pdf
+│   │   ├── WesternUS.MonitoringMDPopulations.Stoner.pdf
+│   │   ├── White-tailed Deer Ecology and Management.pdf
+│   │   ├── WI
+│   │   └── WY
+│   ├── deer_population_data_inventory.R
+│   ├── Elk_Harvest
+│   │   ├── AZ
+│   │   ├── CO
+│   │   ├── CT
+│   │   ├── ID
+│   │   ├── ME
+│   │   ├── MT
+│   │   ├── NV
+│   │   ├── OR
+│   │   ├── UT
+│   │   ├── VT
+│   │   ├── WA
+│   │   └── WY
+│   ├── Elk_Population
+│   │   ├── AZ
+│   │   ├── CO
+│   │   ├── CT
+│   │   ├── ID
+│   │   ├── ME
+│   │   ├── MT
+│   │   ├── UT
+│   │   ├── VT
+│   │   ├── WA
+│   │   └── WY
+│   ├── NAWA_CWD
+│   │   ├── NA_wildlife_agency_CWD_surveillance_data_2000_2022_v2.csv
+│   │   ├── readme.txt
+│   │   └── source.txt
+│   ├── Turkey_Harvest
+│   │   ├── AL
+│   │   ├── AZ
+│   │   ├── CT
+│   │   ├── ID
+│   │   ├── ME
+│   │   ├── MT
+│   │   ├── NJ
+│   │   ├── OR
+│   │   ├── RI
+│   │   ├── SC
+│   │   ├── TX
+│   │   ├── UT
+│   │   ├── VT
+│   │   ├── WA
+│   │   └── WY
+│   └── Turkey_Population
+│       ├── AL
+│       ├── AZ
+│       ├── CT
+│       ├── ID
+│       ├── ME
+│       ├── MT
+│       ├── VT
+│       ├── WA
+│       └── WY
 ├── dataSTATA
-│   ├── MO
-│   │   ├── MO_county_crosswalk.dta
-│   │   ├── temp_MO_harvest_2002-2011.dta
-│   │   ├── temp_MO_harvest_2002-2014_raw.dta
-│   │   ├── temp_MO_harvest_2012-2014.dta
-│   │   └── temp_MO_population_2002-2014.dta
-│   ├── NC
-│   │   ├── NC_county_crosswalk.dta
-│   │   └── temp_NC_harvest_1976-2014_raw.dta
-│   ├── OH
-│   │   ├── OH_county_crosswalk.dta
-│   │   ├── temp_OH_harvest_1980-2014_raw.dta
-│   │   └── temp_OH_population_1981-2014_raw.dta
-│   ├── VA
-│   │   ├── temp_VA_bki_1994-2014_private.dta
-│   │   ├── temp_VA_bki_1994-2014_public.dta
-│   │   ├── temp_VA_bki_1994-2014_raw.dta
-│   │   ├── temp_VA_harvest_1947-2014_private.dta
-│   │   ├── temp_VA_harvest_1947-2014_public.dta
-│   │   ├── temp_VA_harvest_1947-2014_raw.dta
-│   │   ├── temp_VA_harvest_1947-2014_total.dta
-│   │   ├── temp_VA_popstatus_2014_raw.dta
-│   │   ├── VA_county_crosswalk.dta
-│   │   └── VA_county_crosswalk_nameonly.dta
-│   └── WI
-│       ├── temp_WI_harvest_1960-2015_raw.dta
-│       └── WI_county_crosswalk.dta
+│   ├── _append
+│   │   ├── _std_AR.dta
+│   │   ├── _std_CA.dta
+│   │   ├── _std_DE.dta
+│   │   ├── _std_FL.dta
+│   │   ├── _std_GA.dta
+│   │   ├── _std_IA.dta
+│   │   ├── _std_IN.dta
+│   │   ├── _std_KY.dta
+│   │   ├── _std_MD.dta
+│   │   ├── _std_MI.dta
+│   │   ├── _std_MN.dta
+│   │   ├── _std_MO.dta
+│   │   ├── _std_NC.dta
+│   │   ├── _std_NY.dta
+│   │   ├── _std_OH.dta
+│   │   ├── _std_TN.dta
+│   │   ├── _std_VA.dta
+│   │   ├── _std_WI.dta
+│   │   └── _std_WV.dta
+│   ├── AR
+│   │   ├── AR_county_crosswalk.dta
+│   │   ├── temp_AR_harvest_1988-2014.dta
+│   │   └── temp_AR_statewide_totals_1970-2014.dta
+│   ├── CA
+│   │   ├── CA_county_crosswalk.dta
+│   │   ├── temp_CA_harvest_1927-2009_raw.dta
+│   │   ├── temp_CA_harvest_buck_1927-2009.dta
+│   │   ├── temp_CA_harvest_buck_2009only_docx.dta
+│   │   └── temp_CA_harvest_doe_1949-2009.dta
+│   ├── DE
+│   │   ├── DE_county_crosswalk.dta
+│   │   └── temp_DE_harvest_2010-2025_raw.dta
+│   ├── IN
+│   │   ├── IN_county_crosswalk.dta
+│   │   └── temp_IN_harvest_2005-2016.dta
+│   ├── KY
+│   │   ├── KY_county_crosswalk.dta
+│   │   ├── temp_KY_harvest_1990-2015_raw.dta
+│   │   ├── temp_KY_harvest_buck_1999-2015.dta
+│   │   └── temp_KY_harvest_total_1990-2015.dta
+│   ├── MD
+│   │   ├── MD_county_crosswalk.dta
+│   │   └── temp_MD_harvest_1931-2014_raw.dta
+│   ├── MO
+│   │   ├── MO_county_crosswalk.dta
+│   │   ├── temp_MO_harvest_2002-2011.dta
+│   │   ├── temp_MO_harvest_2002-2014_raw.dta
+│   │   ├── temp_MO_harvest_2012-2014.dta
+│   │   └── temp_MO_population_2002-2014.dta
+│   ├── NC
+│   │   ├── NC_county_crosswalk.dta
+│   │   └── temp_NC_harvest_1976-2014_raw.dta
+│   ├── NY
+│   │   ├── NY_county_crosswalk.dta
+│   │   ├── temp_NY_harvest_1954-2014.dta
+│   │   └── temp_NY_harvest_1954-2023.dta
+│   ├── OH
+│   │   ├── OH_county_crosswalk.dta
+│   │   ├── temp_OH_harvest_1980-2014_raw.dta
+│   │   └── temp_OH_population_1981-2014_raw.dta
+│   ├── temp_CWD_panel_qc_passed.dta
+│   ├── TN
+│   │   ├── temp_TN_harvest_2005-2015.dta
+│   │   └── TN_county_crosswalk.dta
+│   ├── VA
+│   │   ├── temp_VA_bki_1994-2014_private.dta
+│   │   ├── temp_VA_bki_1994-2014_public.dta
+│   │   ├── temp_VA_bki_1994-2014_raw.dta
+│   │   ├── temp_VA_harvest_1947-2014_private.dta
+│   │   ├── temp_VA_harvest_1947-2014_public.dta
+│   │   ├── temp_VA_harvest_1947-2014_raw.dta
+│   │   ├── temp_VA_harvest_1947-2014_total.dta
+│   │   ├── temp_VA_popstatus_2014_raw.dta
+│   │   ├── VA_county_crosswalk.dta
+│   │   └── VA_county_crosswalk_nameonly.dta
+│   ├── WI
+│   │   ├── temp_WI_harvest_1960-2015_raw.dta
+│   │   ├── temp_WI_pop_posthunt_2015-2017_wdnr_qc.dta
+│   │   ├── temp_WI_pop_posthunt_2015-2018_stenglein_raw.dta
+│   │   ├── temp_WI_pop_prehunt_2014_raw.dta
+│   │   ├── temp_WI_population_2014-2018_raw.dta
+│   │   └── WI_county_crosswalk.dta
+│   └── WV
+│       ├── temp_WV_harvest_2001-2020.dta
+│       └── WV_county_crosswalk.dta
 ├── Pop_Harvest_Data.zip
 └── Wendy Extraction
     ├── audit.csv
@@ -515,19 +861,20 @@ wendy-wang@Kodama:/mnt/data_d/Dropbox/Research/AnimalCollisionsWeather$ tree
     ├── deer_harvest_audit.csv
     ├── extract_metadata.py
     ├── metadata_extraction
-    │   ├── bin
-    │   ├── include
-    │   ├── lib
-    │   ├── lib64 -> lib
-    │   └── pyvenv.cfg
+    │   ├── bin
+    │   ├── include
+    │   ├── lib
+    │   ├── lib64 -> lib
+    │   └── pyvenv.cfg
     └── repo_structure.md
 
-137 directories, 90 files
+184 directories, 132 files
 
 
 ## wendy-wang@Kodama:/mnt/data_d/Dropbox/Research/VehicleCollisionsDataRepo$ tree -L 3
 .
 ├── codeR
+│   ├── IA_crash_coords_to_fips.R
 │   ├── IA_Shapefile_Conversion.R
 │   ├── Nicole_IA_Shapefile_Conversion_082126_edited.R
 │   ├── Nicole_IA_Shapefile_Conversion_082126.R
@@ -536,8 +883,10 @@ wendy-wang@Kodama:/mnt/data_d/Dropbox/Research/AnimalCollisionsWeather$ tree
 ├── codeSTATA
 │   ├── Charvi - code WIP
 │   │   ├── CT WIP Charvi.do
-│   │   ├── IA WIP Charvi.do
-│   │   └── IA WIP Wendy edits.do
+│   │   ├── IA WIP Charvi v1.do
+│   │   ├── IA WIP Charvi v2.do
+│   │   ├── IA WIP Wendy edits.do
+│   │   └── ID WIP Charvi.do
 │   ├── data_append_state_collisions_files.do
 │   ├── data_dvcs_county_year_split
 │   │   ├── AL.do
@@ -761,6 +1110,12 @@ wendy-wang@Kodama:/mnt/data_d/Dropbox/Research/AnimalCollisionsWeather$ tree
 │       ├── US_FIPS_Codes.xls
 │       └── US_State_Abb.txt
 ├── dataSTATA
+│   ├── _cache_all_crash_ids.dta
+│   ├── _cache_animal_flags.dta
+│   ├── _cache_circumstance_flags.dta
+│   ├── _cache_event_coverage.dta
+│   ├── _cache_main.dta
+│   ├── _cache_new_crashes_final.dta
 │   ├── city_town_identifiers.dta
 │   ├── dvcs_AZ_county_year_1997_2024.dta
 │   ├── dvcs_CO_county_year_2000_2024.dta
@@ -771,14 +1126,19 @@ wendy-wang@Kodama:/mnt/data_d/Dropbox/Research/AnimalCollisionsWeather$ tree
 │   ├── dvcs_DE_county_year_2004_2024.dta
 │   ├── dvcs_IA_county_year_2004_2026.dta
 │   ├── dvcs_IA_county_year_2015_2026.dta
+│   ├── dvcs_IA_crash_level.dta
 │   ├── dvcs_IA_excluded_crashes.dta
+│   ├── dvcs_ID_build.log
+│   ├── dvcs_ID_county_year_1997_2025.dta
 │   ├── dvcs_PA_county_year_1997_2024.dta
 │   ├── state_county_identifiers.dta
 │   └── state_identifiers.dta
-└── logistics
-    ├── RA_applications
-    │   └── Eyal Frank
-    └── RA_applications.zip
+├── logistics
+│   ├── RA_applications
+│   │   └── Eyal Frank
+│   └── RA_applications.zip
+└── logs
+    └── clean_IA.log
 
-
+150 directories, 117 files
 
