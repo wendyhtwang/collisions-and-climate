@@ -12,9 +12,9 @@ never a bare number): `01a` = small-scale PRISM test, `02a` = full-scale
 PRISM extraction, `02b` = its WMA-polygon variant (same pattern for
 `03a`/`04a`/`04b`, the ERA5 counterparts). `05` = aggregation, `06` =
 derived vars, `07a`-`07h` = spot-checks, `08a`/`08b` = population data
-(not yet built; `08a` = general county-level pull, `08b` = CT-specific
-town-level reaggregation -- see "Other data" below for why CT needed its
-own script rather than just another `08a` source config).
+(`08a` = general county-level pull, `08b` = CT-specific town-level
+reaggregation -- see "Other data" below for why CT needed its own script
+rather than just another `08a` source config).
 `gee_extract_utils.py` / `population_utils.py` = shared libraries
 (unnumbered).
 `01b`/`03b` (`0X_verify_*_gee_console.js`) = manual Earth Engine Console
@@ -327,30 +327,62 @@ used for PRISM.
 
 ## Other data
 
-### `08a_population_county.py` -- not yet implemented
-Placeholder for pulling county population data from Census/ICPSR (not a
-Google Earth Engine extraction). No code written yet -- scaffolding only
-(function stubs, `raise NotImplementedError`).
-- Population is the only variable extracted -- no age/sex/race/ethnicity,
-  since the sole downstream use is a collisions-per-100k denominator.
-- County FIPS codes are not stable 1980-2025 (~20 CONUS changes: county
-  splits, mergers, renames). Handled via a static crosswalk table
-  (`dataCSV/Population/fips_crosswalk_1980_2025.csv`, see the TEMPLATE)
-  and `population_utils.apply_fips_crosswalk` -- renames/mergers get
-  relabeled/summed onto the 2018 FIPS, splits (population not separable
-  pre-change) get flagged rather than fabricated via areal apportionment,
-  since this is a rate denominator, not a primary regression variable.
-- Does NOT fetch Connecticut directly -- see `08b` below. Consumes 08b's
-  output as a `SOURCES` entry with `priority=0` so it overrides whatever
-  this script's own Census-based fetch would otherwise return for CT's 8
-  geoids, without touching any other state's rows.
+### `08a_population_county.py` -- implemented 2026-09-03, built 2026-09-04
+Builds the county-year population panel 1981-2025 (CONUS + DC) from
+Census sources: total resident population plus 18 five-year age shares,
+keyed to `TIGER/2018/Counties` FIPS. Not an Earth Engine extraction.
+- Scope includes AGE SHARES as of Eyal's 9/1/26 guidance (total
+  population "all ages, all sexes at birth", plus population share in
+  each standard bucket 0-4 ... 85+, as time-varying regression
+  controls). Sex and race are collapsed, never broken out. The earlier
+  "population only, no demographics" scope is superseded.
+- Five stages, in this order, each with a rule about what it must not do:
+  fetch (never recodes geography) -> stack (never dedupes silently) ->
+  crosswalk (the only stage that changes a geoid; never fabricates) ->
+  CT override (never crosswalked twice) -> validate (never mutates).
+- Source map, verified 2026-09-03 against census.gov: 1981-89 PE-02 flat
+  file; 1990-99 Census intercensal API (`int_charagegroups`); 2000-09
+  CO-EST00INT; 2010-20 CC-EST2020INT; 2020-25 CC-EST2025. Everything
+  except 2020-25 is intercensal (final, reconciled to the decennial
+  count at both ends of its decade); 2020-25 is postcensal and
+  provisional because the 2030 census has not yet anchored it. One
+  vintage per period, never spliced mid-decade.
+- 2020 comes from the 2010-2020 intercensal, not the postcensal file --
+  that product reconciles through the 4/1/2020 census itself. The
+  postcensal source still FETCHES 2020 so `assert_period_continuity` has
+  an overlap year where two independent sources can be compared.
+- County FIPS are not stable 1981-2025. Handled via a static crosswalk
+  (`dataCSV/Population/fips_crosswalk_1980_2025.csv`, 10 verified rows)
+  and `population_utils.apply_fips_crosswalk`.
+- Does NOT fetch Connecticut for the affected years -- see `08b`.
+- ALL ENCODINGS NOW VERIFIED against decennial counts (9/3-9/4/26).
+  `AGEGRP` means three different things across the five products, and
+  `YEAR` is a code whose layout differs per file -- `co-est00int` even
+  carries a census row in the MIDDLE of its sequence. Nothing is assumed:
+  `detect_agegrp_encoding` works the convention out from the data, every
+  source is normalized and then re-verified, and `YEAR_CODE_RULES` takes
+  an explicit map where inference can't work. See project memory
+  (census-encoding-traps) for the full table and the evidence.
+- BUILT: `population_county_year_1990_2025.{csv,dta}`, 111,888 rows =
+  3,108 counties x 36 years. National totals track the decennial counts
+  at 1990/2000/2010/2020 to within the Alaska+Hawaii exclusion plus the
+  July-vs-April offset; 2020 is essentially exact.
+- `validate_panel` checks MAGNITUDE as well as shape. Row counts, dtypes,
+  uniqueness and key coverage all passed on an early build whose 2000s
+  decade was 70x wrong, so the panel is also asserted to sit in a
+  plausible national range with annualized change under 3%/yr.
+- `fetch_pe02_1980s` is deliberately left raising `NotImplementedError`
+  after its download step: the PE-02 sheet layout could not be inspected,
+  and 1981-89 sits outside the collision-data window, so it does not
+  block the Phase 6 merge. Everything else runs.
+- Subset flags for small test runs before a full build:
+  `--years`, `--states`, `--probe-api`, `--skip-ct`.
 
-### `08b_population_ct_towns.py` -- not yet implemented
+### `08b_population_ct_towns.py` -- implemented 2026-09-03
 Reconstructs CT county-year population under the 8 legacy counties
-(09001-09015, matching the weather panel's `TIGER/2018/Counties`) for
-the full 1981-2025 span, by pulling town-level population and
-aggregating up via a static, pre-2022 town->county mapping. Scaffolding
-only.
+(09001-09015, matching the weather panel's `TIGER/2018/Counties`) by
+pulling town-level population and aggregating up via a static, pre-2022
+town->county mapping.
 - Why its own script rather than a branch inside 08a: Census's Vintage
   2022 population estimates (released 2023) switched CT to 9 planning
   regions (09110-09190), which do not nest inside the 8 legacy counties
@@ -361,10 +393,22 @@ only.
   it's a genuinely different fetch method (different source, different
   crosswalk, different aggregation step) from anything else in 08a --
   same reasoning as the PRISM/ERA5 `_county`/`_wma` split.
-- Produces all 45 years, not just the 4 affected ones (2022-2025), so
-  1981-2021 can cross-check against 08a's regular Census-sourced CT rows
-  for those years where the two methods should agree
-  (`cross_check_against_direct_county_pull`).
+- SCOPE NARROWED 2026-09-03 from the original 45-year design: production
+  is 2022-2025 (the only years Census reports CT on the wrong geography,
+  32 rows), plus 2015/2018/2021 as validation years where Census still
+  published legacy counties so the two methods can be compared
+  (`cross_check_against_direct_county_pull`). Three validation years
+  test a static mapping as well as forty-one would.
+- TOTALS ONLY, no age. Census publishes sub-county population as totals
+  in every vintage and CT DPH's town-level age data is not annual, so CT
+  age shares are unavailable for 2022-2025. Those 32 county-years are
+  flagged missing by 08a deliberately and should not be modelled down.
+- The town->county mapping comes from a 2018 Gazetteer county-subdivision
+  file, joined on COUSUB FIPS rather than town name -- name matching
+  between sources is the predictable failure mode here.
+- THIS DESIGN IS NOT RATIFIED BY THE PI. Eyal was asked about CT on
+  9/1/26 and the answer that came back was about the Dorn PDF and the
+  1980s; the CT question itself was never resolved.
 - Collision data (Charvi's CT pipeline) was checked separately and
   confirmed to already key to the legacy 8 counties throughout
   1995-2025 -- no fix needed there. This script exists solely because
@@ -376,10 +420,31 @@ only.
 ### `population_utils.py`
 Shared library for the population scripts (08a/08b): FIPS crosswalk
 mechanics (`load_fips_crosswalk`, `apply_fips_crosswalk`) for
-reconciling county identity across 1980-2025, plus `resolve_data_root`
-re-exported from `aggregation_utils.py` (identical logic, not
-duplicated). Mirrors `aggregation_utils.py`'s role for the aggregation
-stage. Not yet implemented -- scaffolding only.
+reconciling county identity across 1981-2025, age-bucket constants and
+the age-share pivot (`compute_age_shares`), the AGEGRP encoding guard
+(`assert_agegrp_encoding`), the county-universe spine
+(`load_county_universe`, `reindex_to_county_universe`), and the CSV/.dta
+writer. `resolve_data_root` is re-exported from `aggregation_utils.py`
+(identical logic, not duplicated); `setup_logging` is reimplemented
+rather than imported from `gee_extract_utils.py`, deliberately, so the
+population stage does not depend on earthengine-api. Mirrors
+`aggregation_utils.py`'s role for the aggregation stage.
+- Harmonization direction: everything is recoded FORWARD onto TIGER/2018.
+  Dorn's PDF goes the other way (modern codes back onto 1980-era codes,
+  because his target is 1990 commuting zones). We take his change list,
+  not his direction -- do not "fix" this back after reading him.
+- The crosswalk relabels ALL years, not just post-change years. Sources
+  are published under the geography vintage current at PUBLICATION, and
+  for a merger a year-conditional rule would leave the absorbed county as
+  an orphan geoid and undercount the survivor for years. This corrects
+  the 8/31 scaffolding, which had the year-conditional rule.
+
+### `test_population_logic.py`
+Offline regression tests for the population stage -- crosswalk mechanics
+for all four change types, the AGEGRP encoding guard, the age-share
+pivot, the spine reindex, the Stata write, and stack priority resolution
+including the one-year YEAR-code offset backstop. Synthetic fixtures, no
+network. Run `python3 test_population_logic.py` before review.
 
 ### `gee_extract_utils.py`
 Shared library of Earth Engine extraction mechanics (auth, county
