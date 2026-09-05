@@ -8,11 +8,21 @@ dataset's sort order, similar to Stata's own `describe` command. Only
 the file's header is parsed (the full dataset is never loaded into
 memory), so this is fast even on large files.
 
+Some .dta files -- typically ones written by a tool other than Stata
+itself (R's `foreign`/`haven` packages, older exports, etc.) -- use type
+codes that pandas' own parser doesn't recognize and fail with an opaque
+error such as "list index out of range". When that happens, this script
+automatically retries with pyreadstat (if installed), which uses the
+more permissive ReadStat C library. That fallback path can't recover the
+dataset's sort order (Stata doesn't expose it the same way through that
+library) and reports slightly coarser storage types.
+
 Usage:
     python3 describe_dta.py path/to/file.dta
     python3 describe_dta.py path/to/file.dta --csv out.csv
 
-Requires: pandas (no other dependencies).
+Requires: pandas. Optional: pyreadstat, used only as a fallback for
+files pandas can't parse (pip3 install pyreadstat).
 """
 
 import argparse
@@ -38,6 +48,17 @@ _NAMED_TYPES = {
     "Q": "strL",
 }
 
+# pyreadstat's generic (readstat) type names -> Stata storage-type names,
+# used only in the fallback path.
+_READSTAT_TYPE_NAMES = {
+    "int8": "byte",
+    "int16": "int",
+    "int32": "long",
+    "int64": "long",
+    "float": "float",
+    "double": "double",
+}
+
 
 def stata_type_name(code):
     """Translate one raw type code from StataReader._typlist into Stata's
@@ -49,10 +70,10 @@ def stata_type_name(code):
     return f"str{code}"
 
 
-def read_dta_metadata(path):
+def _read_with_pandas(path):
     """
-    Open `path` and pull variable-level metadata plus file-level counts
-    and sort order, without materializing the dataset.
+    Primary parser. Opens `path` and pulls variable-level metadata plus
+    file-level counts and sort order, without materializing the dataset.
 
     Returns a dict: variables (list of {name, label, type} dicts),
     n_vars, n_obs, sorted_by (list of variable names, possibly empty).
@@ -81,8 +102,9 @@ def read_dta_metadata(path):
         for name, t in zip(varnames, typlist)
     ]
 
-    # srtlist holds 1-based variable positions, terminated by a 0.
-    sorted_by = [varnames[i - 1] for i in srtlist if i]
+    # srtlist holds 1-based variable positions, terminated by a 0. Guard
+    # against out-of-range indices rather than crashing on a malformed list.
+    sorted_by = [varnames[i - 1] for i in srtlist if i and 0 < i <= len(varnames)]
 
     return {
         "variables": variables,
@@ -90,6 +112,75 @@ def read_dta_metadata(path):
         "n_obs": n_obs,
         "sorted_by": sorted_by,
     }
+
+
+def _read_with_pyreadstat(path):
+    """
+    Fallback parser for files pandas can't read. Uses pyreadstat
+    (ReadStat) in metadata-only mode -- still no need to load the actual
+    data. Sort order isn't available through this library, so it's
+    reported as None (distinct from an empty list, which means "no sort
+    order").
+    """
+    import pyreadstat
+
+    _, meta = pyreadstat.read_dta(str(path), metadataonly=True)
+
+    variables = []
+    for name in meta.column_names:
+        label = meta.column_names_to_labels.get(name) or ""
+        generic_type = meta.readstat_variable_types.get(name, "")
+        if generic_type == "string":
+            width = (meta.variable_storage_width or {}).get(name)
+            type_name = f"str{width}" if width else "string"
+        else:
+            type_name = _READSTAT_TYPE_NAMES.get(generic_type, generic_type or "unknown")
+        variables.append({"name": name, "label": label, "type": type_name})
+
+    return {
+        "variables": variables,
+        "n_vars": meta.number_columns,
+        "n_obs": meta.number_rows,
+        "sorted_by": None,
+    }
+
+
+def read_dta_metadata(path):
+    """
+    Read `path`'s metadata, trying pandas first and falling back to
+    pyreadstat if pandas can't parse the file. Returns (meta, parser_note)
+    where parser_note is None for the normal path, or a short string
+    describing the fallback that was used.
+    """
+    try:
+        return _read_with_pandas(path), None
+    except Exception as pandas_exc:
+        try:
+            import pyreadstat  # noqa: F401
+        except ImportError:
+            raise RuntimeError(
+                f"pandas could not parse this file ({pandas_exc}). This can happen "
+                "with .dta files written by a tool other than Stata (e.g. R's "
+                "`foreign`/`haven` packages). Installing pyreadstat gives this "
+                "script a more permissive fallback parser -- try:\n"
+                "    pip3 install pyreadstat\n"
+                "and re-run."
+            ) from pandas_exc
+
+        try:
+            meta = _read_with_pyreadstat(path)
+        except Exception as pyreadstat_exc:
+            raise RuntimeError(
+                f"Could not parse this file with pandas ({pandas_exc}) or with "
+                f"pyreadstat ({pyreadstat_exc}) either."
+            ) from pyreadstat_exc
+
+        note = (
+            "pandas couldn't parse this file, so this used pyreadstat as a "
+            "fallback -- sort order isn't available through that path, and "
+            "storage types are approximate."
+        )
+        return meta, note
 
 
 def format_table(variables):
@@ -128,7 +219,7 @@ def main():
         sys.exit(f"File not found: {dta_path}")
 
     try:
-        meta = read_dta_metadata(dta_path)
+        meta, note = read_dta_metadata(dta_path)
     except Exception as exc:
         sys.exit(f"Could not read {dta_path} as a Stata .dta file: {exc}")
 
@@ -136,7 +227,9 @@ def main():
     for line in format_table(meta["variables"]):
         print(line)
 
-    if meta["sorted_by"]:
+    if meta["sorted_by"] is None:
+        sorted_by = "(not available -- read with fallback parser)"
+    elif meta["sorted_by"]:
         sorted_by = " ".join(meta["sorted_by"])
     else:
         sorted_by = "(dataset has no sort order)"
@@ -145,6 +238,9 @@ def main():
     print(f"Number of variables:    {meta['n_vars']}")
     print(f"Number of observations: {meta['n_obs']}")
     print(f"Sorted by: {sorted_by}")
+
+    if note:
+        print(f"\nNote: {note}")
 
     if args.csv:
         with open(args.csv, "w", newline="") as f:
