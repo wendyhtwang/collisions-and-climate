@@ -150,7 +150,7 @@ reshape wide `weather_vars', ///
 * columns out loud.
 foreach v of local weather_vars {
     forvalues m = 1/12 {
-        rename `v'`m' `v'_m`m''
+        rename `v'`m' `v'_m`m'
     }
 }
 
@@ -211,7 +211,7 @@ else {
 
         foreach v of local era5_snow_vars {
             forvalues m = 1/12 {
-                rename `v'`m' `v'_m`m''
+                rename `v'`m' `v'_m`m'
             }
         }
 
