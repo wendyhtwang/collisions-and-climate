@@ -300,7 +300,15 @@ else {
             di as text "NOTE: `r(N)' collisions rows have a malformed geoid (not 5 characters) -- known issue (e.g. St. Louis), Eyal said not urgent to fix (9/4/26)."
         }
 
-        capture isid geoid year
+        * missok: the ~17 known-missing-geoid rows (open item 4, above)
+        * would otherwise fail isid on their own, even with no actual
+        * duplicate geoid-year pairs -- isid errors on ANY missing id
+        * value by default, separate from its duplicates check. Confirmed
+        * via `duplicates tag geoid year` (9/5/26) that no true duplicates
+        * exist; missok lets the already-reported malformed-geoid rows
+        * through without blocking, per Eyal's "report, don't block"
+        * guidance on this issue.
+        capture isid geoid year, missok
         if _rc {
             di as error "collisions_CONUS_county_year_1985_2020.dta is not unique on geoid-year -- check for duplicate state/year vintages (e.g. overlapping snapshots) before merging, and collapse/dedupe as appropriate."
             exit 459
