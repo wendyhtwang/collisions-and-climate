@@ -367,24 +367,59 @@ SOURCES = [
 # Download helper (idempotent, archives raw per CLAUDE.md)
 # ---------------------------------------------------------------------
 
+# Set from --force-download in main(); read by download_to_raw as the
+# default whenever a call site doesn't pass force= explicitly. A module
+# global rather than threading the flag through every fetcher signature,
+# consistent with how this file already handles a handful of other
+# CLI-wide switches (e.g. CENSUS_API_KEY_ENV_VAR).
+FORCE_DOWNLOAD = False
+
+
 def download_to_raw(url: str, source_name: str, filename: str = "", *, force: bool = False) -> Path:
     """
     Download `url` into dataRAW/Population/<source_name>/, skipping the
     fetch if the file is already there (CLAUDE.md: jobs must be
     restartable and must not re-do completed work). Writes/updates a
     source.txt recording where each file came from and when.
+
+    `force` (or --force-download at the CLI, via FORCE_DOWNLOAD) always
+    re-downloads even if a file is already cached -- use it if a cached
+    file is suspected corrupt or truncated. The content check below only
+    catches the "got an HTML error page" case, not every way a download
+    can go wrong (e.g. a connection dropped mid-transfer, which still
+    looks like a plausible file size).
     """
     dest_dir = RAW_DIR / source_name
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / (filename or url.rsplit("/", 1)[-1])
 
-    if dest.exists() and not force:
+    if dest.exists() and not (force or FORCE_DOWNLOAD):
         logging.debug("Cached: %s", dest.name)
         return dest
 
     logging.info("Downloading %s", url)
     response = requests.get(url, timeout=REQUEST_TIMEOUT, headers={"User-Agent": USER_AGENT})
     response.raise_for_status()
+
+    # A 2xx status is not proof the body is the file asked for -- Census
+    # (or a CDN/proxy in front of it) can serve an HTML error or
+    # rate-limit page with a 200 status. Left unchecked, that gets
+    # cached as if it were real data and the failure only surfaces
+    # several stack frames later as something opaque like
+    # KeyError('YEAR') out of pandas, with nothing pointing back at "the
+    # download was bad." Catch the common case here instead: a body that
+    # starts with '<' is not a CSV and not an .xls (an .xls is a
+    # zip/OLE binary blob, never starts with '<').
+    head = response.content[:200].lstrip()
+    if head[:1] == b"<":
+        raise RuntimeError(
+            f"Downloading {url} returned HTTP {response.status_code} but the body looks "
+            f"like HTML/XML, not data -- likely an error or rate-limit page served with a "
+            f"200 status. First 200 bytes:\n{head[:200]!r}\n"
+            "Not caching this. Re-run the fetch; pass --force-download if a bad copy of "
+            "this file was already cached under this name from an earlier attempt."
+        )
+
     dest.write_bytes(response.content)
 
     source_txt = dest_dir / "source.txt"
@@ -1400,6 +1435,10 @@ def main():
                              "Use this first to confirm the AGEGRP/YEAR encoding.")
     parser.add_argument("--force-download", action="store_true", help="Re-download cached raw files")
     args = parser.parse_args()
+
+    if args.force_download:
+        global FORCE_DOWNLOAD
+        FORCE_DOWNLOAD = True
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     setup_logging(LOG_DIR / f"08a_population_{date.today().isoformat()}.log")
