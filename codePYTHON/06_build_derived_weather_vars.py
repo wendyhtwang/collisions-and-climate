@@ -38,14 +38,48 @@ ID_COLS = ["geoid", "state_fips", "county_fips", "county_name"]
 # filter input files.
 EXPECTED_YEARS = set(range(1981, 2026))
 
-# Temperature threshold (0F) in Celsius, for metabolic stress in deer:
+# Temperature threshold (0F) in Celsius, for metabolic stress in deer.
+# Applied INCLUSIVELY (tmin <= EXTREME_COLD), matching Kohn (1975)'s "a
+# minimum temperature of 0F or below" -- this variable is the WSI's
+# cold-stress component, so it follows the WSI's own definition.
+# Changed from a strict < on 09/08/2026; see SCRIPT_OVERVIEW.md.
 EXTREME_COLD = (0.0 - 32) * 5 / 9
 
 # Temperature threshold (32F) in Celsius, for icy/slippery road conditions.
+# Stays STRICT (tmin < FREEZING_32F): this is the standard definition of a
+# below-freezing day and is not part of the WSI, so Kohn's inclusive
+# convention deliberately does not apply to it.
 FREEZING_32F = 0.0
 
 # Precipitation-above-threshold cutoff. Task doc gives 10mm as example.
 PRECIP_THRESHOLD_MM = 10.0
+
+# Snow-depth thresholds for the winter severity index (WSI) snow-hazard
+# component. ERA5-only -- PRISM has no snow variable at all.
+#
+# 18in is THE literature threshold: Kohn (1975) / WI DNR define the
+# component as the number of days with "18 or more inches of snow on the
+# ground", and days_snow_depth_18in is what feeds wsi_snow_days in
+# codeSTATA/build_main_data_county_year.do.
+#
+# 12in and 8in are SENSITIVITY VARIANTS, not competing definitions. They
+# exist because 18in is close to degenerate at this data's resolution:
+# Kohn's index was built from point station/snow-course observations,
+# while snow_depth here is an ERA5-Land grid-box average that is then
+# averaged again over an entire county, and that spatial averaging strips
+# out exactly the local maxima an 18in cutoff is meant to catch. Measured
+# on the 1981 extract (winter 1980-81, Dec + Jan-Apr): Wisconsin recorded
+# 8 county-days at >=18in statewide (all in Vilas County), and Minnesota,
+# Iowa, Illinois and Pennsylvania recorded none; most CONUS >=18in
+# county-days fell in mountain counties in WY/WA/ID/MT rather than in the
+# Great Lakes deer range the index was written for. Carrying the lower
+# cuts lets that be demonstrated rather than asserted.
+#
+# Units: ERA5-Land's snow_depth band is snow thickness on the ground in
+# metres -- NOT the separate snow_depth_water_equivalent band -- so the
+# thresholds convert straight through at 1in = 0.0254m (18in = 0.4572m).
+INCHES_TO_METERS = 0.0254
+SNOW_DEPTH_THRESHOLDS_IN = (18, 12, 8)
 
 # Heating/cooling degree day
 # base temperature: 65F (standard US convention, from NOAA/utility degree-day reporting),
@@ -127,12 +161,22 @@ def compute_month_derived_vars(daily: pd.DataFrame, config: DatasetConfig) -> pd
     # evaluate False (not skipna), so a missing reading is excluded from
     # these sums rather than counted "not extreme" -- same convention as
     # 05/07d, via a different mechanism than their skipna sum/mean.
-    daily["_extremely_cold"] = daily[config.tmin_col] < EXTREME_COLD
+    daily["_extremely_cold"] = daily[config.tmin_col] <= EXTREME_COLD
     daily["_below_freezing_32f"] = daily[config.tmin_col] < FREEZING_32F
     daily["_freeze_thaw"] = (daily[config.tmin_col] < 0.0) & (daily[config.tmax_col] > 0.0)
     daily["_precip_above_threshold"] = daily[config.precip_col] > PRECIP_THRESHOLD_MM
     daily["_hdd"] = (HDD_CDD_BASE_C - daily[config.tmean_col]).clip(lower=0)
     daily["_cdd"] = (daily[config.tmean_col] - HDD_CDD_BASE_C).clip(lower=0)
+
+    if config.has_snow:
+        # ">=", matching the literature's "18 or MORE inches of snow on
+        # the ground". A missing snow_depth reading compares False and so
+        # contributes 0 to the count; n_days / is_incomplete are what
+        # surface the missingness, same as for the temperature flags.
+        for threshold_in in SNOW_DEPTH_THRESHOLDS_IN:
+            daily[f"_snow_depth_ge_{threshold_in}in"] = (
+                daily[config.snow_depth_col] >= threshold_in * INCHES_TO_METERS
+            )
 
     group_cols = ID_COLS + ["year", "month"]
 
@@ -153,6 +197,15 @@ def compute_month_derived_vars(daily: pd.DataFrame, config: DatasetConfig) -> pd
     if config.has_snow:
         agg_kwargs["total_snowfall_mm"] = (config.snowfall_col, "sum")
         agg_kwargs["mean_snow_depth"] = (config.snow_depth_col, "mean")
+        # Day COUNTS at each threshold, alongside the monthly MEAN above.
+        # The WSI needs a count of qualifying days and the monthly mean
+        # cannot stand in for one: a month can average under the threshold
+        # while still containing qualifying days, and vice versa.
+        for threshold_in in SNOW_DEPTH_THRESHOLDS_IN:
+            agg_kwargs[f"days_snow_depth_{threshold_in}in"] = (
+                f"_snow_depth_ge_{threshold_in}in",
+                "sum",
+            )
 
     monthly = daily.groupby(group_cols, as_index=False).agg(**agg_kwargs)
 

@@ -30,6 +30,29 @@ CHANGELOG:
     (e) fips variable naming settled on "fips_num" (matches the style
         guide's own convention, resolving the earlier fips/fips_numeric
         naming question).
+  09/08/2026 Wendy Wang: closed out open item 1 (the WSI snow-hazard
+    component) --
+    (a) codePYTHON/06_build_derived_weather_vars.py now builds the ERA5
+        county-month day counts days_snow_depth_18in (Kohn's literature
+        threshold) plus days_snow_depth_12in / days_snow_depth_8in as
+        sensitivity variants;
+    (b) SECTION 2 now carries those counts through the ERA5 reshape --
+        previously it kept only mean_snow_depth and total_snowfall_mm, so
+        SECTION 7's auto-detect could never have fired even once the
+        upstream variable existed. The three counts are treated as
+        OPTIONAL, so this script still runs against an ERA5 CSV built
+        before that change;
+    (c) SECTION 7 now populates wsi_snow_days and winter_severity_index,
+        and adds wsi_snow_days_12in / _8in and the matching
+        winter_severity_index_snow12 / _snow8 sensitivity indices;
+    (d) upstream, days_extremely_cold changed from tmin < 0F to
+        tmin <= 0F to match Kohn's "0F or below" -- so wsi_cold_days's
+        existing "<=0F" label is now literally correct. On the 1981 and
+        2025 extracts the change moves zero county-days (no daily tmin
+        lands exactly on -17.7778C), but 06 must be rerun for the CSVs
+        to reflect the corrected definition.
+    REQUIRES a rerun of 06_build_derived_weather_vars.py before this
+    script will pick any of it up.
 ==============================================================*/
 
 * Inputs:
@@ -50,14 +73,26 @@ CHANGELOG:
 *   $path/dataSTATA/main_data_county_year.dta
 *
 * Open items -- flagged rather than assumed, per CLAUDE.md:
-*   1. WSI snow-hazard component (SECTION 7) is set to missing: it needs
-*      a county-month COUNT of days with snow depth >=18in, which doesn't
-*      exist anywhere in the pipeline yet (only a monthly MEAN snow depth
-*      does). Per Wendy (9/5/26), left missing rather than approximated --
-*      add a "days with snow depth >=18in" derived variable to ERA5's
-*      processing in 06_build_derived_weather_vars.py (same pattern as
-*      days_extremely_cold for temperature); SECTION 7 auto-detects it
-*      once it exists.
+*   1. RESOLVED 9/8/26 (was: WSI snow-hazard component set to missing).
+*      days_snow_depth_18in now exists upstream and SECTION 7 uses it.
+*      What remains is an INTERPRETATION caveat, not a missing variable:
+*      Kohn's 18in threshold was calibrated on point station/snow-course
+*      observations, whereas snow_depth here is an ERA5-Land grid-box
+*      average averaged again over a whole county, and that spatial
+*      averaging strips out the local maxima the cutoff is meant to
+*      catch. Measured on the 1981 extract (winter 1980-81): Wisconsin
+*      recorded 8 county-days at >=18in statewide (all Vilas County) and
+*      Minnesota, Iowa, Illinois and Pennsylvania recorded none, while
+*      most CONUS >=18in county-days sat in WY/WA/ID/MT mountain
+*      counties rather than the Great Lakes deer range. So
+*      winter_severity_index will be driven almost entirely by
+*      wsi_cold_days across most of the study area. The
+*      winter_severity_index_snow12 / _snow8 variants in SECTION 7 exist
+*      to make that visible in a robustness table -- raise with Eyal and
+*      Jen before the WSI is used as a headline regressor.
+*      Related: county 25019 (Nantucket, MA) has no ERA5-Land snow
+*      readings at all, so its snow-day counts come through as 0 rather
+*      than missing (same convention as the temperature day counts).
 *   2. Wildlife's `year` is "season start year" (Nicole's convention),
 *      which may not align one-to-one with the calendar year used by
 *      weather/collisions/population -- e.g. a hunting season labeled
@@ -180,16 +215,40 @@ else {
     preserve
         import delimited using "`file_name'", clear varnames(1) stringcols(1 2 3)
 
-        local era5_snow_vars mean_snow_depth total_snowfall_mm
+        * REQUIRED: the two ERA5 snow variables 06 has always produced.
+        local era5_snow_required mean_snow_depth total_snowfall_mm
+
+        * OPTIONAL: the snow-depth day COUNTS added to
+        * 06_build_derived_weather_vars.py on 9/8/26 (18in is Kohn's
+        * literature threshold; 12in/8in are sensitivity variants -- see
+        * SECTION 7). Optional rather than required so this script still
+        * runs against an ERA5 derived-vars CSV built before that change,
+        * in which case SECTION 7 falls back to a missing snow component
+        * exactly as it did before.
+        local era5_snow_optional days_snow_depth_18in ///
+                                 days_snow_depth_12in ///
+                                 days_snow_depth_8in
+
         local era5_vars_ok = 1
-        foreach v of local era5_snow_vars {
+        foreach v of local era5_snow_required {
             capture confirm variable `v'
             if _rc local era5_vars_ok = 0
         }
 
         if !`era5_vars_ok' {
-            di as error "Expected ERA5 variables (`era5_snow_vars') not found in era5_derived_weather_vars.csv -- its actual column names haven't been verified against this script. Check and update SECTION 2."
+            di as error "Expected ERA5 variables (`era5_snow_required') not found in era5_derived_weather_vars.csv -- its actual column names haven't been verified against this script. Check and update SECTION 2."
             exit 111
+        }
+
+        local era5_snow_vars `era5_snow_required'
+        foreach v of local era5_snow_optional {
+            capture confirm variable `v'
+            if !_rc {
+                local era5_snow_vars `era5_snow_vars' `v'
+            }
+            else {
+                di as text "NOTE: `v' not found in era5_derived_weather_vars.csv -- rerun codePYTHON/06_build_derived_weather_vars.py to build it. SECTION 7 will leave the corresponding winter-severity variable missing until then."
+            }
         }
 
         keep geoid ///
@@ -198,8 +257,7 @@ else {
              county_name ///
              year ///
              month ///
-             mean_snow_depth ///
-             total_snowfall_mm
+             `era5_snow_vars'
 
         reshape wide `era5_snow_vars', ///
                 i(geoid ///
@@ -437,18 +495,19 @@ gen wsi_cold_days = L1.days_extremely_cold_m12 ///
                    + days_extremely_cold_m4
 label variable wsi_cold_days "WSI cold-stress component: # days Dec 1-Apr 30 with PRISM min temp <=0F"
 
-* The snow-hazard component needs a county-month COUNT of days with snow
-* depth >=18in. Only a monthly MEAN snow depth exists right now
-* (mean_snow_depth, from SECTION 2), not a daily threshold count -- see
-* open item 1 in the header. Per Wendy (9/5/26): leave this component
-* missing rather than approximate it from the monthly mean (a month can
-* average under 18in while still having qualifying days, or vice versa).
-* This block auto-detects the proper variable once someone adds it to
-* ERA5's processing -- rename it here if its eventual name differs from
-* "days_snow_depth_18in".
+* The snow-hazard component is a county-month COUNT of days with snow
+* depth >=18in (days_snow_depth_18in, built by
+* codePYTHON/06_build_derived_weather_vars.py as of 9/8/26 and carried
+* through SECTION 2 above). It is deliberately NOT approximated from
+* mean_snow_depth: a month can average under 18in while still containing
+* qualifying days, and vice versa.
+*
+* Still guarded rather than assumed, so an older ERA5 derived-vars CSV
+* degrades to the previous missing-component behaviour instead of
+* erroring.
 capture confirm variable days_snow_depth_18in_m1
 if _rc {
-    di as text "NOTE: no county-month count of days with snow depth >=18in exists yet -- wsi_snow_days and winter_severity_index's snow component are set to missing. Add that derived variable to ERA5's processing (06_build_derived_weather_vars.py) to complete this."
+    di as text "NOTE: days_snow_depth_18in_m1 not found -- wsi_snow_days and winter_severity_index's snow component are set to missing. Rerun codePYTHON/06_build_derived_weather_vars.py (which builds days_snow_depth_18in), and check SECTION 2 above carried it through the ERA5 reshape."
     gen wsi_snow_days = .
 }
 else {
@@ -458,10 +517,40 @@ else {
                        + days_snow_depth_18in_m3 ///
                        + days_snow_depth_18in_m4
 }
-label variable wsi_snow_days "WSI snow-hazard component: # days Dec 1-Apr 30 with snow depth >=18in -- MISSING until the upstream derived variable exists (see header, open item 1)"
+label variable wsi_snow_days "WSI snow-hazard component: # days Dec 1-Apr 30 with ERA5 county-mean snow depth >=18in (Kohn 1975)"
 
 gen winter_severity_index = wsi_cold_days + wsi_snow_days
 label variable winter_severity_index "Winter Severity Index (Kohn 1975 / WI DNR): wsi_cold_days + wsi_snow_days. Categories: <50 mild, 50-80 moderate, 80-100 moderately severe, >100 very severe"
+
+* --- (4b) Sensitivity variants of the snow-hazard component ---
+* NOT alternative definitions of the Kohn index -- robustness only.
+* Kohn's 18in cutoff was calibrated on point station/snow-course
+* observations. snow_depth here is an ERA5-Land grid-box average averaged
+* again over an entire county, and that spatial averaging removes exactly
+* the local maxima an 18in cutoff is meant to catch, so wsi_snow_days is
+* near-zero across most of the eastern/midwestern deer range and
+* winter_severity_index there is effectively wsi_cold_days alone (see
+* open item 1 in the header for the measured 1980-81 numbers). These
+* lower-threshold indices let that be shown in a robustness table rather
+* than asserted. Report winter_severity_index as the headline measure.
+foreach thr in 12 8 {
+    capture confirm variable days_snow_depth_`thr'in_m1
+    if _rc {
+        di as text "NOTE: days_snow_depth_`thr'in_m1 not found -- wsi_snow_days_`thr'in and winter_severity_index_snow`thr' set to missing."
+        gen wsi_snow_days_`thr'in = .
+    }
+    else {
+        gen wsi_snow_days_`thr'in = L1.days_snow_depth_`thr'in_m12 ///
+                                   + days_snow_depth_`thr'in_m1 ///
+                                   + days_snow_depth_`thr'in_m2 ///
+                                   + days_snow_depth_`thr'in_m3 ///
+                                   + days_snow_depth_`thr'in_m4
+    }
+    label variable wsi_snow_days_`thr'in "SENSITIVITY (not Kohn): # days Dec 1-Apr 30 with ERA5 county-mean snow depth >=`thr'in"
+
+    gen winter_severity_index_snow`thr' = wsi_cold_days + wsi_snow_days_`thr'in
+    label variable winter_severity_index_snow`thr' "SENSITIVITY WSI: wsi_cold_days + wsi_snow_days_`thr'in (>=`thr'in snow instead of Kohn's >=18in)"
+}
 
 *---------------------------------------------------------------
 * SECTION 8: MERGE DIAGNOSTICS
@@ -518,6 +607,10 @@ order mean_winter_temp ///
       wsi_cold_days ///
       wsi_snow_days ///
       winter_severity_index ///
+      wsi_snow_days_12in ///
+      winter_severity_index_snow12 ///
+      wsi_snow_days_8in ///
+      winter_severity_index_snow8 ///
       merge_era5_snow ///
       merge_population ///
       merge_collisions ///

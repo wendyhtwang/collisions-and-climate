@@ -144,12 +144,13 @@ identical and only the column names/units differ.
   monthly output), so `mean_temp_c` here can be cross-checked against
   `05`'s `tmean_mean`/`tmean_c_mean` as an independent consistency
   check.
-- Derived variables: `days_extremely_cold` (daily TMIN < 0F/-17.8C -- deer
-  metabolic-stress threshold, lagged population-prediction instrument),
-  `days_below_freezing_32f` (daily TMIN < 32F/0C -- contemporaneous
-  road-conditions covariate; resolved as a separate variable from
-  `days_extremely_cold` at the 2026-08-14 team meeting, since the two serve
-  different purposes and use different thresholds), `freeze_thaw_days`
+- Derived variables: `days_extremely_cold` (daily TMIN <= 0F/-17.8C -- deer
+  metabolic-stress threshold, lagged population-prediction instrument, and
+  the WSI's cold-stress component), `days_below_freezing_32f` (daily
+  TMIN < 32F/0C -- contemporaneous road-conditions covariate; resolved as a
+  separate variable from `days_extremely_cold` at the 2026-08-14 team
+  meeting, since the two serve different purposes and use different
+  thresholds), `freeze_thaw_days`
   (daily TMIN < 0C AND TMAX > 0C),
   `mean_temp_c`, `tmean_variance_c2`/`tmin_variance_c2`/`tmax_variance_c2`
   (sample variance, ddof=1, on daily mean/min/max temp)
@@ -158,7 +159,51 @@ identical and only the column names/units differ.
   `heating_degree_days`/`cooling_degree_days` (base 65F/18.33C, per
   NOAA's degree-day definition), and ERA5-only `total_snowfall_mm` (summed)
   /`mean_snow_depth` (averaged, since it's a stock not a flux, native
-  ERA5-Land meters -- same reasoning as `05`'s `snow_depth_mean`).
+  ERA5-Land meters -- same reasoning as `05`'s `snow_depth_mean`)
+  /`days_snow_depth_18in`, `days_snow_depth_12in`, `days_snow_depth_8in`
+  (see "Snow-depth day counts" below).
+- **Two comparison operators differ deliberately.** `days_extremely_cold`
+  and the snow-depth counts are INCLUSIVE (`<=` / `>=`) because they are
+  the two components of the Kohn (1975) winter severity index, which is
+  defined on "a minimum temperature of 0F or below" and "18 or more inches
+  of snow on the ground". `days_below_freezing_32f` stays STRICT (`<`):
+  it is the standard definition of a below-freezing day and is not part of
+  the WSI. `days_extremely_cold` was changed from `<` to `<=` on
+  2026-09-08; on the 1981 and 2025 extracts this moves zero county-days
+  (no daily TMIN lands exactly on -17.7778C), so it is a definitional
+  correction rather than a numbers-changing one.
+
+#### Snow-depth day counts (ERA5-only, added 2026-09-08)
+`days_snow_depth_18in` is the snow-hazard component of the winter severity
+index, consumed by `codeSTATA/build_main_data_county_year.do` (SECTION 7)
+as `wsi_snow_days`. 18in is the literature threshold (Kohn 1975 / WI DNR).
+- Thresholds live in `SNOW_DEPTH_THRESHOLDS_IN = (18, 12, 8)`; adding a
+  value there produces a matching `days_snow_depth_<N>in` column with no
+  other change. The Stata side picks up 18/12/8 specifically.
+- Units: ERA5-Land's `snow_depth` band is snow thickness on the ground in
+  METRES -- not the separate `snow_depth_water_equivalent` band -- so the
+  conversion is a straight `1in = 0.0254m` (18in = 0.4572m). PRISM has no
+  snow variable, so these are ERA5-only (`has_snow`).
+- A day COUNT is required, not a monthly mean: a month can average under
+  18in while still containing qualifying days, and vice versa. Both are
+  produced (`mean_snow_depth` alongside the counts).
+- **12in and 8in are sensitivity variants, not competing definitions.**
+  Kohn's 18in cutoff was calibrated on point station/snow-course
+  observations, whereas `snow_depth` here is an ERA5-Land grid-box average
+  averaged again over a whole county, and that spatial averaging strips out
+  the local maxima an 18in cutoff is meant to catch. On the 1981 extract
+  (winter 1980-81): Wisconsin recorded 8 county-days at >=18in statewide
+  (all Vilas County), and Minnesota, Iowa, Illinois and Pennsylvania
+  recorded none; most CONUS >=18in county-days fell in WY/WA/ID/MT mountain
+  counties rather than the Great Lakes deer range the index was written
+  for. Expect `winter_severity_index` to be driven almost entirely by its
+  cold component across most of the study area -- the lower cuts exist so
+  that can be shown in a robustness table.
+- Missing readings compare False and so contribute 0 to a count, matching
+  the temperature day counts. County 25019 (Nantucket, MA) has no
+  ERA5-Land snow readings at all, so its counts are 0 rather than missing
+  while its `mean_snow_depth` is missing -- worth remembering before
+  reading a Nantucket WSI of 0 as a mild winter.
 - Same completeness check and WI-county duplicate-row handling (per-column,
   see "Duplicate-conflict detection fix" below) as `05`.
 
