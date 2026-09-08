@@ -3,9 +3,11 @@ Build the county-year population panel from Census sources: total
 resident population plus 18 five-year age shares, keyed to TIGER/2018
 county FIPS, CONUS + DC.
 
-Builds 1990-2025 today (111,888 rows = 3,108 counties x 36 years).
-1981-89 needs fetch_pe02_1980s, which is not implemented -- see its
-docstring for why that is deliberate.
+Builds 1981-2025 (139,860 rows = 3,108 counties x 45 years) now that
+fetch_pe02_1980s is implemented -- CONFIRMED 9/8/26 against
+pe-02-1985.xls; the other 8 years of the 1980s are expected to share
+that layout but have not each been individually verified (see the
+fetcher's docstring).
 
 Consumed by the Phase 6 merge as the collision-rate denominator and as
 time-varying controls (Eyal, 9/1/26: total population "all ages, all
@@ -25,7 +27,7 @@ most ways this can silently corrupt a series are ordering violations:
 
 SOURCES, all verified against decennial counts 9/3-9/4/26:
 
-    1981-89  PE-02, one .xls per year           NOT IMPLEMENTED
+    1981-89  PE-02, one .xls per year           verified against 1985 only
     1990-99  intercensal API                    key required
     2000-09  co-est00int, one .csv per state
     2010-20  cc-est2020int, one .csv per state
@@ -52,7 +54,7 @@ THREE THINGS THAT WILL BITE ANYONE EDITING THIS:
 Run:
     python 08a_population_county.py --probe-api
     python 08a_population_county.py --years 2020 2021 --states 17
-    python 08a_population_county.py --years $(seq 1990 2025)
+    python 08a_population_county.py --years $(seq 1981 2025)
 """
 
 from __future__ import annotations
@@ -806,46 +808,126 @@ def fetch_pe02_1980s(config: PopulationSourceConfig, states: list) -> pd.DataFra
     Read the PE-02 intercensal county file for one year of the 1980s
     (one .xls per year, county x 5-year age group x sex x race).
 
-    LEAST-VERIFIED FETCHER IN THIS SCRIPT. The file layout could not be
-    checked from the session this was written in, so the column handling
-    below is a best-effort read of a sheet whose exact header shape is
-    unconfirmed. It is also last in the build order and entirely outside
-    the collision-data window (Eyal, 9/1: "good collision data started
-    mid-90s, early 2000"), so a failure here does not block the merge.
+    CONFIRMED 9/8/26 against pe-02-1985.xls (cached under
+    dataRAW/Population/census_pe02_1980s/): one sheet named after the
+    year, a title block in rows 1-5, column headers on row 6
+    ("Year of Estimate", "FIPS State and County Codes", "Race/Sex
+    Indicator", then 18 age-bucket columns "Under 5 years" ...
+    "85 years and over"), one row per (county, race/sex) with 6
+    race/sex rows per county: White/Black/Other races x male/female.
+    3,141 counties x 6 = 18,846 data rows, plus one leading blank
+    spacer row. No Hispanic-origin breakdown (this vintage predates
+    it) and no pre-summed total row -- sex and race are collapsed
+    here, and the AGEGRP_TOTAL_CODE row is synthesized below.
 
-    If this doesn't parse cleanly, the escalation path Eyal set on 9/1 is:
-    try harder locally first, and only come back to him if it turns into
-    manual Unicode/encoding repair -- at which point his own pre-cleaned
-    file becomes the fallback, though he'd rather the pipeline build
-    everything itself.
+    The 18 age-bucket labels line up EXACTLY with this project's
+    standard AGE_BUCKETS codes 1-18 (population_utils.AGE_BUCKETS):
+    "Under 5 years" IS the 0-4 bucket (code 1), not a STCH-ICEN
+    under-1 bucket -- this file predates that convention, so no
+    age-code translation is needed, only a label -> code lookup.
+
+    Only 1985 has been verified. Other years in 1981-1989 are
+    expected to share this layout (same product, same vintage), but
+    each year's file is validated against the required columns below
+    before being trusted -- if Census varied the layout in another
+    year, this raises rather than silently mis-mapping columns.
     """
+    age_col_labels = [
+        "Under 5 years", "5 to 9 years", "10 to 14 years", "15 to 19 years",
+        "20 to 24 years", "25 to 29 years", "30 to 34 years", "35 to 39 years",
+        "40 to 44 years", "45 to 49 years", "50 to 54 years", "55 to 59 years",
+        "60 to 64 years", "65 to 69 years", "70 to 74 years", "75 to 79 years",
+        "80 to 84 years", "85 years and over",
+    ]
+    label_to_code = dict(zip(age_col_labels, range(1, 19)))
+
+    wanted_states = set(states)
     frames = []
+
     for year in config.years:
-        path = download_to_raw(config.url_template.format(year=year), config.name)
+        path = download_to_raw(
+            config.url_template.format(year=year), config.name,
+            filename=f"pe-02-{year}.xls",
+        )
         try:
-            sheet = pd.read_excel(path, dtype=str)
+            raw = pd.read_excel(path, sheet_name=str(year), header=5, dtype=str)
         except Exception as exc:  # noqa: BLE001 - want the filename in the message
             raise RuntimeError(
-                f"[{config.name}] could not read {path.name}: {exc}. PE-02 ships as .xls "
-                "(xlrd handles it; openpyxl will not). If the layout differs from what this "
-                "fetcher assumes, inspect the file saved under "
-                f"{RAW_DIR / config.name} before changing anything here."
+                f"[{config.name}] could not read {path.name} (sheet '{year}', header on "
+                f"row 6): {exc}. PE-02 ships as .xls (xlrd handles it; openpyxl will not). "
+                f"If the sheet name or header row differ from what this fetcher assumes, "
+                f"inspect the file under {RAW_DIR / config.name} before changing anything "
+                "here."
             ) from exc
 
-        sheet.columns = [str(c).strip().upper() for c in sheet.columns]
-        sheet["year"] = year
-        frames.append(sheet)
+        raw.columns = [str(c).strip() for c in raw.columns]
+        required_cols = {
+            "Year of Estimate", "FIPS State and County Codes", "Race/Sex Indicator",
+            *age_col_labels,
+        }
+        missing_cols = required_cols - set(raw.columns)
+        if missing_cols:
+            raise ValueError(
+                f"[{config.name}] {path.name} is missing column(s) {sorted(missing_cols)}. "
+                f"Columns found: {list(raw.columns)}. The PE-02 layout may differ for this "
+                "year -- re-inspect the file (see the docstring above) before editing the "
+                "column list."
+            )
+
+        raw = raw.dropna(subset=["FIPS State and County Codes", "Race/Sex Indicator"])
+        raw["geoid"] = raw["FIPS State and County Codes"].astype(str).str.strip().str.zfill(5)
+        if raw["geoid"].str.len().ne(5).any():
+            bad = sorted(raw.loc[raw["geoid"].str.len() != 5, "geoid"].unique())[:10]
+            raise ValueError(
+                f"[{config.name}] {path.name}: geoid values that are not 5 characters "
+                f"after zero-fill: {bad}. The FIPS column may contain a state total, a "
+                "footnote row, or something else that isn't a county."
+            )
+
+        if wanted_states:
+            raw = raw[raw["geoid"].str[:2].isin(wanted_states)]
+        if raw.empty:
+            continue
+
+        long = raw.melt(
+            id_vars=["geoid"], value_vars=age_col_labels,
+            var_name="age_label", value_name="population",
+        )
+        long["agegrp"] = long["age_label"].map(label_to_code)
+        long["population"] = pd.to_numeric(long["population"], errors="coerce").fillna(0)
+        long["year"] = year
+
+        # Sum the 6 race/sex rows (White/Black/Other races x male/female) per
+        # (geoid, agegrp) -- sex and race are collapsed everywhere else in this
+        # pipeline (see the module docstring), and PE-02 has no pre-summed row
+        # to use instead.
+        collapsed = (
+            long.groupby(["geoid", "year", "agegrp"], as_index=False)["population"].sum()
+        )
+
+        # Synthesize the AGEGRP_TOTAL_CODE row PE-02 doesn't ship. Every other
+        # source in this pipeline either arrives with a total row (standard
+        # encoding) or gets one built by normalize_agegrp (the STCH-ICEN
+        # sources). PE-02's 18 buckets already ARE the standard encoding (see
+        # the docstring), so summing them here is exact, not an approximation
+        # -- and it's what lets detect_agegrp_encoding / assert_agegrp_encoding
+        # run on this source exactly like every other, rather than special
+        # casing it.
+        totals = collapsed.groupby(["geoid", "year"], as_index=False)["population"].sum()
+        totals["agegrp"] = AGEGRP_TOTAL_CODE
+        collapsed = pd.concat([collapsed, totals], ignore_index=True)
+
+        logging.info(
+            "[%s] %d: %d counties, %d rows (18 age buckets + synthesized total).",
+            config.name, year, collapsed["geoid"].nunique(), len(collapsed),
+        )
+        frames.append(collapsed)
+
+    if not frames:
+        raise RuntimeError(f"[{config.name}] no rows fetched for years {list(config.years)}")
 
     out = pd.concat(frames, ignore_index=True)
-    raise NotImplementedError(
-        "fetch_pe02_1980s: PE-02 column mapping is not implemented. The download and "
-        "caching above work; what is missing is the sheet->schema mapping, which needs "
-        f"the actual file in hand. Files are cached under {RAW_DIR / config.name} after "
-        "the first run -- inspect one, then map its columns to "
-        "(geoid, year, agegrp, population) and delete this raise. Deliberately left "
-        "unimplemented rather than guessed: 1981-89 is outside the collision window and "
-        "does not block the Phase 6 merge."
-    )
+    return _standardize(out, config)
 
 
 def fetch_ct_town_reaggregation(config: PopulationSourceConfig, states: list) -> pd.DataFrame:
