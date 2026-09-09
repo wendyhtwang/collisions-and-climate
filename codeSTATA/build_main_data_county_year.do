@@ -168,6 +168,13 @@ global tables     "$path/tables"
 cap mkdir "$dataSTATA"
 cap mkdir "$tables/merge_diagnostics"
 
+* Open log file in the codeSTATA directory
+* Derive the codeSTATA path from the global path set above
+local codeSTATA_dir = "$path/codeSTATA"
+local log_file = "`codeSTATA_dir'/build_main_data_county_year.log"
+cap log close
+log using "`log_file'", replace text
+
 *---------------------------------------------------------------
 * SECTION 1: BUILD THE WEATHER COUNTY-YEAR PANEL (MASTER, PRISM)
 *---------------------------------------------------------------
@@ -705,4 +712,4 @@ di as result _newline "Saved `file_name'"
 di as result "Merge diagnostics written to $tables/merge_diagnostics/"
 
 * Wrap Up
-cap log close   // safe even though this script doesn't open its own log
+log close
