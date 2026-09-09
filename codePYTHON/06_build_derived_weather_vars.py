@@ -9,6 +9,7 @@ aggregated to county-year-month.
     - handles duplicates (drop-if-identical / error-if-any-non-key-column-disagrees).
 """
 
+import argparse
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -183,6 +184,20 @@ def compute_month_derived_vars(daily: pd.DataFrame, config: DatasetConfig) -> pd
     precip_col_name = f"days_precip_above_{int(PRECIP_THRESHOLD_MM)}mm"
     agg_kwargs = {
         "n_days": ("date", "count"),
+        # Monthly precipitation TOTAL. Named after each dataset's own precip
+        # column exactly as 05 does it (PRISM -> ppt_total, ERA5 ->
+        # precip_mm_total), so this file and prism_county_month.csv can be
+        # cross-checked column-for-column -- see 06b_validate_ppt_total.py.
+        # The Methods section's "annual precipitation quintiles" control is
+        # built from the 12 monthly totals downstream; before this existed the
+        # panel had only days_precip_above_10mm and the estimation script fell
+        # back to quintiles of that count.
+        # NOTE ON MISSINGNESS: pandas sum() skips NaN, so a month with missing
+        # days returns the total of the days PRESENT -- understated, not
+        # missing. Same convention as every other aggregation here (n_days /
+        # is_incomplete surface it), but understatement bites harder on a total
+        # than on a mean, so treat totals for flagged months with care.
+        f"{config.precip_col}_total": (config.precip_col, "sum"),
         "days_extremely_cold": ("_extremely_cold", "sum"),
         "days_below_freezing_32f": ("_below_freezing_32f", "sum"),
         "freeze_thaw_days": ("_freeze_thaw", "sum"),
@@ -292,9 +307,25 @@ def process_dataset(config: DatasetConfig) -> pd.DataFrame:
 # Main
 # ---------------------------------------------------------------------
 
+DATASET_CONFIGS = {"PRISM": PRISM_CONFIG, "ERA5": ERA5_CONFIG}
+
+
 def main() -> None:
-    for config in (PRISM_CONFIG, ERA5_CONFIG):
-        process_dataset(config)
+    """Run both datasets by default, so `python script "..."` from
+    _project_main.do is unaffected. --dataset narrows the run when only one
+    side needs rebuilding (e.g. re-deriving PRISM after adding a variable),
+    since each dataset re-reads ~45 files of ~1.1M daily county rows."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dataset",
+        choices=sorted(DATASET_CONFIGS),
+        action="append",
+        help="Process only this dataset; repeatable. Default: both.",
+    )
+    args = parser.parse_args()
+
+    for name in args.dataset or list(DATASET_CONFIGS):
+        process_dataset(DATASET_CONFIGS[name])
 
 if __name__ == "__main__":
     main()
