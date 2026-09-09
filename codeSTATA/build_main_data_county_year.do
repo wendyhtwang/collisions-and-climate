@@ -53,6 +53,25 @@ CHANGELOG:
         to reflect the corrected definition.
     REQUIRES a rerun of 06_build_derived_weather_vars.py before this
     script will pick any of it up.
+  09/09/2026 Wendy Wang: added additional merge diagnostics to distinguish
+    EXPECTED merge gaps (before/after a source's own coverage window)
+    from genuine glitches (a gap inside it) --
+    (a) each source panel now captures its own min/max `year' as locals
+        right after it's built (SECTIONS 2-5);
+    (b) SECTION 8 now also runs `tab year if merge_<src> != 3' per
+        source (exactly what Eyal described on the call), and exports a
+        second CSV per source -- unmatched_<src>_in_window.csv -- holding
+        only the unmatched geoid-year rows that fall inside that source's
+        own coverage window. The existing unmatched_<src>_by_county.csv
+        export is unchanged.
+  09/09/2026 Wendy Wang: SECTION 3 now points at
+    population_county_year_1981_2025.dta (the full panel Wendy built on
+    Kodama) instead of population_county_year_1990_2025.dta. Removed the
+    SECTION 3 comment calling 1980s population-merge gaps "expected" --
+    that's no longer true now that the panel covers 1981 onward. This
+    also means min_year_population (SECTION 3/8) should now read 1981
+    instead of 1990 the next time this runs -- if it doesn't, the Kodama
+    file isn't the one actually being picked up.
 ==============================================================*/
 
 * Inputs:
@@ -60,7 +79,9 @@ CHANGELOG:
 *       (county-year-month; reshaped wide by month in SECTION 1)
 *   $path/dataCSV/ERA5/era5_derived_weather_vars.csv
 *       (county-year-month; only its snow columns are used, SECTION 2)
-*   $path/dataCSV/Population/population_county_year_1990_2025.dta
+*   $path/dataCSV/Population/population_county_year_1981_2025.dta
+*       (full 1981-2025 panel, replacing the earlier 1990-2025-only file --
+*       see 09/09/2026 changelog entry)
 *   $path/dataRAW/Collisions/collisions_CONUS_county_year_1985_2020.dta
 *       (pre-2020 snapshot Eyal placed here 9/1/26; Charvi's updates since
 *       then -- 2019/2020 for some states, more for others -- are not yet
@@ -274,6 +295,11 @@ else {
         }
 
         isid geoid year
+
+        quietly summarize year
+        local min_year_era5_snow = r(min)
+        local max_year_era5_snow = r(max)
+
         tempfile era5_snow_panel
         save `era5_snow_panel'
     restore
@@ -289,9 +315,14 @@ else {
 *---------------------------------------------------------------
 
 preserve
-    local file_name = "$dataCSV/Population/population_county_year_1990_2025.dta"
+    local file_name = "$dataCSV/Population/population_county_year_1981_2025.dta"
     use "`file_name'", clear
     isid geoid year
+
+    quietly summarize year
+    local min_year_population = r(min)
+    local max_year_population = r(max)
+
     tempfile population_panel
     save `population_panel'
 restore
@@ -299,9 +330,10 @@ restore
 * Per Eyal (9/1/26): keep every county-year row on both sides -- do NOT
 * `assert _merge==3` or drop unmatched observations here, which departs
 * from the style guide's default merge convention (Section 10). Population
-* is only built 1990-2025 so far (1980s not implemented yet), so
-* weather-only rows for 1981-1989 are an EXPECTED gap, not a bug. SECTION 8
-* tracks and documents mismatches instead of asserting them away.
+* now covers 1981-2025 (09/09/2026 -- previously 1990-2025 only, see
+* changelog), so there is no longer an expected 1980s population gap.
+* SECTION 8 still tracks and documents any mismatches instead of
+* asserting them away.
 merge 1:1 geoid year using `population_panel'
 rename _merge merge_population
 
@@ -372,6 +404,10 @@ else {
             exit 459
         }
 
+        quietly summarize year
+        local min_year_collisions = r(min)
+        local max_year_collisions = r(max)
+
         tempfile collisions_panel
         save `collisions_panel'
     restore
@@ -428,6 +464,10 @@ else {
             di as error "wildlife panel is not unique on geoid-year -- check before merging."
             exit 459
         }
+
+        quietly summarize year
+        local min_year_wildlife = r(min)
+        local max_year_wildlife = r(max)
 
         tempfile wildlife_panel
         save `wildlife_panel'
@@ -557,14 +597,23 @@ foreach thr in 12 8 {
 *---------------------------------------------------------------
 * Per Eyal (9/1/26): don't fix FIPS mismatches now, just track how many
 * there are and which counties are affected -- county by county rather
-* than row by row (a 1981-1989 population gap, e.g., would otherwise dump
-* thousands of expected-unmatched rows into the export).
+* than row by row (a whole-decade coverage gap in one source, e.g., would
+* otherwise dump thousands of expected-unmatched rows into the export).
 
 foreach src in era5_snow population collisions wildlife {
     cap confirm variable merge_`src'
     if !_rc {
         di as text _newline "--- merge_`src' ---"
         tab merge_`src', missing
+
+        * Eyal (9/8/26 call): a year tab of the unmatched rows tells you
+        * whether the gaps are the EXPECTED kind (before/after this
+        * source's own coverage window) or a genuine glitch (a gap
+        * *inside* the window where the source should have a record).
+        * `min_year_`src'' / `max_year_`src'' were captured off the
+        * source's own panel, above, when it was built.
+        di as text "Year distribution of unmatched `src' rows:"
+        tab year if merge_`src' != 3
 
         preserve
             gen byte temp = (merge_`src' != 3)
@@ -587,6 +636,35 @@ foreach src in era5_snow population collisions wildlife {
                 share_years_unmatched ///
                 using "`file_name'", ///
                 replace
+        restore
+
+        * NEW: isolate the subset of unmatched rows that fall INSIDE this
+        * source's own known coverage window (min_year_`src' to
+        * max_year_`src'', captured when its panel was built) -- those are
+        * the ones Eyal said he'd actually worry about (e.g. "a county in
+        * 2000 that's not getting a weather record"), as opposed to rows
+        * unmatched only because the master panel extends before/after
+        * this source's coverage, which is expected and not exported here.
+        * If the source's min/max year wasn't captured (e.g. its input
+        * file was missing), every unmatched row is written instead, since
+        * there's no window to filter against.
+        preserve
+            keep if merge_`src' != 3
+            if "`min_year_`src''" != "" & "`max_year_`src''" != "" {
+                keep if year >= `min_year_`src'' & year <= `max_year_`src''
+            }
+            gsort geoid year
+            local n_flagged = _N
+            local file_name = "$tables/merge_diagnostics/unmatched_`src'_in_window.csv"
+            export delimited geoid ///
+                state_fips ///
+                county_fips ///
+                county_name ///
+                year ///
+                merge_`src' ///
+                using "`file_name'", ///
+                replace
+            di as result "  -> `n_flagged' in-window unmatched `src' row(s) written to `file_name''"
         restore
     }
 }
