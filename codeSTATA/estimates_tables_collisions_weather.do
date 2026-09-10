@@ -55,6 +55,30 @@ CHANGELOG:
     the \ExpandableInput lines was renamed to match on the assumption that
     the Overleaf subfolder mirrors the local one; confirm that against
     Overleaf before compiling (see SECTION 4).
+  09/10/2026 Wendy Wang: Overleaf paths corrected against the actual repo,
+    after the first upload failed to compile --
+    (a) \tablePATH DOES NOT EXIST. main.tex defines \tabPath (= "tables")
+        and \figPath (= "figures"), and neither was used anywhere in the
+        project yet, so there was nothing to copy the convention from and
+        the earlier drafts invented a macro name. Undefined control
+        sequence -> the path collapsed to /results/... -> file not found
+        -> emergency stop. The \ExpandableInput lines now emit
+        exhibits_main_text/\tabPath/collisions_weather/..., which uses
+        \tabPath as it is actually defined (the leaf folder name).
+    (b) Exhibits are under exhibits_main_text/, not a project-root
+        tables/. Paths resolve from main.tex's directory.
+    (c) The notes now cite \eqref{eq:baseline}; the align block in
+        04_methods.tex had no \label at all and one was added.
+    (d) Both tables overflowed the page -- by ~250pt (share) and ~110pt
+        (rate), with the notes running off the bottom and colliding with
+        the page number. Fixed by sizing the table body (\footnotesize
+        and \arraystretch 1 inside threeparttable, the latter matching
+        what main.tex already does for the appendix), dropping the notes
+        to \scriptsize, and cutting the notes roughly in half. Measured
+        with a local pdflatex run against a copy of the Overleaf project;
+        both tables now fit on one page with room to spare. The
+        \scriptsize is a deliberate departure from style guide Section
+        13.3, which specifies \footnotesize in the tablenotes boilerplate.
 
 * Inputs:
 *   $path/dataSTATA/estimates/collisions_weather/<outcome>_p<A|B1|B2|C|D>_c<1-4>_W<wt>.ster
@@ -85,10 +109,19 @@ CHANGELOG:
 *     share outcome runs to about 0.02, so 2 decimals would round most of
 *     the table to 0.00.
 *
-* NOT SETTLED -- check before this goes to Eyal:
-*   - The equation label in the notes, eq:collisions_weather, has to
-*     match the \label{} on the specification in the Overleaf Methods
-*     section. If it does not, LaTeX prints ?? and compiles anyway.
+* OVERLEAF LAYOUT -- read from the repo on 9/10/26, not assumed:
+*   - Exhibits live at exhibits_main_text/tables/<subfolder>/, NOT at a
+*     project-root tables/. LaTeX resolves \input and \ExpandableInput
+*     paths from main.tex's directory, so they are written from there.
+*   - main.tex defines \tabPath as "tables" and \figPath as "figures".
+*     Both name the LEAF folder, so the full path is
+*     exhibits_main_text/\tabPath/<subfolder>/ -- which is what the
+*     \ExpandableInput lines below emit.
+*   - There is NO \tablePATH macro in this project. Earlier drafts of
+*     this file assumed one; that is what broke the compile on 9/10.
+*   - \ExpandableInput itself IS defined, in preamble.tex.
+*   - The baseline specification is the align block in 04_methods.tex,
+*     labelled eq:baseline.
 ==============================================================*/
 
 *---------------------------------------------------------------
@@ -441,22 +474,24 @@ tex \centering
 tex Table \ref{table:collisions_weather_share}. \\
 tex Animal-Related Collision Share and Winter Conditions \\
 tex \begin{threeparttable}
+tex \footnotesize
+tex \def\arraystretch{1}
 tex \begin{tabulary}{\textwidth}{l*{4}{c}@{}}
 tex \toprule \toprule
 tex \noalign{\smallskip}
 tex & \multicolumn{4}{c}{Animal share of all collisions (\(\bar{Y}\) = `ybar')} \\
 tex \cmidrule(l{5pt}r{5pt}){2-5}
 tex \multicolumn{5}{l}{Panel A. Mean winter temperature} \\
-tex \ExpandableInput{\tablePATH/results/collisions_weather/table_collisions_weather_`tag'_panel_A.tex}
+tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_A.tex}
 tex \tabularnewline
 tex \multicolumn{5}{l}{`b_head'} \\
-tex \ExpandableInput{\tablePATH/results/collisions_weather/table_collisions_weather_`tag'_panel_B.tex}
+tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_B.tex}
 tex \tabularnewline
 tex \multicolumn{5}{l}{Panel C. Days below 0\(^{\circ}\)F, Dec--Apr} \\
-tex \ExpandableInput{\tablePATH/results/collisions_weather/table_collisions_weather_`tag'_panel_C.tex}
+tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_C.tex}
 tex \tabularnewline
 tex \multicolumn{5}{l}{Panel D. Winter severity index} \\
-tex \ExpandableInput{\tablePATH/results/collisions_weather/table_collisions_weather_`tag'_panel_D.tex}
+tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_D.tex}
 tex \noalign{\smallskip}
 tex \bottomrule
 tex \end{tabulary}
@@ -464,29 +499,19 @@ tex \medskip
 tex \begin{tablenotes}[flushleft]
 tex \setlength\labelsep{0pt}
 tex \item
-tex \footnotesize
+tex \scriptsize
 tex \justify
-tex Notes: Estimation results for Equation \eqref{eq:collisions_weather}. The outcome is
-tex animal-related collisions as a share of all-cause collisions at the county-year level.
-tex The numerator is the all-animal collision count, backfilled from the deer-only count
-tex wherever a county-year reports deer collisions but no all-animal figure; the
-tex denominator is all-cause collisions.
-tex Each panel reports a separate set of regressions, differing only in the measure of
-tex winter conditions on the right-hand side; within a panel, columns differ only in the
-tex time-varying controls included.
-tex Weather controls are the twelve monthly mean temperatures and `ppt_note'.
-tex Age shares are the eighteen five-year population age bands, with the 0--4 band
-tex omitted as the base category.
-tex All regressions include county fixed effects and state-by-year fixed effects.
-tex Standard errors, in parentheses, are clustered at the county level.
-tex Panel B reports the `b_show' threshold; the `b_alt' threshold was estimated as a
-tex separate specification and is not shown, since the two indicators overlap by
-tex construction.
-tex Every winter measure spans December of the preceding year through the following
-tex spring, and the underlying PRISM record begins in January 1981, so the estimation
-tex sample begins in 1982.
-tex Entry into the sample is unbalanced because states begin reporting animal-involved
-tex collisions in different years.
+tex Notes: Estimation results for Equation \eqref{eq:baseline}. The outcome is animal-related
+tex collisions as a share of all-cause collisions at the county-year level; the numerator is the
+tex all-animal count, backfilled from the deer-only count where it is missing. Panels differ only
+tex in the measure of winter conditions, columns only in the time-varying controls: weather
+tex controls are the twelve monthly mean temperatures and `ppt_note', and age shares are the
+tex eighteen five-year population age bands with 0--4 omitted. All regressions include county and
+tex state-by-year fixed effects; standard errors, in parentheses, are clustered at the county
+tex level. Panel B reports the `b_show' threshold; the `b_alt' threshold was estimated
+tex separately, since the two indicators overlap by construction. The sample begins in 1982:
+tex every winter measure spans December of the preceding year, and PRISM begins in January 1981.
+tex Entry is unbalanced -- states begin reporting animal-involved collisions in different years.
 tex \end{tablenotes}
 tex \end{threeparttable}
 tex \end{table}
@@ -704,22 +729,24 @@ tex \centering
 tex Table \ref{table:collisions_weather_rate}. \\
 tex Animal-Related Collision Rate and Winter Conditions \\
 tex \begin{threeparttable}
+tex \footnotesize
+tex \def\arraystretch{1}
 tex \begin{tabulary}{\textwidth}{l*{4}{c}@{}}
 tex \toprule \toprule
 tex \noalign{\smallskip}
 tex & \multicolumn{4}{c}{Animal collisions per 100,000 residents (\(\bar{Y}\) = `ybar')} \\
 tex \cmidrule(l{5pt}r{5pt}){2-5}
 tex \multicolumn{5}{l}{Panel A. Mean winter temperature} \\
-tex \ExpandableInput{\tablePATH/results/collisions_weather/table_collisions_weather_`tag'_panel_A.tex}
+tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_A.tex}
 tex \tabularnewline
 tex \multicolumn{5}{l}{`b_head'} \\
-tex \ExpandableInput{\tablePATH/results/collisions_weather/table_collisions_weather_`tag'_panel_B.tex}
+tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_B.tex}
 tex \tabularnewline
 tex \multicolumn{5}{l}{Panel C. Days below 0\(^{\circ}\)F, Dec--Apr} \\
-tex \ExpandableInput{\tablePATH/results/collisions_weather/table_collisions_weather_`tag'_panel_C.tex}
+tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_C.tex}
 tex \tabularnewline
 tex \multicolumn{5}{l}{Panel D. Winter severity index} \\
-tex \ExpandableInput{\tablePATH/results/collisions_weather/table_collisions_weather_`tag'_panel_D.tex}
+tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_D.tex}
 tex \noalign{\smallskip}
 tex \bottomrule
 tex \end{tabulary}
@@ -727,14 +754,12 @@ tex \medskip
 tex \begin{tablenotes}[flushleft]
 tex \setlength\labelsep{0pt}
 tex \item
-tex \footnotesize
+tex \scriptsize
 tex \justify
-tex Notes: Estimation results for Equation \eqref{eq:collisions_weather}. The outcome is
-tex animal-related collisions per 100,000 residents at the county-year level, and all
-tex regressions are weighted by county population.
-tex The numerator is defined as in Table \ref{table:collisions_weather_share}.
-tex Panel and column structure, control definitions, fixed effects, clustering, the
-tex anomaly threshold on display, and the 1982 sample start are all as in
+tex Notes: Estimation results for Equation \eqref{eq:baseline}. The outcome is animal-related
+tex collisions per 100,000 residents at the county-year level, and all regressions are weighted
+tex by county population. The numerator, panel and column structure, control definitions, fixed
+tex effects, clustering, the anomaly threshold on display, and the 1982 sample start are as in
 tex Table \ref{table:collisions_weather_share}.
 tex \end{tablenotes}
 tex \end{threeparttable}
@@ -748,12 +773,9 @@ di as result "Wrote `file_name'"
 *---------------------------------------------------------------
 * SECTION 4: WHAT TO UPLOAD TO OVERLEAF
 *---------------------------------------------------------------
-* Ten files, into the Overleaf subfolder that
-* \tablePATH/results/collisions_weather resolves to. That Overleaf path is
-* assumed to mirror the local $tables subfolder name; if the Overleaf
-* folder is called something else, change the \ExpandableInput lines in
-* SECTIONS 2f and 3f to match, not the local paths.
-* The files:
+* Ten files, into exhibits_main_text/tables/collisions_weather/ in the
+* Overleaf project -- one folder, not a nested collisions_weather/
+* collisions_weather/. The files:
 *   table_collisions_weather_share.tex        <- input this one
 *   table_collisions_weather_share_panel_A-D.tex
 *   table_collisions_weather_rate.tex         <- and this one
