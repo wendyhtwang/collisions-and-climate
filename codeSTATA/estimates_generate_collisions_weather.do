@@ -5,7 +5,7 @@ CURRENT LEAD: Wendy Wang
 
 PURPOSE:      Estimate the collisions-on-winter-weather regressions and
               save each specification's estimates to
-              $dataSTATA/estimates/collisions/ as a .ster file, for
+              $dataSTATA/estimates/collisions_weather/ as a .ster file, for
               estimates_tables_collisions_weather.do to read back.
 
               Table 1 = animal share of all collisions.
@@ -79,15 +79,22 @@ CHANGELOG:
         existed, blanking the regressor for every county-year whose
         predecessor sits outside the collisions panel and shrinking N
         without saying so.
+  09/10/2026 Wendy Wang: output subfolder renamed from
+    dataSTATA/estimates/collisions to dataSTATA/estimates/collisions_weather,
+    so the .ster folder is named for the pair of scripts that writes and
+    reads it rather than for the outcome alone. The matching read path in
+    estimates_tables_collisions_weather.do was changed in the same pass;
+    any .ster files already sitting in the old folder are stale and should
+    be deleted rather than moved, since they predate the Panel B split.
 
 * Inputs:
 *   $path/dataSTATA/main_data_county_year.dta
 *       (built by build_main_data_county_year.do)
 *
 * Outputs:
-*   $path/dataSTATA/estimates/collisions/<outcome>_p<A|B1|B2|C|D>_c<1-4>_W<wt>.ster
+*   $path/dataSTATA/estimates/collisions_weather/<outcome>_p<A|B1|B2|C|D>_c<1-4>_W<wt>.ster
 *       (40 files: 2 outcomes x 5 panels x 4 columns)
-*   $path/dataSTATA/estimates/collisions/_run_settings.txt
+*   $path/dataSTATA/estimates/collisions_weather/_run_settings.txt
 *       (the switch settings this run used; read back by the table file)
 *   $path/codeSTATA/estimates_generate_collisions_weather.log
 *
@@ -146,7 +153,7 @@ global estimates  "$path/dataSTATA/estimates"
 global tables     "$path/tables"
 
 cap mkdir "$estimates"
-cap mkdir "$estimates/collisions"
+cap mkdir "$estimates/collisions_weather"
 
 * Open log file in the codeSTATA directory, matching
 * build_main_data_county_year.do
@@ -193,7 +200,7 @@ else {
 }
 
 *---------------------------------------------------------------
-* SECTION 2: LOAD PANEL AND RESTRICT TO THE ESTIMATION SAMPLE
+* SECTION 2: LOAD PANEL AND FLAG THE ESTIMATION SAMPLE
 *---------------------------------------------------------------
 
 local file_name = "$dataSTATA/main_data_county_year.dta"
@@ -516,7 +523,7 @@ foreach y in animal_share animal_rate_100k {
             * File name records outcome, panel, column and weighting, so
             * it is readable without opening it (style guide Section 11).
             local reg_file_name = "`y'_p`p'_c`c'_W`wsuffix'"
-            estimates save "$estimates/collisions/`reg_file_name'.ster", replace
+            estimates save "$estimates/collisions_weather/`reg_file_name'.ster", replace
         }
     }
 }
@@ -553,7 +560,7 @@ foreach y in animal_share animal_rate_100k {
     forvalues c = 1/4 {
         foreach s in 1 2 {
 
-            local ster = "$estimates/collisions/`y'_pB`s'_c`c'_W`wsuffix'.ster"
+            local ster = "$estimates/collisions_weather/`y'_pB`s'_c`c'_W`wsuffix'.ster"
             capture confirm file "`ster'"
             if _rc {
                 di as error "  MISSING: `ster'"
@@ -599,7 +606,7 @@ di as text "Eyal's tie-break: both precise and same-signed -> keep 1SD."
 * precipitation-control wording. Writing them to a small text file keeps
 * the two .do files consistent without either one guessing.
 
-local file_name = "$estimates/collisions/_run_settings.txt"
+local file_name = "$estimates/collisions_weather/_run_settings.txt"
 file open  fh using "`file_name'", write replace
 file write fh "winter_lag = `winter_lag'"                   _n
 file write fh "coef_prefix = $coef_prefix"                  _n
@@ -612,7 +619,7 @@ file write fh "estimation_sample_rows = `n_est'"            _n
 file write fh "run_date = `c(current_date)'"                _n
 file close fh
 
-di as result _newline "Estimates written to $estimates/collisions/"
+di as result _newline "Estimates written to $estimates/collisions_weather/"
 di as result "Run settings written to `file_name'"
 
 * Wrap Up
