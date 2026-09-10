@@ -79,6 +79,42 @@ CHANGELOG:
         existed, blanking the regressor for every county-year whose
         predecessor sits outside the collisions panel and shrinking N
         without saying so.
+  09/10/2026 (evening) Wendy Wang: numerator and scale, after the 9/10
+    diagnostics on the merged panel --
+    (a) THE NUMERATOR IS NOW any_animal_total, NOT animal_total. Eyal said
+        "any_animal" on 9/8; the panel carries three animal families and
+        the first pass used the smallest of them. any_animal_total has
+        46,665 non-missing rows to animal_total's 29,130, contains every
+        row animal_total does, and is identical in value wherever both
+        exist -- so the switch cannot change an existing observation, only
+        add observations. Expected effect: N 42,245 -> 56,778, clusters
+        2,696 -> 2,986, mean share 0.168 -> 0.121. EVERY COEFFICIENT IN
+        BOTH TABLES MOVES; the published 9/10 tables are superseded.
+    (b) SECTION 3 rewritten as a three-step fill plus a floor, with a
+        num_source provenance variable so the composition can be reported
+        in the table notes and the deer stand-ins cut as a robustness
+        check. The old single deer backfill also REPLACED animal_total in
+        place, which quietly made a source variable mean something else
+        for the rest of the run; the new block leaves every source
+        variable alone and builds any_animal_filled beside them.
+    (c) The share outcome is now in PERCENTAGE POINTS (share_scale = 100).
+        At the 0-1 scale, Table 1 Panels C and D printed -0.001, -0.000 or
+        0.000 in every cell. Scaling the outcome rather than the
+        coefficients keeps the dependent-variable mean in the header on
+        the same footing as the estimates.
+    (d) SECTION 8 now writes share_scale and the four numerator-composition
+        counts instead of n_backfilled_animal_from_deer and
+        n_deer_exceeds_animal, whose locals no longer exist. Those two
+        writes sat at the very END of the file, so leaving them in place
+        would have errored only after all 40 regressions had run.
+    NOT changed here, deliberately: $Wtemp still holds all twelve monthly
+    mean temperatures, two of which (January and February) are components
+    of mean_winter_temp. Columns 2 and 4 of Panel A therefore estimate
+    exactly 3x the December(t-1) effect, not the effect of the winter mean
+    -- proven numerically on 9/10 to eight significant figures. That is
+    Q1, it is a specification question rather than a labelling one, and it
+    goes to Eyal with the evidence before anyone changes his control set.
+    The table notes carry the caveat in the meantime.
   09/10/2026 Wendy Wang: output subfolder renamed from
     dataSTATA/estimates/collisions to dataSTATA/estimates/collisions_weather,
     so the .ster folder is named for the pair of scripts that writes and
@@ -179,9 +215,28 @@ if _rc ssc install estout
 *     1 = winter measure enters as L1. (Equation (1) as literally written)
 local winter_lag = 0
 
-* Q2: numerator of the share and of the rate. Settled 9/8/26:
-*     "animal_total" per Eyal; "deer_total" is the robustness cut.
-local share_numerator = "animal_total"
+* Q2: numerator of the share and of the rate. Settled 9/8/26 in favour of
+*     the ALL-ANIMAL count; settled 9/10/26 as to WHICH all-animal
+*     variable that is. Eyal said "any_animal" repeatedly on 9/8 and the
+*     panel carries three families (animal_*, wild_animal_*,
+*     any_animal_*). Verified on the merged panel: any_animal_total has
+*     46,665 non-missing rows against animal_total's 29,130, is a strict
+*     superset of it (count if missing(any_animal_total) &
+*     !missing(animal_total) -> 0) and is identical in value wherever
+*     both exist (count if !missing(animal_total) & any_animal_total !=
+*     animal_total -> 0). The switch is therefore free: it can only add
+*     observations, never change an existing one. SECTION 3 builds
+*     any_animal_filled from it. "deer_total" remains the robustness cut.
+local share_numerator = "any_animal_filled"
+
+* Scale on the SHARE outcome. 100 = percentage points. At the natural
+* 0-1 scale every Panel C and Panel D cell in Table 1 printed as -0.001,
+* -0.000 or 0.000 at three decimals, i.e. the panels were unreadable.
+* Scaling the outcome rather than the coefficients keeps the dependent-
+* variable mean in the column header on the same footing as the
+* estimates. The table script reads this back from _run_settings.txt and
+* words the header accordingly.
+local share_scale = 100
 
 * Q3: weights on the SHARE regressions. Empty = unweighted (current
 *     Methods). Set to "[aweight=population]" to weight like the rate.
@@ -258,33 +313,126 @@ label variable est_sample "1 if county-year is in the collisions estimation samp
 * check_animal_deer_backfill.do is the standalone diagnostic and reports
 * the offending rows.
 
-qui count if est_sample & missing(animal_total) & !missing(deer_total)
-local n_backfill = r(N)
-replace animal_total = deer_total if missing(animal_total) & !missing(deer_total)
+* --- Build the numerator ---------------------------------------------
+* any_animal_total is the base. Three fills, each applied only where the
+* running variable is still missing, then a floor:
+*   (1) the severity components (fatal + injury + pdo) where the total is
+*       missing but the components are not;
+*   (2) deer_total where it is still missing -- without this, every
+*       deer-only state-year leaves the sample;
+*   (3) a floor at deer_total wherever a non-missing deer count EXCEEDS
+*       the all-animal count. That is impossible by construction, so
+*       those rows are an upstream defect; Eyal's rule (9/8/26) is that
+*       deer is a minimum, so the floor is applied and the count is
+*       reported rather than the rows being silently kept or dropped.
+*
+* Verified counts on the 9/9/26 panel, for comparison against the log:
+*   any_animal_total non-missing                    46,665
+*   + component rebuild where total missing        + 3,920
+*   + deer_total where still missing               +10,219
+*                                                  =60,804
+*   = every row of the collisions file (60,787 matched + 17 using-only).
+*
+* num_source records which step produced each row, so the numerator
+* composition can be reported in the table notes and the deer stand-ins
+* can be cut as a robustness check without re-deriving this logic.
+* NOTE the ordering inside each step: num_source is set BEFORE
+* any_animal_filled is replaced, because the condition tests the
+* pre-replacement value.
 
-qui count if est_sample & !missing(animal_total) & !missing(deer_total) ///
-             & deer_total > animal_total
-local n_deer_exceeds = r(N)
+gen double comp_total = any_animal_fatal + any_animal_injury + any_animal_pdo
+label variable comp_total "any_animal_fatal + _injury + _pdo (severity-component rebuild)"
+
+gen double any_animal_filled = any_animal_total
+gen byte num_source = 1 if !missing(any_animal_filled)
+
+qui count if est_sample & missing(any_animal_filled) & !missing(comp_total)
+local n_fill_comp = r(N)
+replace num_source        = 2         if missing(any_animal_filled) & !missing(comp_total)
+replace any_animal_filled = comp_total if missing(any_animal_filled) & !missing(comp_total)
+
+qui count if est_sample & missing(any_animal_filled) & !missing(deer_total)
+local n_fill_deer = r(N)
+replace num_source        = 3          if missing(any_animal_filled) & !missing(deer_total)
+replace any_animal_filled = deer_total if missing(any_animal_filled) & !missing(deer_total)
+
+qui count if est_sample & !missing(any_animal_filled) & !missing(deer_total) ///
+             & deer_total > any_animal_filled
+local n_fill_floor = r(N)
+replace num_source        = 4          if !missing(any_animal_filled) & !missing(deer_total) & deer_total > any_animal_filled
+replace any_animal_filled = deer_total if !missing(any_animal_filled) & !missing(deer_total) & deer_total > any_animal_filled
+
+label variable any_animal_filled "All-animal collisions; component- then deer-filled, floored at deer_total"
+label variable num_source "Numerator provenance: 1 native, 2 component rebuild, 3 deer stand-in, 4 deer floor applied"
+label define num_source_lbl 1 "any_animal_total" 2 "component rebuild" ///
+                            3 "deer stand-in"    4 "deer floor applied", replace
+label values num_source num_source_lbl
+
+* n_fill_comp / n_fill_deer / n_fill_floor above are what each STEP
+* touched, counted before the next step ran. They do not partition the
+* sample: the floor reclassifies rows that were already native or
+* component-filled. The partition the table notes need is the final
+* num_source, counted here.
+forvalues k = 1/4 {
+    qui count if est_sample & num_source == `k'
+    local n_src`k' = r(N)
+}
+qui count if est_sample & missing(any_animal_filled)
+local n_num_missing = r(N)
 
 di as text _newline "{hline 70}"
-di as text "All-animal / deer consistency on the estimation sample:"
-di as text "  rows backfilled (animal missing, deer present): `n_backfill'"
-di as text "  rows where deer_total > animal_total:           `n_deer_exceeds'"
-if `n_backfill' > 0 {
-    di as error "  NOTE: the upstream appended collisions file did NOT"
-    di as error "  already backfill these. Flag to Eyal and Charvi -- the"
-    di as error "  fix belongs upstream, not here."
+di as text "Numerator fill steps (each counted before the next ran):"
+di as text "  filled from fatal+injury+pdo components:    `n_fill_comp'"
+di as text "  filled from deer_total:                     `n_fill_deer'"
+di as text "  floored up to deer_total (upstream defect): `n_fill_floor'"
+di as text "Final composition on the estimation sample (partitions it):"
+di as text "  1 native any_animal_total:                  `n_src1'"
+di as text "  2 severity-component rebuild:               `n_src2'"
+di as text "  3 deer stand-in:                            `n_src3'"
+di as text "  4 deer floor applied over an inverted row:  `n_src4'"
+di as text "  still missing after all fills:              `n_num_missing'"
+if `n_num_missing' > 0 {
+    di as error "  WARNING: the fill does not cover the estimation sample."
+    di as error "  N will differ from the 56,778 the 9/10/26 diagnostics"
+    di as error "  projected. Investigate before reporting these tables."
 }
-if `n_deer_exceeds' > 0 {
-    di as error "  NOTE: deer exceeds all-animal somewhere, which should"
-    di as error "  be impossible. Run check_animal_deer_backfill.do for"
-    di as error "  the offending geoid-year rows before reporting these"
-    di as error "  estimates."
+if `n_fill_floor' > 0 {
+    di as error "  NOTE: deer exceeds all-animal on `n_fill_floor' rows,"
+    di as error "  which is impossible by construction. This is an upstream"
+    di as error "  defect in the 2022 collisions snapshot, concentrated in"
+    di as error "  NY and WV -- flag to Charvi and Eyal; a robustness cut"
+    di as error "  excluding those two states is the obvious response."
 }
 di as text "{hline 70}"
 
-gen double animal_share = `share_numerator' / total_total
-label variable animal_share "`share_numerator' as a share of total_total"
+*---------------------------------------------------------------
+* The two outcomes
+*---------------------------------------------------------------
+
+gen double animal_share = `share_scale' * `share_numerator' / total_total
+if `share_scale' == 100 {
+    label variable animal_share "`share_numerator' as a percentage of total_total"
+}
+else {
+    label variable animal_share "`share_numerator' / total_total, scaled by `share_scale'"
+}
+
+* The share is bounded above by 1 (i.e. by `share_scale' once scaled) if
+* total_total really is all-cause. It is not, on some rows: the 9/10/26
+* diagnostics found 4 county-years above 1 and p99 exactly 1. Counted
+* here rather than assumed, because it is a functional-form question for
+* OLS as much as a data question.
+qui count if est_sample & animal_share > `share_scale' & !missing(animal_share)
+local n_share_gt1 = r(N)
+qui count if est_sample & animal_share == 0
+local n_share_zero = r(N)
+qui count if est_sample & !missing(animal_share)
+local n_share_nm = r(N)
+di as text _newline "Share diagnostics on the estimation sample (`n_share_nm' rows):"
+di as text "  animal_share > 1 (denominator is not all-cause): `n_share_gt1'"
+di as text "  animal_share == 0 exactly:                       `n_share_zero'"
+di as text "  -- mass at both boundaries is a functional-form question"
+di as text "     for OLS, not only a data question. Raise with Eyal."
 
 gen double animal_rate_100k = 100000 * `share_numerator' / population ///
     if population > 0 & !missing(population)
@@ -613,8 +761,11 @@ file write fh "coef_prefix = $coef_prefix"                  _n
 file write fh "share_numerator = `share_numerator'"         _n
 file write fh "weight_share = `weight_share'"               _n
 file write fh "ppt_control_note = $ppt_control_note"        _n
-file write fh "n_backfilled_animal_from_deer = `n_backfill'" _n
-file write fh "n_deer_exceeds_animal = `n_deer_exceeds'"    _n
+file write fh "share_scale = `share_scale'"                  _n
+file write fh "n_numerator_native = `n_src1'"                _n
+file write fh "n_numerator_component_fill = `n_src2'"       _n
+file write fh "n_numerator_deer_fill = `n_src3'"            _n
+file write fh "n_numerator_deer_floor = `n_src4'"           _n
 file write fh "estimation_sample_rows = `n_est'"            _n
 file write fh "run_date = `c(current_date)'"                _n
 file close fh

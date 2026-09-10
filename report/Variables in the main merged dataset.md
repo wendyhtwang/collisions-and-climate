@@ -88,7 +88,7 @@ imputation_flag_deer_pdo, imputation_flag_deer_total,
 imputation_flag_pdo, imputation_flag_total_pdo,                                                              
 imputation_flag_total_total,                                                                                 
 imputation_flag_wild_ani_total                                                                               
-any_animal_fatal, any_animal_fatalities,               int    =1 if any animal-crash outcome present (6 vars)
+any_animal_fatal, any_animal_fatalities,               int    Crash counts, ANY-animal-involved (6 vars)     
 any_animal_injuries, any_animal_injury,                                                                      
 any_animal_pdo, any_animal_total                                                                             
 animal_fatalities_to_crashes, animal_pdo_to_crashes,   float  Ratio/rate variables (9 vars)                  

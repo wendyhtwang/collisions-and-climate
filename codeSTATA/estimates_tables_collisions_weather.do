@@ -55,6 +55,48 @@ CHANGELOG:
     the \ExpandableInput lines was renamed to match on the assumption that
     the Overleaf subfolder mirrors the local one; confirm that against
     Overleaf before compiling (see SECTION 4).
+  09/10/2026 (evening) Wendy Wang: revised against the 9/10 diagnostics on
+    the merged panel and a review of the first published pass --
+    (a) _run_settings.txt is now parsed generically into set_<key> locals
+        instead of scanning for one key. The estimation script writes more
+        settings than this file used to read.
+    (b) The share outcome arrives in PERCENTAGE POINTS (share_scale = 100
+        upstream). At the 0-1 scale, Panels C and D of Table 1 printed
+        -0.001, -0.000 or 0.000 in every cell. Y-bar format and the column
+        header follow the scale rather than assuming it.
+    (c) The notes now report the NUMERATOR COMPOSITION -- what share of the
+        outcome is reported all-animal, rebuilt from severity components,
+        or standing in from the deer-only count -- read from the counts the
+        estimation script records. A reader cannot otherwise tell that
+        roughly a sixth of the numerator is a deer stand-in.
+    (d) Three factual corrections to the notes. The sample does NOT begin
+        in 1982: est_sample requires merge_collisions == 3 and the
+        collisions snapshot covers 1985-2020, so the PRISM constraint never
+        binds. $Xage holds SEVENTEEN age bands, not eighteen; eighteen
+        exist including the omitted 0-4 base category. And the panels do
+        not share a winter window -- Panel A is Dec-Feb, Panels C and D are
+        Dec-Apr -- which the panel headings now say.
+    (e) The notes carry the column (2)/(4) caveat. $Wtemp includes January
+        and February mean temperature, which are two of the three months
+        composing mean_winter_temp, so the Panel A coefficient in those
+        columns is exactly 3x the December(t-1) effect and is not
+        comparable to column (1). See Q1 in the estimation script: this is
+        a specification question for Eyal, and the caveat is what stands
+        until he has seen the evidence.
+    (f) The rate table is labelled a robustness counterpart to the share
+        table rather than reading as a co-equal main-text Table 2, per the
+        Phase 6 task doc.
+    (g) tabulary -> tabular* with \extracolsep{\fill}. tabulary only
+        distributes width across LRCJ columns and this table declared
+        lowercase c, so it had no stretchable column at all and TeX dumped
+        all the slack from the wider \multicolumn header into the last
+        column, leaving column (4) visually detached. tabular* is also read
+        once rather than twice, which is safer for the \ExpandableInput
+        panels, and needs no package.
+    STILL REQUIRED IN OVERLEAF, not fixable from here: 04_methods.tex has
+    no \label{eq:baseline} on its align block, so \eqref{eq:baseline} in
+    these notes compiles to "(??)". An earlier changelog entry claimed the
+    label was added; it was not. Add it before compiling.
   09/10/2026 Wendy Wang: Overleaf paths corrected against the actual repo,
     after the first upload failed to compile --
     (a) \tablePATH DOES NOT EXIST. main.tex defines \tabPath (= "tables")
@@ -99,9 +141,10 @@ CHANGELOG:
 *   See SECTION 4.
 *
 * Notes on three deliberate departures from the Section 13.2 template:
-*   - Only Panel A carries mlabels((1) (2) (3) (4)). Panels B-D use
-*     mlabels(none), since the four blocks stack inside one tabular and
-*     the column numbers should print once.
+*   - Every panel uses mlabels(none). The column numbers are emitted once
+*     by the texdoc wrapper, above the Panel A title. Putting them in
+*     Panel A's estout block printed them BELOW that title, which read as
+*     though they belonged to the panel rather than to the table.
 *   - The control indicator rows (ctrl_weather / ctrl_age) are appended
 *     to Panel D's stats() only, so the X-block appears once at the foot
 *     of the table rather than under every panel.
@@ -201,7 +244,6 @@ else {
 * must be labelled. Read them rather than restating them here, so the two
 * files cannot drift apart.
 
-local ppt_note ""
 local file_name = "$estimates/collisions_weather/_run_settings.txt"
 capture confirm file "`file_name'"
 if _rc {
@@ -210,19 +252,70 @@ if _rc {
     exit 601
 }
 
+* Parse every "key = value" line into a local named set_<key>, rather than
+* picking out one key by name. The estimation script writes more settings
+* than this file used to read (the share scale and the four numerator-
+* composition counts, added 9/10/26 evening), and a reader that knows only
+* about the keys it was written for silently ignores the rest.
 file open fh using "`file_name'", read
 file read fh line
 while r(eof) == 0 {
-    if strpos(`"`line'"', "ppt_control_note = ") == 1 {
-        local ppt_note = substr(`"`line'"', strlen("ppt_control_note = ") + 1, .)
+    local eqpos = strpos(`"`line'"', " = ")
+    if `eqpos' > 0 {
+        local key = trim(substr(`"`line'"', 1, `eqpos' - 1))
+        local set_`key' = trim(substr(`"`line'"', `eqpos' + 3, .))
     }
     file read fh line
 }
 file close fh
 
+local ppt_note = "`set_ppt_control_note'"
 if "`ppt_note'" == "" {
     local ppt_note "annual precipitation quintiles"
 }
+
+* Scale on the share outcome: 100 = percentage points. Absent from a
+* _run_settings.txt written before 9/10/26 evening, in which case the
+* outcome was on the raw 0-1 scale.
+local share_scale = 1
+if "`set_share_scale'" != "" {
+    local share_scale = `set_share_scale'
+}
+
+* Numerator composition, for the table notes. All four counts have to be
+* present or the sentence is dropped rather than half-written.
+local have_comp = 1
+foreach k in n_numerator_native n_numerator_component_fill ///
+             n_numerator_deer_fill n_numerator_deer_floor {
+    if "`set_`k''" == "" local have_comp = 0
+}
+
+if `have_comp' {
+    local n_num_all = `set_n_numerator_native' + `set_n_numerator_component_fill' ///
+                    + `set_n_numerator_deer_fill' + `set_n_numerator_deer_floor'
+    local pc_native : di %2.0f 100 * `set_n_numerator_native'          / `n_num_all'
+    local pc_comp   : di %2.0f 100 * `set_n_numerator_component_fill'  / `n_num_all'
+    local pc_deer   : di %2.0f 100 * `set_n_numerator_deer_fill'       / `n_num_all'
+    local numnote   = "the all-animal count: " + trim("`pc_native'") + "\% as reported, " ///
+                    + trim("`pc_comp'") + "\% rebuilt from the fatal, injury and " ///
+                    + "property-damage components where the reported total is missing, and " ///
+                    + trim("`pc_deer'") + "\% standing in from the deer-only count where " ///
+                    + "neither is available. A further " + trim("`set_n_numerator_deer_floor'") ///
+                    + " county-years report more deer collisions than all-animal collisions, " ///
+                    + "which cannot happen by construction; those are raised to the deer count " ///
+                    + "and are flagged to the data provider."
+    di as text "Numerator composition read from _run_settings.txt:"
+    di as text "  native `set_n_numerator_native', component `set_n_numerator_component_fill', " ///
+               "deer `set_n_numerator_deer_fill', floored `set_n_numerator_deer_floor'"
+}
+else {
+    local numnote = "the all-animal count, backfilled from the severity components and from " ///
+                  + "the deer-only count where it is missing"
+    di as text "NOTE: _run_settings.txt carries no numerator-composition counts."
+    di as text "  Rerun estimates_generate_collisions_weather.do to get them"
+    di as text "  into the table notes."
+}
+di as text "Share outcome scale: `share_scale' (100 = percentage points)"
 
 * Q3 decides whether the SHARE regressions are weighted, which changes
 * the .ster file-name suffix. Detect it rather than hardcoding "none",
@@ -305,7 +398,14 @@ if `n_missing' > 0 {
 * The outcome mean goes in the column header, per the mockup and the
 * convention in Eyal's own tables.
 estimates use "$estimates/collisions_weather/`y'_pA_c1_W`wt'.ster"
-local ybar : di %5.3f e(dep_var_mean)
+if `share_scale' == 100 {
+    local ybar : di %5.2f e(dep_var_mean)
+    local yhead "Animal share of all collisions, percent"
+}
+else {
+    local ybar : di %5.3f e(dep_var_mean)
+    local yhead "Animal share of all collisions"
+}
 local ybar = trim("`ybar'")
 
 *---------------------------------------------------------------
@@ -327,7 +427,7 @@ estout p_A_c_1
              labels("\midrule \(R^2\)"
                     "N"
                     "Clusters"))
-       mlabels((1) (2) (3) (4))
+       mlabels(none)
        collabels(none)
        varlabels(`cp'mean_winter_temp "Mean winter temperature (\(^{\circ}\)C)")
        keep(`cp'mean_winter_temp)
@@ -476,12 +576,13 @@ tex Animal-Related Collision Share and Winter Conditions \\
 tex \begin{threeparttable}
 tex \footnotesize
 tex \def\arraystretch{1}
-tex \begin{tabulary}{\textwidth}{l*{4}{c}@{}}
+tex \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}cccc}
 tex \toprule \toprule
 tex \noalign{\smallskip}
-tex & \multicolumn{4}{c}{Animal share of all collisions (\(\bar{Y}\) = `ybar')} \\
+tex & \multicolumn{4}{c}{`yhead' (\(\bar{Y}\) = `ybar')} \\
 tex \cmidrule(l{5pt}r{5pt}){2-5}
-tex \multicolumn{5}{l}{Panel A. Mean winter temperature} \\
+tex & (1) & (2) & (3) & (4) \\
+tex \multicolumn{5}{l}{Panel A. Mean winter temperature, Dec--Feb} \\
 tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_A.tex}
 tex \tabularnewline
 tex \multicolumn{5}{l}{`b_head'} \\
@@ -490,11 +591,11 @@ tex \tabularnewline
 tex \multicolumn{5}{l}{Panel C. Days below 0\(^{\circ}\)F, Dec--Apr} \\
 tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_C.tex}
 tex \tabularnewline
-tex \multicolumn{5}{l}{Panel D. Winter severity index} \\
+tex \multicolumn{5}{l}{Panel D. Winter severity index, Dec--Apr} \\
 tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_D.tex}
 tex \noalign{\smallskip}
 tex \bottomrule
-tex \end{tabulary}
+tex \end{tabular*}
 tex \medskip
 tex \begin{tablenotes}[flushleft]
 tex \setlength\labelsep{0pt}
@@ -502,16 +603,19 @@ tex \item
 tex \scriptsize
 tex \justify
 tex Notes: Estimation results for Equation \eqref{eq:baseline}. The outcome is animal-related
-tex collisions as a share of all-cause collisions at the county-year level; the numerator is the
-tex all-animal count, backfilled from the deer-only count where it is missing. Panels differ only
-tex in the measure of winter conditions, columns only in the time-varying controls: weather
-tex controls are the twelve monthly mean temperatures and `ppt_note', and age shares are the
-tex eighteen five-year population age bands with 0--4 omitted. All regressions include county and
-tex state-by-year fixed effects; standard errors, in parentheses, are clustered at the county
-tex level. Panel B reports the `b_show' threshold; the `b_alt' threshold was estimated
-tex separately, since the two indicators overlap by construction. The sample begins in 1982:
-tex every winter measure spans December of the preceding year, and PRISM begins in January 1981.
-tex Entry is unbalanced -- states begin reporting animal-involved collisions in different years.
+tex collisions as a percentage of all-cause collisions at the county-year level; the numerator is
+tex `numnote' Panels differ in the measure of winter conditions and in the window it spans, as
+tex their headings state; columns differ only in the time-varying controls. Weather controls are
+tex the twelve monthly mean temperatures of year \(t\) and `ppt_note'; age shares are seventeen of
+tex the eighteen five-year population age bands, with 0--4 omitted as the base category. All
+tex regressions include county and state-by-year fixed effects; standard errors, in parentheses,
+tex are clustered at the county level. Panel B reports the `b_show' threshold; the `b_alt'
+tex threshold was estimated separately, since the two indicators overlap by construction.
+tex Columns (2) and (4) control for January and February mean temperature, two of the three months
+tex that compose the Panel A regressor, so the Panel A coefficient there is identified off December
+tex variation alone and is not comparable to column (1). The collisions source is a county-year
+tex panel covering 1985--2020; entry is unbalanced, as states begin reporting animal-involved
+tex collisions in different years.
 tex \end{tablenotes}
 tex \end{threeparttable}
 tex \end{table}
@@ -589,7 +693,7 @@ estout r_A_c_1
              labels("\midrule \(R^2\)"
                     "N"
                     "Clusters"))
-       mlabels((1) (2) (3) (4))
+       mlabels(none)
        collabels(none)
        varlabels(`cp'mean_winter_temp "Mean winter temperature (\(^{\circ}\)C)")
        keep(`cp'mean_winter_temp)
@@ -731,12 +835,13 @@ tex Animal-Related Collision Rate and Winter Conditions \\
 tex \begin{threeparttable}
 tex \footnotesize
 tex \def\arraystretch{1}
-tex \begin{tabulary}{\textwidth}{l*{4}{c}@{}}
+tex \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}cccc}
 tex \toprule \toprule
 tex \noalign{\smallskip}
 tex & \multicolumn{4}{c}{Animal collisions per 100,000 residents (\(\bar{Y}\) = `ybar')} \\
 tex \cmidrule(l{5pt}r{5pt}){2-5}
-tex \multicolumn{5}{l}{Panel A. Mean winter temperature} \\
+tex & (1) & (2) & (3) & (4) \\
+tex \multicolumn{5}{l}{Panel A. Mean winter temperature, Dec--Feb} \\
 tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_A.tex}
 tex \tabularnewline
 tex \multicolumn{5}{l}{`b_head'} \\
@@ -745,11 +850,11 @@ tex \tabularnewline
 tex \multicolumn{5}{l}{Panel C. Days below 0\(^{\circ}\)F, Dec--Apr} \\
 tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_C.tex}
 tex \tabularnewline
-tex \multicolumn{5}{l}{Panel D. Winter severity index} \\
+tex \multicolumn{5}{l}{Panel D. Winter severity index, Dec--Apr} \\
 tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisions_weather_`tag'_panel_D.tex}
 tex \noalign{\smallskip}
 tex \bottomrule
-tex \end{tabulary}
+tex \end{tabular*}
 tex \medskip
 tex \begin{tablenotes}[flushleft]
 tex \setlength\labelsep{0pt}
@@ -757,10 +862,12 @@ tex \item
 tex \scriptsize
 tex \justify
 tex Notes: Estimation results for Equation \eqref{eq:baseline}. The outcome is animal-related
-tex collisions per 100,000 residents at the county-year level, and all regressions are weighted
-tex by county population. The numerator, panel and column structure, control definitions, fixed
-tex effects, clustering, the anomaly threshold on display, and the 1982 sample start are as in
-tex Table \ref{table:collisions_weather_share}.
+tex collisions per 100,000 residents at the county-year level, and all regressions are weighted by
+tex county population. This table is a robustness counterpart to Table
+tex \ref{table:collisions_weather_share}, not an independent result. The numerator, panel and
+tex column structure, control definitions, fixed effects, clustering, the anomaly threshold on
+tex display, the column (2) and (4) caveat, and the sample window are as in Table
+tex \ref{table:collisions_weather_share}.
 tex \end{tablenotes}
 tex \end{threeparttable}
 tex \end{table}
