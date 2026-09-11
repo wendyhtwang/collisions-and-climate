@@ -110,6 +110,45 @@ python clear
 ************************ Descriptive Data Analysis *****************************
 ********************************************************************************
 
+/* Weather descriptives. Tier 1 is internal QA; Tier 2 is the exhibit set that
+   10_generate_weather_report.do knits into the dated PDF report. Both are
+   generated from codePYTHON/09_descriptive_weather_full.ipynb by
+   codePYTHON/make_scripts.py -- edit the notebook, then regenerate.
+
+   09b must run before 10, which asserts that every exhibit it expects exists.
+
+   KNOWN ORDERING GAP (9/10/26). One exhibit in 09b -- the Winter Severity
+   Index choropleth -- reads winter_severity_index from
+   $path/dataSTATA/main_data_county_year.dta, because SECTION 7 of
+   build_main_data_county_year.do is the single place the project's four winter
+   measures are constructed, and recomputing the index here would create a
+   second definition of it.
+
+   That makes a Phase 4 output depend on a Phase 6 input, and this file runs the
+   descriptives BEFORE the estimation section. So on a clean end-to-end run the
+   .dta does not exist yet: 09b prints a NOTE, skips the two WSI exhibits, and
+   10 omits that section. Everything else is unaffected -- the report still
+   builds -- but it builds one section short, quietly.
+
+   To get the WSI exhibits, run build_main_data_county_year.do first, then
+   re-run 09b and 10.
+
+   The real fix is to move the index's construction upstream into
+   06_build_derived_weather_vars.py, where it belongs: it is PRISM cold days
+   plus ERA5 snow days, both pure weather inputs, and the merge script would
+   then read it rather than build it. That touches a script the PI has already
+   signed off and that Table 1 was run against, so it is deferred to the code
+   review rather than done here. */
+
+python script "$path/codePYTHON/09a_descriptive_weather_tier1.py"
+python clear
+
+python script "$path/codePYTHON/09b_descriptive_weather_tier2.py"
+python clear
+
+do "$path/codeSTATA/10_generate_weather_report.do"
+
+
 
 ********************************************************************************
 ************************* Regression Estimation ********************************
