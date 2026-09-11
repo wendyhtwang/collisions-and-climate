@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025/Debian) (preloaded format=pdflatex 2026.8.31)  11 SEP 2026 10:05
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025/Debian) (preloaded format=pdflatex 2026.8.31)  11 SEP 2026 10:41
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -675,96 +675,96 @@ Package pdftex.def Info: exhibits/prism_state_trends_pooled_by_region.pdf  used
  <./exhibits/prism_state_trends_pooled_by_region.pdf>] [9
 
 ]
-<exhibits/prism_winter_warming_data_section.pdf, id=354, 581.05081pt x 487.3217
-pt>
+<exhibits/prism_winter_warming_data_section.pdf, id=354, 581.05081pt x 483.9868
+5pt>
 File: exhibits/prism_winter_warming_data_section.pdf Graphic file (type pdf)
 <use exhibits/prism_winter_warming_data_section.pdf>
 Package pdftex.def Info: exhibits/prism_winter_warming_data_section.pdf  used o
 n input line 168.
-(pdftex.def)             Requested size: 484.20988pt x 406.11281pt.
+(pdftex.def)             Requested size: 484.20988pt x 403.33368pt.
  [10
 
  <./exhibits/prism_winter_warming_data_section.pdf>]
-<exhibits/prism_mean_winter_temperature.pdf, id=412, 512.47144pt x 339.66899pt>
+<exhibits/prism_mean_winter_temperature.pdf, id=412, 532.43736pt x 339.66899pt>
 
 File: exhibits/prism_mean_winter_temperature.pdf Graphic file (type pdf)
 <use exhibits/prism_mean_winter_temperature.pdf>
 Package pdftex.def Info: exhibits/prism_mean_winter_temperature.pdf  used on in
 put line 176.
-(pdftex.def)             Requested size: 484.20988pt x 320.93706pt.
+(pdftex.def)             Requested size: 484.20988pt x 308.91785pt.
  [11
 
  <./exhibits/prism_mean_winter_temperature.pdf>]
 <exhibits/prism_winter_temperature_early_vs_recent.pdf, id=452, 569.48758pt x 2
-15.7494pt>
+08.97154pt>
 File: exhibits/prism_winter_temperature_early_vs_recent.pdf Graphic file (type 
 pdf)
 <use exhibits/prism_winter_temperature_early_vs_recent.pdf>
 Package pdftex.def Info: exhibits/prism_winter_temperature_early_vs_recent.pdf 
  used on input line 184.
-(pdftex.def)             Requested size: 484.20988pt x 183.44711pt.
+(pdftex.def)             Requested size: 484.20988pt x 177.68402pt.
  [12
 
  <./exhibits/prism_winter_temperature_early_vs_recent.pdf>]
-<exhibits/prism_winter_temperature_change.pdf, id=504, 534.60556pt x 354.12299p
-t>
+<exhibits/prism_winter_temperature_change.pdf, id=504, 555.4588pt x 354.12299pt
+>
 File: exhibits/prism_winter_temperature_change.pdf Graphic file (type pdf)
 <use exhibits/prism_winter_temperature_change.pdf>
 Package pdftex.def Info: exhibits/prism_winter_temperature_change.pdf  used on 
 input line 192.
-(pdftex.def)             Requested size: 484.20988pt x 320.74483pt.
+(pdftex.def)             Requested size: 484.20988pt x 308.70589pt.
  [13
 
  <./exhibits/prism_winter_temperature_change.pdf>]
-<exhibits/prism_extreme_cold_day_count.pdf, id=545, 534.60556pt x 354.12299pt>
+<exhibits/prism_extreme_cold_day_count.pdf, id=545, 555.4588pt x 354.12299pt>
 File: exhibits/prism_extreme_cold_day_count.pdf Graphic file (type pdf)
 <use exhibits/prism_extreme_cold_day_count.pdf>
 Package pdftex.def Info: exhibits/prism_extreme_cold_day_count.pdf  used on inp
 ut line 201.
-(pdftex.def)             Requested size: 484.20988pt x 320.74483pt.
+(pdftex.def)             Requested size: 484.20988pt x 308.70589pt.
  [14
 
  <./exhibits/prism_extreme_cold_day_count.pdf>]
-<exhibits/prism_extreme_cold_early_recent_change.pdf, id=584, 581.05081pt x 481
-.03432pt>
+<exhibits/prism_extreme_cold_early_recent_change.pdf, id=584, 581.05081pt x 477
+.48662pt>
 File: exhibits/prism_extreme_cold_early_recent_change.pdf Graphic file (type pd
 f)
 <use exhibits/prism_extreme_cold_early_recent_change.pdf>
 Package pdftex.def Info: exhibits/prism_extreme_cold_early_recent_change.pdf  u
 sed on input line 209.
-(pdftex.def)             Requested size: 484.20988pt x 400.87318pt.
+(pdftex.def)             Requested size: 484.20988pt x 397.91667pt.
 
 [15
 
  <./exhibits/prism_extreme_cold_early_recent_change.pdf>]
-<exhibits/prism_winter_severity_index.pdf, id=641, 512.47144pt x 339.66899pt>
+<exhibits/prism_winter_severity_index.pdf, id=641, 532.43736pt x 339.66899pt>
 File: exhibits/prism_winter_severity_index.pdf Graphic file (type pdf)
 <use exhibits/prism_winter_severity_index.pdf>
 Package pdftex.def Info: exhibits/prism_winter_severity_index.pdf  used on inpu
 t line 218.
-(pdftex.def)             Requested size: 484.20988pt x 320.93706pt.
+(pdftex.def)             Requested size: 484.20988pt x 308.91785pt.
  [16
 
  <./exhibits/prism_winter_severity_index.pdf>]
-<exhibits/prism_winter_severity_index_sensitivity.pdf, id=674, 570.93298pt x 21
-1.57512pt>
+<exhibits/prism_winter_severity_index_sensitivity.pdf, id=674, 570.93298pt x 20
+4.91403pt>
 File: exhibits/prism_winter_severity_index_sensitivity.pdf Graphic file (type p
 df)
 <use exhibits/prism_winter_severity_index_sensitivity.pdf>
 Package pdftex.def Info: exhibits/prism_winter_severity_index_sensitivity.pdf  
 used on input line 226.
-(pdftex.def)             Requested size: 484.20988pt x 179.44261pt.
+(pdftex.def)             Requested size: 484.20988pt x 173.79315pt.
  [17
 
  <./exhibits/prism_winter_severity_index_sensitivity.pdf>]
-<exhibits/prism_anomalous_warm_winter_frequency_1sd.pdf, id=721, 512.81946pt x 
+<exhibits/prism_anomalous_warm_winter_frequency_1sd.pdf, id=721, 532.48589pt x 
 339.66899pt>
 File: exhibits/prism_anomalous_warm_winter_frequency_1sd.pdf Graphic file (type
  pdf)
 <use exhibits/prism_anomalous_warm_winter_frequency_1sd.pdf>
 Package pdftex.def Info: exhibits/prism_anomalous_warm_winter_frequency_1sd.pdf
   used on input line 240.
-(pdftex.def)             Requested size: 484.20988pt x 320.71938pt.
+(pdftex.def)             Requested size: 484.20988pt x 308.88158pt.
  [18
 
  <./exhibits/prism_anomalous_warm_winter_frequency_1sd.pdf>]
@@ -780,14 +780,14 @@ df  used on input line 248.
 [19
 
  <./exhibits/prism_anomalous_warm_winter_time_series_1sd.pdf>]
-<exhibits/prism_anomalous_warm_winter_frequency_2sd.pdf, id=814, 512.81946pt x 
+<exhibits/prism_anomalous_warm_winter_frequency_2sd.pdf, id=814, 532.48589pt x 
 339.66899pt>
 File: exhibits/prism_anomalous_warm_winter_frequency_2sd.pdf Graphic file (type
  pdf)
 <use exhibits/prism_anomalous_warm_winter_frequency_2sd.pdf>
 Package pdftex.def Info: exhibits/prism_anomalous_warm_winter_frequency_2sd.pdf
   used on input line 256.
-(pdftex.def)             Requested size: 484.20988pt x 320.71938pt.
+(pdftex.def)             Requested size: 484.20988pt x 308.88158pt.
  [20
 
  <./exhibits/prism_anomalous_warm_winter_frequency_2sd.pdf>]
@@ -1033,7 +1033,7 @@ lic/lm/lmr17.pfb></usr/share/texmf/fonts/type1/public/lm/lmr9.pfb></usr/share/t
 exmf/fonts/type1/public/lm/lmri10.pfb></usr/share/texmf/fonts/type1/public/lm/l
 mri9.pfb></usr/share/texmf/fonts/type1/public/lm/lmsy10.pfb></usr/share/texmf/f
 onts/type1/public/lm/lmtt10.pfb>
-Output written on report__2026_09_11.pdf (35 pages, 9826217 bytes).
+Output written on report__2026_09_11.pdf (35 pages, 10036767 bytes).
 PDF statistics:
  1421 PDF objects out of 1440 (max. 8388607)
  453 compressed objects within 5 object streams
