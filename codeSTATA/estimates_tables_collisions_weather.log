@@ -1,0 +1,973 @@
+------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/estimate
+> s_tables_collisions_weather.log
+  log type:  text
+ opened on:  10 Sep 2026, 19:06:58
+
+. 
+. cap which estout
+
+. if _rc ssc install estout
+
+. cap which texdoc
+
+. if _rc ssc install texdoc
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 1: SETTINGS AND WHAT THE ESTIMATION RUN ACTUALLY DID
+. *---------------------------------------------------------------
+. 
+. * Which warm-winter anomaly threshold goes in Panel B: 1 or 2.
+. * The estimation script estimates both and prints them side by side in
+. * its SECTION 7. Eyal's tie-break, 9/8/26: if both are precise and point
+. * the same way, keep 1SD, because a 1SD winter is far more common and the
+. * estimate therefore has more support. Set this once, here, after looking
+. * at that comparison.
+. local panelB_sd = 1
+
+. 
+. if `panelB_sd' == 1 {
+.     local b_var  = "warm_winter_1sd"
+.     local b_row  = "\(\geq\) 1\(\sigma\) above own climatology"
+.     local b_head = "Panel B. Warm-winter anomaly, \(\geq\) 1\(\sigma\)"
+.     local b_show = "1\(\sigma\)"
+.     local b_alt  = "2\(\sigma\)"
+. }
+
+. else {
+.     local b_var  = "warm_winter_2sd"
+.     local b_row  = "\(\geq\) 2\(\sigma\) above own climatology"
+.     local b_head = "Panel B. Warm-winter anomaly, \(\geq\) 2\(\sigma\)"
+.     local b_show = "2\(\sigma\)"
+.     local b_alt  = "1\(\sigma\)"
+. }
+
+. 
+. * The estimation script records the choices that change how this table
+. * must be labelled. Read them rather than restating them here, so the two
+. * files cannot drift apart.
+. 
+. local file_name = "$estimates/collisions_weather/_run_settings.txt"
+
+. capture confirm file "`file_name'"
+
+. if _rc {
+.     di as error "_run_settings.txt not found -- run"
+.     di as error "estimates_generate_collisions_weather.do first."
+.     exit 601
+. }
+
+. 
+. * Parse every "key = value" line into a local named set_<key>, rather than
+. * picking out one key by name. The estimation script writes more settings
+. * than this file used to read (the share scale and the four numerator-
+. * composition counts, added 9/10/26 evening), and a reader that knows only
+. * about the keys it was written for silently ignores the rest.
+. file open fh using "`file_name'", read
+
+. file read fh line
+
+. while r(eof) == 0 {
+  2.     local eqpos = strpos(`"`line'"', " = ")
+  3.     if `eqpos' > 0 {
+  4.         local key = trim(substr(`"`line'"', 1, `eqpos' - 1))
+  5.         local set_`key' = trim(substr(`"`line'"', `eqpos' + 3, .))
+  6.     }
+  7.     file read fh line
+  8. }
+
+. file close fh
+
+. 
+. local ppt_note = "`set_ppt_control_note'"
+
+. if "`ppt_note'" == "" {
+.     local ppt_note "annual precipitation quintiles"
+. }
+
+. 
+. * Scale on the share outcome: 100 = percentage points. Absent from a
+. * _run_settings.txt written before 9/10/26 evening, in which case the
+. * outcome was on the raw 0-1 scale.
+. local share_scale = 1
+
+. if "`set_share_scale'" != "" {
+.     local share_scale = `set_share_scale'
+. }
+
+. 
+. * Numerator composition, for the table notes. All four counts have to be
+. * present or the sentence is dropped rather than half-written.
+. local have_comp = 1
+
+. foreach k in n_numerator_native n_numerator_component_fill ///
+>              n_numerator_deer_fill n_numerator_deer_floor {
+  2.     if "`set_`k''" == "" local have_comp = 0
+  3. }
+
+. 
+. if `have_comp' {
+.     local n_num_all = `set_n_numerator_native' + `set_n_numerator_component_fill' 
+> ///
+>                     + `set_n_numerator_deer_fill' + `set_n_numerator_deer_floor'
+.     local pc_native : di %2.0f 100 * `set_n_numerator_native'          / `n_num_al
+> l'
+.     local pc_comp   : di %2.0f 100 * `set_n_numerator_component_fill'  / `n_num_al
+> l'
+.     local pc_deer   : di %2.0f 100 * `set_n_numerator_deer_fill'       / `n_num_al
+> l'
+.     local numnote   = "the all-animal count: " + trim("`pc_native'") + "\% as repo
+> rted, " ///
+>                     + trim("`pc_comp'") + "\% rebuilt from the fatal, injury and "
+>  ///
+>                     + "property-damage components where the reported total is miss
+> ing, and " ///
+>                     + trim("`pc_deer'") + "\% standing in from the deer-only count
+>  where " ///
+>                     + "neither is available. A further " + trim("`set_n_numerator_
+> deer_floor'") ///
+>                     + " county-years report more deer collisions than all-animal c
+> ollisions, " ///
+>                     + "which cannot happen by construction; those are raised to th
+> e deer count " ///
+>                     + "and are flagged to the data provider."
+.     di as text "Numerator composition read from _run_settings.txt:"
+Numerator composition read from _run_settings.txt:
+.     di as text "  native `set_n_numerator_native', component `set_n_numerator_comp
+> onent_fill', " ///
+>                "deer `set_n_numerator_deer_fill', floored `set_n_numerator_deer_fl
+> oor'"
+  native 42049, component 267, deer 10219, floored 4243
+. }
+
+. else {
+.     local numnote = "the all-animal count, backfilled from the severity components
+>  and from " ///
+>                   + "the deer-only count where it is missing"
+.     di as text "NOTE: _run_settings.txt carries no numerator-composition counts."
+.     di as text "  Rerun estimates_generate_collisions_weather.do to get them"
+.     di as text "  into the table notes."
+. }
+
+. di as text "Share outcome scale: `share_scale' (100 = percentage points)"
+Share outcome scale: 100 (100 = percentage points)
+
+. 
+. * Q3 decides whether the SHARE regressions are weighted, which changes
+. * the .ster file-name suffix. Detect it rather than hardcoding "none",
+. * so flipping the switch upstream cannot silently break this script.
+. local share_wt = ""
+
+. foreach w in none pop {
+  2.     capture confirm file "$estimates/collisions_weather/animal_share_pA_c1_W`w'
+> .ster"
+  3.     if !_rc local share_wt = "`w'"
+  4. }
+
+. if "`share_wt'" == "" {
+.     di as error "No animal_share Panel A / column 1 estimates found in"
+.     di as error "$estimates/collisions_weather/ -- run"
+.     di as error "estimates_generate_collisions_weather.do first."
+.     exit 601
+. }
+
+. di as text "Share-table weighting detected: `share_wt'"
+Share-table weighting detected: none
+
+. 
+. * Detect the Q1 lag choice from the estimates themselves rather than
+. * trusting a second copy of the switch: under Q1 == 1 the regressor
+. * entered as L1. and Stata named the coefficient L.mean_winter_temp.
+. estimates use "$estimates/collisions_weather/animal_share_pA_c1_W`share_wt'.ster"
+
+. local temp_names : colnames e(b)
+
+. if strpos(" `temp_names' ", " L.mean_winter_temp ") > 0 {
+.     local cp = "L."
+. }
+
+. else {
+.     local cp = ""
+. }
+
+. di as text "Coefficient-name prefix detected: [`cp']"
+Coefficient-name prefix detected: []
+
+. di as text "Panel B threshold on display: `panelB_sd'SD"
+Panel B threshold on display: 1SD
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 2: TABLE 1 -- ANIMAL SHARE OF ALL COLLISIONS
+. *---------------------------------------------------------------
+. * 2a. Load the sixteen estimates and store them under grid names.
+. *     Panel B's source file is pB1 or pB2 depending on the switch, but it
+. *     is stored as p_B_c_# either way so the estout call below does not
+. *     have to care which one is on display.
+. 
+. local y   = "animal_share"
+
+. local wt  = "`share_wt'"
+
+. local tag = "share"
+
+. 
+. local n_missing = 0
+
+. 
+. foreach p in A B C D {
+  2. 
+.     if "`p'" == "B" {
+  3.         local psrc = "B`panelB_sd'"
+  4.     }
+  5.     else {
+  6.         local psrc = "`p'"
+  7.     }
+  8. 
+.     forvalues c = 1/4 {
+  9.         local ster = "$estimates/collisions_weather/`y'_p`psrc'_c`c'_W`wt'.ster
+> "
+ 10.         capture confirm file "`ster'"
+ 11.         if _rc {
+ 12.             di as error "MISSING: `ster'"
+ 13.             local n_missing = `n_missing' + 1
+ 14.         }
+ 15.         else {
+ 16.             estimates use "`ster'"
+ 17.             estimates store p_`p'_c_`c'
+ 18.         }
+ 19.     }
+ 20. }
+
+. 
+. if `n_missing' > 0 {
+.     di as error "`n_missing' of 16 estimate files are missing for the"
+.     di as error "  share table. Rerun"
+.     di as error "  estimates_generate_collisions_weather.do -- and if"
+.     di as error "  only the Panel D files are missing, check its"
+.     di as error "  winter_severity_index guard, which skips the panel"
+.     di as error "  when the WSI snow component did not make it into the"
+.     di as error "  panel."
+.     exit 601
+. }
+
+. 
+. * The outcome mean goes in the column header, per the mockup and the
+. * convention in Eyal's own tables.
+. estimates use "$estimates/collisions_weather/`y'_pA_c1_W`wt'.ster"
+
+. if `share_scale' == 100 {
+.     local ybar : di %5.2f e(dep_var_mean)
+.     local yhead "Animal share of all collisions, percent"
+. }
+
+. else {
+.     local ybar : di %5.3f e(dep_var_mean)
+.     local yhead "Animal share of all collisions"
+. }
+
+. local ybar = trim("`ybar'")
+
+. 
+. *---------------------------------------------------------------
+. * 2b. Panel A -- mean winter temperature
+. *---------------------------------------------------------------
+. 
+. #delimit ;
+delimiter now ;
+. estout p_A_c_1
+>        p_A_c_2
+>        p_A_c_3
+>        p_A_c_4
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_A.te
+> x",
+>        cells(b(fmt(3)) se(par fmt(3)))
+>        label style(tex)
+>        stats(r2
+>              N
+>              N_clust,
+>              fmt(2 %9.0gc %9.0gc)
+>              labels("\midrule \(R^2\)"
+>                     "N"
+>                     "Clusters"))
+>        mlabels(none)
+>        collabels(none)
+>        varlabels(`cp'mean_winter_temp "Mean winter temperature (\(^{\circ}\)C)")
+>        keep(`cp'mean_winter_temp)
+>        order(`cp'mean_winter_temp)
+>        prehead(
+> 
+>        )
+>        posthead(\midrule)
+>        prefoot()
+>        postfoot(
+>          \noalign{\smallskip}
+>        )
+>        replace;
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
+> sions_weather/table_collisions_weather_share_panel_A.tex)
+
+. #delimit cr
+delimiter now cr
+. 
+. *---------------------------------------------------------------
+. * 2c. Panel B -- warm-winter anomaly
+. *---------------------------------------------------------------
+. * One threshold only. The other was estimated as its own specification
+. * and lives in the .ster folder; it is not in this table, per Eyal
+. * 9/8/26, because the two dummies overlap by construction.
+. 
+. #delimit ;
+delimiter now ;
+. estout p_B_c_1
+>        p_B_c_2
+>        p_B_c_3
+>        p_B_c_4
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_B.te
+> x",
+>        cells(b(fmt(3)) se(par fmt(3)))
+>        label style(tex)
+>        stats(r2
+>              N
+>              N_clust,
+>              fmt(2 %9.0gc %9.0gc)
+>              labels("\midrule \(R^2\)"
+>                     "N"
+>                     "Clusters"))
+>        mlabels(none)
+>        collabels(none)
+>        varlabels(`cp'`b_var' "`b_row'")
+>        keep(`cp'`b_var')
+>        order(`cp'`b_var')
+>        prehead(
+> 
+>        )
+>        posthead(\midrule)
+>        prefoot()
+>        postfoot(
+>          \noalign{\smallskip}
+>        )
+>        replace;
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
+> sions_weather/table_collisions_weather_share_panel_B.tex)
+
+. #delimit cr
+delimiter now cr
+. 
+. *---------------------------------------------------------------
+. * 2d. Panel C -- days below 0F, Dec-Apr
+. *---------------------------------------------------------------
+. 
+. #delimit ;
+delimiter now ;
+. estout p_C_c_1
+>        p_C_c_2
+>        p_C_c_3
+>        p_C_c_4
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_C.te
+> x",
+>        cells(b(fmt(3)) se(par fmt(3)))
+>        label style(tex)
+>        stats(r2
+>              N
+>              N_clust,
+>              fmt(2 %9.0gc %9.0gc)
+>              labels("\midrule \(R^2\)"
+>                     "N"
+>                     "Clusters"))
+>        mlabels(none)
+>        collabels(none)
+>        varlabels(`cp'winter_days_below_0f "Extreme-cold days")
+>        keep(`cp'winter_days_below_0f)
+>        order(`cp'winter_days_below_0f)
+>        prehead(
+> 
+>        )
+>        posthead(\midrule)
+>        prefoot()
+>        postfoot(
+>          \noalign{\smallskip}
+>        )
+>        replace;
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
+> sions_weather/table_collisions_weather_share_panel_C.tex)
+
+. #delimit cr
+delimiter now cr
+. 
+. *---------------------------------------------------------------
+. * 2e. Panel D -- winter severity index
+. *---------------------------------------------------------------
+. * The control X-block is appended to THIS panel's stats() only, so it
+. * prints once, at the foot of the table. One weather row, per Eyal
+. * 9/8/26 -- the monthly temperature controls and the precipitation
+. * quintiles always enter together, so they never need separate rows.
+. 
+. #delimit ;
+delimiter now ;
+. estout p_D_c_1
+>        p_D_c_2
+>        p_D_c_3
+>        p_D_c_4
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_D.te
+> x",
+>        cells(b(fmt(3)) se(par fmt(3)))
+>        label style(tex)
+>        stats(r2
+>              N
+>              N_clust
+>              ctrl_weather
+>              ctrl_age,
+>              fmt(2 %9.0gc %9.0gc 0 0)
+>              labels("\midrule \(R^2\)"
+>                     "N"
+>                     "Clusters"
+>                     "\noalign{\medskip} \midrule Weather controls"
+>                     "Age shares"))
+>        mlabels(none)
+>        collabels(none)
+>        varlabels(`cp'winter_severity_index "WSI (Kohn / WI DNR)")
+>        keep(`cp'winter_severity_index)
+>        order(`cp'winter_severity_index)
+>        prehead(
+> 
+>        )
+>        posthead(\midrule)
+>        prefoot()
+>        postfoot(
+>          \noalign{\smallskip}
+>        )
+>        replace;
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
+> sions_weather/table_collisions_weather_share_panel_D.tex)
+
+. #delimit cr
+delimiter now cr
+. 
+. *---------------------------------------------------------------
+. * 2f. Wrap the four panels into Table 1
+. *---------------------------------------------------------------
+. 
+. * New table file
+. local file_name = "$tables/collisions_weather/table_collisions_weather_`tag'.tex"
+
+. texdoc init "`file_name'", replace force
+(texdoc output file is /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/c
+> ollisions_weather/table_collisions_weather_share.tex)
+
+. 
+. tex \begin{table}[htpb]
+
+. tex \captionlistentry[table]{Animal-Related Collision Share and Winter Conditions}
+
+. tex \label{table:collisions_weather_share}
+
+. tex \centering
+
+. tex Table \ref{table:collisions_weather_share}. \\
+
+. tex Animal-Related Collision Share and Winter Conditions \\
+
+. tex \begin{threeparttable}
+
+. tex \footnotesize
+
+. tex \def\arraystretch{1}
+
+. tex \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}cccc}
+
+. tex \toprule \toprule
+
+. tex \noalign{\smallskip}
+
+. tex & \multicolumn{4}{c}{`yhead' (\(\bar{Y}\) = `ybar')} \\
+
+. tex \cmidrule(l{5pt}r{5pt}){2-5}
+
+. tex & (1) & (2) & (3) & (4) \\
+
+. tex \multicolumn{5}{l}{Panel A. Mean winter temperature, Dec--Feb} \\
+
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
+> ns_weather_`tag'_panel_A.tex}
+
+. tex \tabularnewline
+
+. tex \multicolumn{5}{l}{`b_head'} \\
+
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
+> ns_weather_`tag'_panel_B.tex}
+
+. tex \tabularnewline
+
+. tex \multicolumn{5}{l}{Panel C. Days below 0\(^{\circ}\)F, Dec--Apr} \\
+
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
+> ns_weather_`tag'_panel_C.tex}
+
+. tex \tabularnewline
+
+. tex \multicolumn{5}{l}{Panel D. Winter severity index, Dec--Apr} \\
+
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
+> ns_weather_`tag'_panel_D.tex}
+
+. tex \noalign{\smallskip}
+
+. tex \bottomrule
+
+. tex \end{tabular*}
+
+. tex \medskip
+
+. tex \begin{tablenotes}[flushleft]
+
+. tex \setlength\labelsep{0pt}
+
+. tex \item
+
+. tex \scriptsize
+
+. tex \justify
+
+. tex Notes: Estimation results for Equation \eqref{eq:baseline}. The outcome is ani
+> mal-related
+
+. tex collisions as a percentage of all-cause collisions at the county-year level; t
+> he numerator is
+
+. tex `numnote' Panels differ in the measure of winter conditions and in the window 
+> it spans, as
+
+. tex their headings state; columns differ only in the time-varying controls. Weathe
+> r controls are
+
+. tex the twelve monthly mean temperatures of year \(t\) and `ppt_note'; age shares 
+> are seventeen of
+
+. tex the eighteen five-year population age bands, with 0--4 omitted as the base cat
+> egory. All
+
+. tex regressions include county and state-by-year fixed effects; standard errors, i
+> n parentheses,
+
+. tex are clustered at the county level. Panel B reports the `b_show' threshold; the
+>  `b_alt'
+
+. tex threshold was estimated separately, since the two indicators overlap by constr
+> uction.
+
+. tex Columns (2) and (4) control for January and February mean temperature, two of 
+> the three months
+
+. tex that compose the Panel A regressor, so the Panel A coefficient there is identi
+> fied off December
+
+. tex variation alone and is not comparable to column (1). The collisions source is 
+> a county-year
+
+. tex panel covering 1985--2020; entry is unbalanced, as states begin reporting anim
+> al-involved
+
+. tex collisions in different years.
+
+. tex \end{tablenotes}
+
+. tex \end{threeparttable}
+
+. tex \end{table}
+
+. 
+. * Close table file
+. texdoc close
+(texdoc output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/table
+> s/collisions_weather/table_collisions_weather_share.tex)
+
+. 
+. di as result "Wrote `file_name'"
+Wrote /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_weather
+> /table_collisions_weather_share.tex
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 3: TABLE 2 -- ANIMAL COLLISIONS PER 100,000 RESIDENTS
+. *---------------------------------------------------------------
+. * Identical structure to Table 1, two substitutions: the outcome is
+. * animal_rate_100k and every regression is population-weighted. Phase 6
+. * asks for this as the level counterpart to the share.
+. *
+. * 3a. Load and store.
+. 
+. local y   = "animal_rate_100k"
+
+. local wt  = "pop"
+
+. local tag = "rate"
+
+. 
+. local n_missing = 0
+
+. 
+. foreach p in A B C D {
+  2. 
+.     if "`p'" == "B" {
+  3.         local psrc = "B`panelB_sd'"
+  4.     }
+  5.     else {
+  6.         local psrc = "`p'"
+  7.     }
+  8. 
+.     forvalues c = 1/4 {
+  9.         local ster = "$estimates/collisions_weather/`y'_p`psrc'_c`c'_W`wt'.ster
+> "
+ 10.         capture confirm file "`ster'"
+ 11.         if _rc {
+ 12.             di as error "MISSING: `ster'"
+ 13.             local n_missing = `n_missing' + 1
+ 14.         }
+ 15.         else {
+ 16.             estimates use "`ster'"
+ 17.             estimates store r_`p'_c_`c'
+ 18.         }
+ 19.     }
+ 20. }
+
+. 
+. if `n_missing' > 0 {
+.     di as error "`n_missing' of 16 estimate files are missing for the"
+.     di as error "  rate table. Rerun"
+.     di as error "  estimates_generate_collisions_weather.do."
+.     exit 601
+. }
+
+. 
+. estimates use "$estimates/collisions_weather/`y'_pA_c1_W`wt'.ster"
+
+. local ybar : di %6.2f e(dep_var_mean)
+
+. local ybar = trim("`ybar'")
+
+. 
+. *---------------------------------------------------------------
+. * 3b. Panel A -- mean winter temperature
+. *---------------------------------------------------------------
+. 
+. #delimit ;
+delimiter now ;
+. estout r_A_c_1
+>        r_A_c_2
+>        r_A_c_3
+>        r_A_c_4
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_A.te
+> x",
+>        cells(b(fmt(3)) se(par fmt(3)))
+>        label style(tex)
+>        stats(r2
+>              N
+>              N_clust,
+>              fmt(2 %9.0gc %9.0gc)
+>              labels("\midrule \(R^2\)"
+>                     "N"
+>                     "Clusters"))
+>        mlabels(none)
+>        collabels(none)
+>        varlabels(`cp'mean_winter_temp "Mean winter temperature (\(^{\circ}\)C)")
+>        keep(`cp'mean_winter_temp)
+>        order(`cp'mean_winter_temp)
+>        prehead(
+> 
+>        )
+>        posthead(\midrule)
+>        prefoot()
+>        postfoot(
+>          \noalign{\smallskip}
+>        )
+>        replace;
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
+> sions_weather/table_collisions_weather_rate_panel_A.tex)
+
+. #delimit cr
+delimiter now cr
+. 
+. *---------------------------------------------------------------
+. * 3c. Panel B -- warm-winter anomaly
+. *---------------------------------------------------------------
+. 
+. #delimit ;
+delimiter now ;
+. estout r_B_c_1
+>        r_B_c_2
+>        r_B_c_3
+>        r_B_c_4
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_B.te
+> x",
+>        cells(b(fmt(3)) se(par fmt(3)))
+>        label style(tex)
+>        stats(r2
+>              N
+>              N_clust,
+>              fmt(2 %9.0gc %9.0gc)
+>              labels("\midrule \(R^2\)"
+>                     "N"
+>                     "Clusters"))
+>        mlabels(none)
+>        collabels(none)
+>        varlabels(`cp'`b_var' "`b_row'")
+>        keep(`cp'`b_var')
+>        order(`cp'`b_var')
+>        prehead(
+> 
+>        )
+>        posthead(\midrule)
+>        prefoot()
+>        postfoot(
+>          \noalign{\smallskip}
+>        )
+>        replace;
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
+> sions_weather/table_collisions_weather_rate_panel_B.tex)
+
+. #delimit cr
+delimiter now cr
+. 
+. *---------------------------------------------------------------
+. * 3d. Panel C -- days below 0F, Dec-Apr
+. *---------------------------------------------------------------
+. 
+. #delimit ;
+delimiter now ;
+. estout r_C_c_1
+>        r_C_c_2
+>        r_C_c_3
+>        r_C_c_4
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_C.te
+> x",
+>        cells(b(fmt(3)) se(par fmt(3)))
+>        label style(tex)
+>        stats(r2
+>              N
+>              N_clust,
+>              fmt(2 %9.0gc %9.0gc)
+>              labels("\midrule \(R^2\)"
+>                     "N"
+>                     "Clusters"))
+>        mlabels(none)
+>        collabels(none)
+>        varlabels(`cp'winter_days_below_0f "Extreme-cold days")
+>        keep(`cp'winter_days_below_0f)
+>        order(`cp'winter_days_below_0f)
+>        prehead(
+> 
+>        )
+>        posthead(\midrule)
+>        prefoot()
+>        postfoot(
+>          \noalign{\smallskip}
+>        )
+>        replace;
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
+> sions_weather/table_collisions_weather_rate_panel_C.tex)
+
+. #delimit cr
+delimiter now cr
+. 
+. *---------------------------------------------------------------
+. * 3e. Panel D -- winter severity index
+. *---------------------------------------------------------------
+. 
+. #delimit ;
+delimiter now ;
+. estout r_D_c_1
+>        r_D_c_2
+>        r_D_c_3
+>        r_D_c_4
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_D.te
+> x",
+>        cells(b(fmt(3)) se(par fmt(3)))
+>        label style(tex)
+>        stats(r2
+>              N
+>              N_clust
+>              ctrl_weather
+>              ctrl_age,
+>              fmt(2 %9.0gc %9.0gc 0 0)
+>              labels("\midrule \(R^2\)"
+>                     "N"
+>                     "Clusters"
+>                     "\noalign{\medskip} \midrule Weather controls"
+>                     "Age shares"))
+>        mlabels(none)
+>        collabels(none)
+>        varlabels(`cp'winter_severity_index "WSI (Kohn / WI DNR)")
+>        keep(`cp'winter_severity_index)
+>        order(`cp'winter_severity_index)
+>        prehead(
+> 
+>        )
+>        posthead(\midrule)
+>        prefoot()
+>        postfoot(
+>          \noalign{\smallskip}
+>        )
+>        replace;
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
+> sions_weather/table_collisions_weather_rate_panel_D.tex)
+
+. #delimit cr
+delimiter now cr
+. 
+. *---------------------------------------------------------------
+. * 3f. Wrap the four panels into Table 2
+. *---------------------------------------------------------------
+. 
+. * New table file
+. local file_name = "$tables/collisions_weather/table_collisions_weather_`tag'.tex"
+
+. texdoc init "`file_name'", replace force
+(texdoc output file is /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/c
+> ollisions_weather/table_collisions_weather_rate.tex)
+
+. 
+. tex \begin{table}[htpb]
+
+. tex \captionlistentry[table]{Animal-Related Collision Rate and Winter Conditions}
+
+. tex \label{table:collisions_weather_rate}
+
+. tex \centering
+
+. tex Table \ref{table:collisions_weather_rate}. \\
+
+. tex Animal-Related Collision Rate and Winter Conditions \\
+
+. tex \begin{threeparttable}
+
+. tex \footnotesize
+
+. tex \def\arraystretch{1}
+
+. tex \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}cccc}
+
+. tex \toprule \toprule
+
+. tex \noalign{\smallskip}
+
+. tex & \multicolumn{4}{c}{Animal collisions per 100,000 residents (\(\bar{Y}\) = `y
+> bar')} \\
+
+. tex \cmidrule(l{5pt}r{5pt}){2-5}
+
+. tex & (1) & (2) & (3) & (4) \\
+
+. tex \multicolumn{5}{l}{Panel A. Mean winter temperature, Dec--Feb} \\
+
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
+> ns_weather_`tag'_panel_A.tex}
+
+. tex \tabularnewline
+
+. tex \multicolumn{5}{l}{`b_head'} \\
+
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
+> ns_weather_`tag'_panel_B.tex}
+
+. tex \tabularnewline
+
+. tex \multicolumn{5}{l}{Panel C. Days below 0\(^{\circ}\)F, Dec--Apr} \\
+
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
+> ns_weather_`tag'_panel_C.tex}
+
+. tex \tabularnewline
+
+. tex \multicolumn{5}{l}{Panel D. Winter severity index, Dec--Apr} \\
+
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
+> ns_weather_`tag'_panel_D.tex}
+
+. tex \noalign{\smallskip}
+
+. tex \bottomrule
+
+. tex \end{tabular*}
+
+. tex \medskip
+
+. tex \begin{tablenotes}[flushleft]
+
+. tex \setlength\labelsep{0pt}
+
+. tex \item
+
+. tex \scriptsize
+
+. tex \justify
+
+. tex Notes: Estimation results for Equation \eqref{eq:baseline}. The outcome is ani
+> mal-related
+
+. tex collisions per 100,000 residents at the county-year level, and all regressions
+>  are weighted by
+
+. tex county population. This table is a robustness counterpart to Table
+
+. tex \ref{table:collisions_weather_share}, not an independent result. The numerator
+> , panel and
+
+. tex column structure, control definitions, fixed effects, clustering, the anomaly 
+> threshold on
+
+. tex display, the column (2) and (4) caveat, and the sample window are as in Table
+
+. tex \ref{table:collisions_weather_share}.
+
+. tex \end{tablenotes}
+
+. tex \end{threeparttable}
+
+. tex \end{table}
+
+. 
+. * Close table file
+. texdoc close
+(texdoc output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/table
+> s/collisions_weather/table_collisions_weather_rate.tex)
+
+. 
+. di as result "Wrote `file_name'"
+Wrote /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_weather
+> /table_collisions_weather_rate.tex
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 4: WHAT TO UPLOAD TO OVERLEAF
+. *---------------------------------------------------------------
+. * Ten files, into exhibits_main_text/tables/collisions_weather/ in the
+. * Overleaf project -- one folder, not a nested collisions_weather/
+. * collisions_weather/. The files:
+. *   table_collisions_weather_share.tex        <- input this one
+. *   table_collisions_weather_share_panel_A-D.tex
+. *   table_collisions_weather_rate.tex         <- and this one
+. *   table_collisions_weather_rate_panel_A-D.tex
+. * Then reference the two wrappers from the Results section with \input,
+. * naming the wrapper, not the panels (Eyal, 9/8/26).
+. 
+. di as result _newline "Upload $tables/collisions_weather/*.tex to Overleaf;"
+
+Upload /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_weathe
+> r/*.tex to Overleaf;
+
+. di as result "input the two wrapper files from the Results section."
+input the two wrapper files from the Results section.
+
+. 
+. * Wrap Up
+. log close
+      name:  <unnamed>
+       log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/estimate
+> s_tables_collisions_weather.log
+  log type:  text
+ closed on:  10 Sep 2026, 19:06:59
+------------------------------------------------------------------------------------

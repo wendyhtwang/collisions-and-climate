@@ -11,11 +11,10 @@ Output:   $path/reports/WeatherData/report_YYYY_MM_DD/
 Notes:    Tier 1 QA exhibits are indexed in Appendix B, not reproduced.
           The multi-page state exhibit goes to Appendix A via \includepdf.
 
-          v2 (09/10/2026). Rewritten for the revised exhibit set. Eyal asked
-          (Slack, 8/28) for the title and the source note to come OUT of every
-          image and for the notes to live in the figure notes instead. So each
-          exhibit now carries a short hand-written \caption{} plus a Notes
-          paragraph read from prism_tier2_exhibit_notes.csv, which the notebook
+          v2 (09/10/2026). Rewritten for the revised exhibit set. Moved title
+	  and source note out of every exhibit so they live in the figure notes
+	  instead. So each exhibit now carries a short hand-written \caption{} 
+	  plus a Notes paragraph read from prism_tier2_exhibit_notes.csv, which the notebook
           writes from the same strings it used to print inside the figures. The
           captions cannot drift from the figures that way.
 
@@ -248,7 +247,6 @@ local prettydate = subinstr("`string_sysdate'", "_", "-", .)
 tex \title{Winter Weather Panel: Descriptive Report\\[4pt]
 tex \large PRISM county--month data, 1981--2025 \\[2pt]
 tex \normalsize Version 2}
-tex \author{Wendy Wang}
 tex \date{`prettydate'}
 tex \maketitle
 tex \thispagestyle{empty}
@@ -273,7 +271,7 @@ tex \emph{detrended} residual above 1.5 SD. They now use the same construction a
 tex \path{warm_winter_1sd} and \path{warm_winter_2sd} in the merged county-year panel:
 tex the raw winter mean above the county's own full-sample mean by one or two standard
 tex deviations. The figures and the regression table therefore describe the same object.
-tex Section~\ref{sec:decisions} lists this and the remaining choices requiring a decision.
+/*tex Section~\ref{sec:decisions} lists this and the remaining choices requiring a decision.*/
 tex \end{minipage}\end{center}
 tex \newpage
 tex \tableofcontents
@@ -426,6 +424,8 @@ exhibitblock "prism_era5_national_winter_temperature_comparison.pdf" ///
 exhibitblock "prism_era5_national_winter_temperature_comparison_area_weighted.pdf" ///
     "The same comparison with counties weighted by land area."
 
+
+/*
 *------------------------------------------------------------------------------
 * 6. Decisions requested (driven by the Tier 2 CSV)
 *------------------------------------------------------------------------------
@@ -451,6 +451,8 @@ forvalues i = 1/`=_N' {
     tex \textbf{Status.} `s'
 }
 tex \clearpage
+
+*/
 
 *------------------------------------------------------------------------------
 * 7. Appendices

@@ -1,0 +1,77 @@
+graph set window fontface "cmr12"
+graph set print fontface "cmr12"
+graph set eps fontface "cmr12"
+graph set svg fontface "cmr12" 
+
+* Color pallete for figures 
+* Uses several of the colors found on: 
+* https://www.w3schools.com/colors/colors_palettes.asp
+global soft_coral = "247 120 107"
+global pink_gray = "247 202 201"
+global blue_gray = "146 168 209"
+global cherry_red = "201 76 76"
+global gray_teal = "177 203 187"
+global light_gray_teal = "222 234 238"
+global gray_purple = "214 203 211"
+global dark_purple = "80 57 76" 
+* More colors from 
+* https://coolors.co/palettes/trending
+global light_green = "131 197 190"
+global dark_green = "0 109 119"
+global light_pink = "255 221 210"
+global slab_gray = "208 184 172"
+global dark_orange = "196 73 0"
+* Standard UChicago maroon color 
+global uoc_maroon = "128 0 0"
+* Quantitative color scheme 
+global quant_q1 = "237 246 249"
+global quant_q2 = "201 173 167"
+global quant_q3 = "154 140 152"
+global quant_q4 = "74 78 105"
+global quant_q5 = "34 34 59"
+* Qualitative color scheme from:
+* https://carto.com/carto-colors/ (Antique)
+global color_q1 = "133 92 117"
+global color_q2 = "217 175 107"
+global color_q3 = "175 100 88"
+global color_q4 = "115 111 76"
+global color_q5 = "82 106 131"
+global color_q6 = "98 83 119"
+global color_q7 = "104 133 92"
+global color_q8 = "156 156 94"
+global color_q9 = "160 97 119"
+global color_q10 = "140 120 93"
+global color_q11 = "70 115 120"
+global color_q12 = "124 124 124"
+* Spanish Viridian 
+* https://coolors.co/007f5f-2b9348-55a630-80b918-aacc00-bfd200-d4d700-dddf00-eeef20-ffff3f
+global color_vir_1 = "255 255 63"
+global color_vir_2 = "238 239 32"
+global color_vir_3 = "221 223 0"
+global color_vir_4 = "212 215 0"
+global color_vir_5 = "191 210 0"
+global color_vir_6 = "170 204 0"
+global color_vir_7 = "128 185 24"
+global color_vir_8 = "85 166 48"
+global color_vir_9 = "43 147 72"
+global color_vir_10 = "0 127 95"
+* From http://tsitsul.in/blog/coloropt/
+global mute_calm_1 = "39 77 82"
+global mute_calm_2 = "199 162 166"
+global mute_calm_3 = "129 139 112"
+global mute_calm_4 = "96 78 60"
+global mute_calm_5 = "140 159 183"
+global mute_calm_6 = "121 104 128"
+global mute_calm_7 = "192 192 192"
+global mute_calm_8 = "86 100 26"
+global mute_calm_9 = "192 175 251"
+global mute_calm_10 = "230 161 118"
+global mute_calm_11 = "0 103 138"
+global mute_calm_12 = "152 68 100"
+global mute_calm_13 = "94 204 171"
+* https://coolors.co/3d5a80-98c1d9-e0fbfc-ee6c4d-293241
+global bdazzled_blue = "61 90 128"
+global pale_cerulean = "152 193 217"
+global light_cyan = "224 251 252"
+global burnt_sienna = "238 108 77"
+global gunmetal = "41 50 65"

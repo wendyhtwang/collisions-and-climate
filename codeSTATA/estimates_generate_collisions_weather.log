@@ -1,0 +1,3078 @@
+------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/estimate
+> s_generate_collisions_weather.log
+  log type:  text
+ opened on:  10 Sep 2026, 19:04:00
+
+. 
+. * reghdfe and estout are required; install once if this is a fresh Stata
+. * install (same pattern as 10_generate_weather_report.do).
+. cap which reghdfe
+
+. if _rc ssc install reghdfe
+
+. cap which ftools
+
+. if _rc ssc install ftools
+
+. cap which estout
+
+. if _rc ssc install estout
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 1: SPECIFICATION SWITCHES (the open questions)
+. *---------------------------------------------------------------
+. * Change these here, nowhere else. Every downstream local reads them.
+. 
+. * Q1: 0 = winter measure enters contemporaneously (Methods fn. 5)
+. *     1 = winter measure enters as L1. (Equation (1) as literally written)
+. local winter_lag = 0
+
+. 
+. * Q2: numerator of the share and of the rate. Settled 9/8/26 in favour of
+. *     the ALL-ANIMAL count; settled 9/10/26 as to WHICH all-animal
+. *     variable that is. Eyal said "any_animal" repeatedly on 9/8 and the
+. *     panel carries three families (animal_*, wild_animal_*,
+. *     any_animal_*). Verified on the merged panel: any_animal_total has
+. *     46,665 non-missing rows against animal_total's 29,130, is a strict
+. *     superset of it (count if missing(any_animal_total) &
+. *     !missing(animal_total) -> 0) and is identical in value wherever
+. *     both exist (count if !missing(animal_total) & any_animal_total !=
+. *     animal_total -> 0). The switch is therefore free: it can only add
+. *     observations, never change an existing one. SECTION 3 builds
+. *     any_animal_filled from it. "deer_total" remains the robustness cut.
+. local share_numerator = "any_animal_filled"
+
+. 
+. * Scale on the SHARE outcome. 100 = percentage points. At the natural
+. * 0-1 scale every Panel C and Panel D cell in Table 1 printed as -0.001,
+. * -0.000 or 0.000 at three decimals, i.e. the panels were unreadable.
+. * Scaling the outcome rather than the coefficients keeps the dependent-
+. * variable mean in the column header on the same footing as the
+. * estimates. The table script reads this back from _run_settings.txt and
+. * words the header accordingly.
+. local share_scale = 100
+
+. 
+. * Q3: weights on the SHARE regressions. Empty = unweighted (current
+. *     Methods). Set to "[aweight=population]" to weight like the rate.
+. local weight_share = ""
+
+. 
+. * Derived from Q1: the lag operator prefix applied to every winter
+. * regressor, and the matching prefix that will appear in the coefficient
+. * NAMES that estimates_tables_collisions_weather.do has to keep().
+. if `winter_lag' == 1 {
+.     local L  = "L1."
+.     global coef_prefix = "L."
+. }
+
+. else {
+.     local L  = ""
+.     global coef_prefix = ""
+. }
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 2: LOAD PANEL AND FLAG THE ESTIMATION SAMPLE
+. *---------------------------------------------------------------
+. 
+. local file_name = "$dataSTATA/main_data_county_year.dta"
+
+. use "`file_name'", clear
+(County-year main data file: PRISM weather + ERA5 snow (wide by month), winter se)
+
+. 
+. * Numeric state FIPS for the state-by-year fixed effect. Style guide
+. * Section 10: build it at the point of use, keep geoid as the string key.
+. gen long state_fips_num = real(state_fips)
+(11,285 missing values generated)
+
+. label variable state_fips_num "Numeric state FIPS; for reghdfe absorb() only"
+
+. 
+. * fips_num is real(geoid); a malformed geoid upstream would surface here
+. * as a missing county identifier, which cannot be a fixed effect.
+. qui count if missing(fips_num)
+
+. if r(N) > 0 {
+.     di as error "WARNING: `r(N)' rows have a missing fips_num and are"
+WARNING: 17 rows have a missing fips_num and are
+.     di as error "  being dropped. Check geoid construction in SECTION 6"
+  being dropped. Check geoid construction in SECTION 6
+.     di as error "  of build_main_data_county_year.do."
+  of build_main_data_county_year.do.
+.     drop if missing(fips_num)
+(17 observations deleted)
+. }
+
+. 
+. * xtset is needed for the L1. operator under Q1 == 1, and doubles as the
+. * duplicate check: a repeated county-year would make the lag ambiguous,
+. * and xtset errors out rather than silently picking one.
+. xtset fips_num year
+       panel variable:  fips_num (unbalanced)
+        time variable:  year, 1927 to 2025, but with gaps
+                delta:  1 unit
+
+. 
+. * The estimation sample is flagged rather than kept, and applied as an
+. * `if' on each regression, so that the whole weather panel stays in
+. * memory. This matters under Q1 == 1: the collisions panel is 1985-2020
+. * and does not cover every county-year the weather panel does, so
+. * dropping the weather-only rows first would leave L1. reaching into
+. * rows that are no longer there and silently blanking the regressor for
+. * every county-year whose predecessor is outside the collisions sample.
+. * Rows outside the flag would in any case contribute nothing -- the
+. * outcomes below are missing wherever total_total is.
+. gen byte est_sample = (merge_collisions == 3) ///
+>                       & !missing(total_total) ///
+>                       & total_total > 0
+
+. label variable est_sample "1 if county-year is in the collisions estimation sample
+> "
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 3: OUTCOMES
+. *---------------------------------------------------------------
+. * Eyal, 9/8/26, on which collision count is the numerator: "Take the all
+. * animal one because some states report by animal, some just report any
+. * animal... if there is a non-missing deer value, that should also be a
+. * minimum and non-missing any_animal value... You should not lose any
+. * observations from using the any_animal whatsoever. You should only be
+. * gaining observations."
+. *
+. * He believed the file that appended the state collisions data already
+. * backfilled a missing animal value from a non-missing deer value, but
+. * asked for it to be checked rather than assumed. The fill is applied
+. * here so the estimation sample is right regardless of what the upstream
+. * snapshot did; the counts below say whether it was needed.
+. * check_animal_deer_backfill.do is the standalone diagnostic and reports
+. * the offending rows.
+. 
+. * --- Build the numerator ---------------------------------------------
+. * any_animal_total is the base. Three fills, each applied only where the
+. * running variable is still missing, then a floor:
+. *   (1) the severity components (fatal + injury + pdo) where the total is
+. *       missing but the components are not;
+. *   (2) deer_total where it is still missing -- without this, every
+. *       deer-only state-year leaves the sample;
+. *   (3) a floor at deer_total wherever a non-missing deer count EXCEEDS
+. *       the all-animal count. That is impossible by construction, so
+. *       those rows are an upstream defect; Eyal's rule (9/8/26) is that
+. *       deer is a minimum, so the floor is applied and the count is
+. *       reported rather than the rows being silently kept or dropped.
+. *
+. * Verified counts on the 9/9/26 panel, for comparison against the log:
+. *   any_animal_total non-missing                    46,665
+. *   + component rebuild where total missing        + 3,920
+. *   + deer_total where still missing               +10,219
+. *                                                  =60,804
+. *   = every row of the collisions file (60,787 matched + 17 using-only).
+. *
+. * num_source records which step produced each row, so the numerator
+. * composition can be reported in the table notes and the deer stand-ins
+. * can be cut as a robustness check without re-deriving this logic.
+. * NOTE the ordering inside each step: num_source is set BEFORE
+. * any_animal_filled is replaced, because the condition tests the
+. * pre-replacement value.
+. 
+. gen double comp_total = any_animal_fatal + any_animal_injury + any_animal_pdo
+(100,560 missing values generated)
+
+. label variable comp_total "any_animal_fatal + _injury + _pdo (severity-component r
+> ebuild)"
+
+. 
+. gen double any_animal_filled = any_animal_total
+(104,480 missing values generated)
+
+. gen byte num_source = 1 if !missing(any_animal_filled)
+(104,480 missing values generated)
+
+. 
+. qui count if est_sample & missing(any_animal_filled) & !missing(comp_total)
+
+. local n_fill_comp = r(N)
+
+. replace num_source        = 2         if missing(any_animal_filled) & !missing(com
+> p_total)
+(3,920 real changes made)
+
+. replace any_animal_filled = comp_total if missing(any_animal_filled) & !missing(co
+> mp_total)
+(3,920 real changes made)
+
+. 
+. qui count if est_sample & missing(any_animal_filled) & !missing(deer_total)
+
+. local n_fill_deer = r(N)
+
+. replace num_source        = 3          if missing(any_animal_filled) & !missing(de
+> er_total)
+(10,219 real changes made)
+
+. replace any_animal_filled = deer_total if missing(any_animal_filled) & !missing(de
+> er_total)
+(10,219 real changes made)
+
+. 
+. qui count if est_sample & !missing(any_animal_filled) & !missing(deer_total) ///
+>              & deer_total > any_animal_filled
+
+. local n_fill_floor = r(N)
+
+. replace num_source        = 4          if !missing(any_animal_filled) & !missing(d
+> eer_total) & deer_total > any_animal_filled
+(5,050 real changes made)
+
+. replace any_animal_filled = deer_total if !missing(any_animal_filled) & !missing(d
+> eer_total) & deer_total > any_animal_filled
+(5,050 real changes made)
+
+. 
+. label variable any_animal_filled "All-animal collisions; component- then deer-fill
+> ed, floored at deer_total"
+
+. label variable num_source "Numerator provenance: 1 native, 2 component rebuild, 3 
+> deer stand-in, 4 deer floor applied"
+note: label truncated to 80 characters
+
+. label define num_source_lbl 1 "any_animal_total" 2 "component rebuild" ///
+>                             3 "deer stand-in"    4 "deer floor applied", replace
+
+. label values num_source num_source_lbl
+
+. 
+. * n_fill_comp / n_fill_deer / n_fill_floor above are what each STEP
+. * touched, counted before the next step ran. They do not partition the
+. * sample: the floor reclassifies rows that were already native or
+. * component-filled. The partition the table notes need is the final
+. * num_source, counted here.
+. forvalues k = 1/4 {
+  2.     qui count if est_sample & num_source == `k'
+  3.     local n_src`k' = r(N)
+  4. }
+
+. qui count if est_sample & missing(any_animal_filled)
+
+. local n_num_missing = r(N)
+
+. 
+. di as text _newline "{hline 70}"
+
+----------------------------------------------------------------------
+
+. di as text "Numerator fill steps (each counted before the next ran):"
+Numerator fill steps (each counted before the next ran):
+
+. di as text "  filled from fatal+injury+pdo components:    `n_fill_comp'"
+  filled from fatal+injury+pdo components:    2969
+
+. di as text "  filled from deer_total:                     `n_fill_deer'"
+  filled from deer_total:                     10219
+
+. di as text "  floored up to deer_total (upstream defect): `n_fill_floor'"
+  floored up to deer_total (upstream defect): 4243
+
+. di as text "Final composition on the estimation sample (partitions it):"
+Final composition on the estimation sample (partitions it):
+
+. di as text "  1 native any_animal_total:                  `n_src1'"
+  1 native any_animal_total:                  42049
+
+. di as text "  2 severity-component rebuild:               `n_src2'"
+  2 severity-component rebuild:               267
+
+. di as text "  3 deer stand-in:                            `n_src3'"
+  3 deer stand-in:                            10219
+
+. di as text "  4 deer floor applied over an inverted row:  `n_src4'"
+  4 deer floor applied over an inverted row:  4243
+
+. di as text "  still missing after all fills:              `n_num_missing'"
+  still missing after all fills:              0
+
+. if `n_num_missing' > 0 {
+.     di as error "  WARNING: the fill does not cover the estimation sample."
+.     di as error "  N will differ from the 56,778 the 9/10/26 diagnostics"
+.     di as error "  projected. Investigate before reporting these tables."
+. }
+
+. if `n_fill_floor' > 0 {
+.     di as error "  NOTE: deer exceeds all-animal on `n_fill_floor' rows,"
+  NOTE: deer exceeds all-animal on 4243 rows,
+.     di as error "  which is impossible by construction. This is an upstream"
+  which is impossible by construction. This is an upstream
+.     di as error "  defect in the 2022 collisions snapshot, concentrated in"
+  defect in the 2022 collisions snapshot, concentrated in
+.     di as error "  NY and WV -- flag to Charvi and Eyal; a robustness cut"
+  NY and WV -- flag to Charvi and Eyal; a robustness cut
+.     di as error "  excluding those two states is the obvious response."
+  excluding those two states is the obvious response.
+. }
+
+. di as text "{hline 70}"
+----------------------------------------------------------------------
+
+. 
+. *---------------------------------------------------------------
+. * The two outcomes
+. *---------------------------------------------------------------
+. 
+. gen double animal_share = `share_scale' * `share_numerator' / total_total
+(94,350 missing values generated)
+
+. if `share_scale' == 100 {
+.     label variable animal_share "`share_numerator' as a percentage of total_total"
+. }
+
+. else {
+.     label variable animal_share "`share_numerator' / total_total, scaled by `share
+> _scale'"
+. }
+
+. 
+. * The share is bounded above by 1 (i.e. by `share_scale' once scaled) if
+. * total_total really is all-cause. It is not, on some rows: the 9/10/26
+. * diagnostics found 4 county-years above 1 and p99 exactly 1. Counted
+. * here rather than assumed, because it is a functional-form question for
+. * OLS as much as a data question.
+. qui count if est_sample & animal_share > `share_scale' & !missing(animal_share)
+
+. local n_share_gt1 = r(N)
+
+. qui count if est_sample & animal_share == 0
+
+. local n_share_zero = r(N)
+
+. qui count if est_sample & !missing(animal_share)
+
+. local n_share_nm = r(N)
+
+. di as text _newline "Share diagnostics on the estimation sample (`n_share_nm' rows
+> ):"
+
+Share diagnostics on the estimation sample (56778 rows):
+
+. di as text "  animal_share > 1 (denominator is not all-cause): `n_share_gt1'"
+  animal_share > 1 (denominator is not all-cause): 21
+
+. di as text "  animal_share == 0 exactly:                       `n_share_zero'"
+  animal_share == 0 exactly:                       15280
+
+. di as text "  -- mass at both boundaries is a functional-form question"
+  -- mass at both boundaries is a functional-form question
+
+. di as text "     for OLS, not only a data question. Raise with Eyal."
+     for OLS, not only a data question. Raise with Eyal.
+
+. 
+. gen double animal_rate_100k = 100000 * `share_numerator' / population ///
+>     if population > 0 & !missing(population)
+(90,348 missing values generated)
+
+. label variable animal_rate_100k "`share_numerator' per 100,000 residents"
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 4: WINTER REGRESSORS AND CONTROL SETS
+. *---------------------------------------------------------------
+. 
+. * --- Panel C's regressor: days below 0F over the Dec-Apr window -------
+. * This is numerically identical to wsi_cold_days, which is built in
+. * build_main_data_county_year.do SECTION 7. Cloned under its own name so
+. * the panel label and the variable label agree -- Panel C is a standalone
+. * winter measure here, not "the cold half of the WSI".
+. * TODO: move this clonevar upstream into SECTION 7 of the build script so
+. * every downstream file sees the same variable.
+. clonevar winter_days_below_0f = wsi_cold_days
+(14,376 missing values generated)
+
+. label variable winter_days_below_0f "# days Dec 1-Apr 30 with min temp <=0F"
+
+. 
+. * --- The winter measures, one per panel -------------------------------
+. * B1 and B2 are the SAME panel of the published table, estimated twice:
+. * Eyal, 9/8/26, on running both dummies in one regression -- "I would
+. * choose either or... especially because there's going to be overlap
+. * between one sigma and above and two sigma and above. So I would just --
+. * you can run both and decide which one you want to keep."
+. global rhsA  "`L'mean_winter_temp"
+
+. global rhsB1 "`L'warm_winter_1sd"
+
+. global rhsB2 "`L'warm_winter_2sd"
+
+. global rhsC  "`L'winter_days_below_0f"
+
+. global rhsD  "`L'winter_severity_index"
+
+. 
+. * --- Monthly mean-temperature controls -------------------------------
+. global Wtemp ""
+
+. forvalues m = 1/12 {
+  2.     global Wtemp "$Wtemp mean_temp_c_m`m'"
+  3. }
+
+. 
+. * --- Annual precipitation quintiles ----------------------------------
+. * ppt_total_m1..m12 are PRISM monthly precipitation totals in mm, carried
+. * through prism_derived_weather_vars.csv as of the 9/9/26 rebuild. If
+. * they are absent, the Stata side is reading a stale dataCSV copy (Kodama
+. * keeps two project trees -- the git clone and the Dropbox tree the .do
+. * files read). Stop rather than substitute: a mislabelled control row is
+. * worse than a run that fails loudly.
+. capture confirm variable ppt_total_m1
+
+. if _rc {
+.     di as error "ppt_total_m1 is not in the panel. PRISM precipitation is"
+.     di as error "  extracted into prism_county_month.csv and, since the"
+.     di as error "  9/9/26 rebuild, carried into"
+.     di as error "  prism_derived_weather_vars.csv. Its absence here means"
+.     di as error "  build_main_data_county_year.do read a stale copy of"
+.     di as error "  that CSV -- check the column count Stata reports on"
+.     di as error "  import delimited (12 base vars x 12 months, not 11),"
+.     di as error "  rerun 06_build_derived_weather_vars.py against the"
+.     di as error "  Dropbox tree, and rebuild the panel."
+.     exit 111
+. }
+
+. 
+. local pptvars ""
+
+. forvalues m = 1/12 {
+  2.     local pptvars "`pptvars' ppt_total_m`m'"
+  3. }
+
+. 
+. * rowtotal reads missing as zero, which would turn a county-year with
+. * missing months into a spuriously dry one. Count the missing months
+. * first and blank the annual total if any month is absent.
+. egen byte temp = rowmiss(`pptvars')
+
+. egen double ppt_annual = rowtotal(`pptvars'), missing
+(11,268 missing values generated)
+
+. replace ppt_annual = . if temp > 0
+(0 real changes made)
+
+. drop temp
+
+. label variable ppt_annual "Total annual precipitation, mm (sum of 12 PRISM monthly
+>  totals)"
+
+. 
+. * Quintiles are cut on the estimation sample, not the full weather panel,
+. * so the five bins carry roughly equal numbers of estimation rows.
+. xtile ppt_q = ppt_annual if est_sample, nq(5)
+
+. label variable ppt_q "Quintile of total annual precipitation"
+
+. 
+. global Wppt "i.ppt_q"
+
+. global ppt_control_note "annual precipitation quintiles"
+
+. 
+. * --- Age-share controls (pop_share_0_4 omitted as the base category) --
+. * The 18 shares sum to one, so one band has to be left out or the set is
+. * collinear with the fixed effects' implicit constant.
+. global Xage ""
+
+. foreach a in 5_9 10_14 15_19 20_24 25_29 30_34 35_39 40_44 45_49 ///
+>              50_54 55_59 60_64 65_69 70_74 75_79 80_84 85plus {
+  2.     global Xage "$Xage pop_share_`a'"
+  3. }
+
+. 
+. * --- The four column definitions -------------------------------------
+. * Monthly mean temperature and the precipitation quintiles always enter
+. * together, which is why the table reports them as a single "Weather
+. * controls" row (Eyal, 9/8/26).
+. global col1 ""
+
+. global col2 "$Wtemp $Wppt"
+
+. global col3 "$Xage"
+
+. global col4 "$Wtemp $Wppt $Xage"
+
+. 
+. * --- Fixed effects and standard errors -------------------------------
+. * County FE + state-by-year FE, clustered at the county level. State-by-
+. * year is the baseline rather than plain year because every outcome
+. * series is assembled state by state, each with its own reporting regime
+. * that changes over time (Eyal, 9/8/26).
+. global FE "fips_num state_fips_num#year"
+
+. global SE "cluster fips_num"
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 5: WHAT THE CONTROL BLOCKS COST IN SAMPLE
+. *---------------------------------------------------------------
+. * Columns 1-4 are meant to "diagnose what and if at all the controls do
+. * anything" (Eyal, 9/8/26). That reading only holds if the sample is
+. * roughly stable across columns, so report the missingness each block
+. * introduces before the table does. If N moves materially between column
+. * 1 and column 4, raise a fixed-sample variant with Eyal rather than
+. * letting the reader infer it from the N row.
+. 
+. qui count if est_sample
+
+. local n_est = r(N)
+
+. di as text _newline "{hline 70}"
+
+----------------------------------------------------------------------
+
+. di as text "Estimation sample: `n_est' county-year rows"
+Estimation sample: 56778 county-year rows
+
+. 
+. foreach block in Wtemp Wppt Xage {
+  2.     if "`block'" == "Wppt" {
+  3.         local blockvars "ppt_q"
+  4.     }
+  5.     else {
+  6.         local blockvars "${`block'}"
+  7.     }
+  8.     egen byte temp = rowmiss(`blockvars')
+  9.     qui count if est_sample & temp > 0
+ 10.     di as text "  rows missing at least one `block' variable: " r(N)
+ 11.     drop temp
+ 12. }
+  rows missing at least one Wtemp variable: 0
+  rows missing at least one Wppt variable: 0
+  rows missing at least one Xage variable: 0
+
+. 
+. * Frequency of each anomaly dummy, which is the "support" Eyal's
+. * tie-break between 1SD and 2SD turns on.
+. foreach v in warm_winter_1sd warm_winter_2sd {
+  2.     qui summ `v' if est_sample
+  3.     di as text "  share of rows with `v' == 1: " %6.4f r(mean) ///
+>                "  (N = " r(N) ")"
+  4. }
+  share of rows with warm_winter_1sd == 1: 0.1723  (N = 56778)
+  share of rows with warm_winter_2sd == 1: 0.0077  (N = 56778)
+
+. di as text "{hline 70}"
+----------------------------------------------------------------------
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 6: ESTIMATION
+. *---------------------------------------------------------------
+. * Variations being run:
+. *   Panels (winter measure on the right-hand side)
+. *     A)  Mean winter temperature, Dec(t-1)/Jan(t)/Feb(t)
+. *     B1) Warm-winter anomaly, >= 1SD above the county's own climatology
+. *     B2) Warm-winter anomaly, >= 2SD, estimated SEPARATELY from B1
+. *     C)  Days below 0F, Dec 1 - Apr 30
+. *     D)  Winter severity index (Kohn 1975 / WI DNR)
+. *   Columns (time-varying controls)
+. *     1) No time-varying controls
+. *     2) Weather controls: monthly mean temperature + precipitation quintiles
+. *     3) Age shares
+. *     4) All of the above
+. *   Outcomes (one table each)
+. *     animal_share      -> Table 1, weights per Q3 (default: none)
+. *     animal_rate_100k  -> Table 2, population-weighted
+. *
+. * estadd runs BEFORE estimates save so the dependent-variable mean and
+. * the X/blank control indicators travel inside the .ster file, per style
+. * guide Section 11. The table script then needs no access to the data.
+. 
+. foreach y in animal_share animal_rate_100k {
+  2. 
+.     * Weights, and the suffix that records them in the file name.
+.     if "`y'" == "animal_share" {
+  3.         local wt "`weight_share'"
+  4.     }
+  5.     else {
+  6.         local wt "[aweight=population]"
+  7.     }
+  8.     if "`wt'" == "" {
+  9.         local wsuffix "none"
+ 10.     }
+ 11.     else {
+ 12.         local wsuffix "pop"
+ 13.     }
+ 14. 
+.     di as result _newline "=== Outcome: `y'  (weights: `wsuffix') ==="
+ 15. 
+.     foreach p in A B1 B2 C D {
+ 16. 
+.         * Panel D is degenerate if the WSI snow component never made it
+.         * into the panel. It did as of the 9/9/26 rebuild, but the two
+.         * project trees on Kodama mean a stale dataCSV copy can quietly
+.         * put it back to all-missing, so keep the guard: skip rather than
+.         * save four empty .ster files the table script would read back as
+.         * a row of missings.
+.         if "`p'" == "D" {
+ 17.             qui count if est_sample & !missing(winter_severity_index)
+ 18.             if r(N) == 0 {
+ 19.                 di as error "SKIPPING Panel D: winter_severity_index is"
+ 20.                 di as error "  entirely missing on the estimation sample."
+ 21.                 di as error "  Rerun 06_build_derived_weather_vars.py"
+ 22.                 di as error "  (which builds days_snow_depth_18in) against"
+ 23.                 di as error "  the Dropbox tree and rebuild"
+ 24.                 di as error "  main_data_county_year.dta, then rerun this."
+ 25.                 continue
+ 26.             }
+ 27.         }
+ 28. 
+.         forvalues c = 1/4 {
+ 29. 
+.             reghdfe `y' ///
+>                     ${rhs`p'} ///
+>                     ${col`c'} ///
+>                     if est_sample ///
+>                     `wt', ///
+>                     absorb($FE) ///
+>                     vce($SE)
+ 30. 
+.             * Weighted where the regression is weighted, so the mean in
+.             * the column header is on the same footing as the estimates.
+.             qui summ `y' if e(sample) `wt'
+ 31.             estadd scalar dep_var_mean = r(mean)
+ 32. 
+.             * Control-set indicator rows for the table footer. One row
+.             * for the weather block, per Eyal 9/8/26.
+.             if inlist(`c', 2, 4) {
+ 33.                 estadd local ctrl_weather = "X"
+ 34.             }
+ 35.             else {
+ 36.                 estadd local ctrl_weather = ""
+ 37.             }
+ 38.             if inlist(`c', 3, 4) {
+ 39.                 estadd local ctrl_age = "X"
+ 40.             }
+ 41.             else {
+ 42.                 estadd local ctrl_age = ""
+ 43.             }
+ 44. 
+.             * File name records outcome, panel, column and weighting, so
+.             * it is readable without opening it (style guide Section 11).
+.             local reg_file_name = "`y'_p`p'_c`c'_W`wsuffix'"
+ 45.             estimates save "$estimates/collisions_weather/`reg_file_name'.ster"
+> , replace
+ 46.         }
+ 47.     }
+ 48. }
+
+=== Outcome: animal_share  (weights: none) ===
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(   1,   2985) =       7.31
+Statistics robust to heteroskedasticity           Prob > F        =     0.0069
+                                                  R-squared       =     0.9280
+                                                  Adj R-squared   =     0.9227
+                                                  Within R-sq.    =     0.0002
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.3112
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+    animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+mean_winter_temp |   .1865575   .0689821     2.70   0.007     .0513004    .3218147
+           _cons |   12.58533   .0579013   217.36   0.000      12.4718    12.69886
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pA_c1_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  17,   2985) =       3.45
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9281
+                                                  Adj R-squared   =     0.9228
+                                                  Within R-sq.    =     0.0012
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.3092
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+    animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+mean_winter_temp |  -.0189646   .1536682    -0.12   0.902     -.320271    .2823417
+  mean_temp_c_m1 |   .1216008   .0769823     1.58   0.114    -.0293429    .2725446
+  mean_temp_c_m2 |   .0422148   .0624754     0.68   0.499    -.0802843    .1647139
+  mean_temp_c_m3 |   .1511319   .0517234     2.92   0.004     .0497148     .252549
+  mean_temp_c_m4 |  -.1042373   .0653969    -1.59   0.111    -.2324649    .0239904
+  mean_temp_c_m5 |  -.1001073   .0756177    -1.32   0.186    -.2483754    .0481607
+  mean_temp_c_m6 |   .2951784   .0751158     3.93   0.000     .1478945    .4424624
+  mean_temp_c_m7 |  -.0701144   .0653735    -1.07   0.284    -.1982961    .0580672
+  mean_temp_c_m8 |   .1657696   .0688374     2.41   0.016      .030796    .3007432
+  mean_temp_c_m9 |   -.206191   .0605992    -3.40   0.001    -.3250114   -.0873706
+ mean_temp_c_m10 |   .0591551   .0642868     0.92   0.358    -.0668959    .1852061
+ mean_temp_c_m11 |  -.0497319   .0548053    -0.91   0.364    -.1571919    .0577281
+ mean_temp_c_m12 |   .0181536   .0517755     0.35   0.726    -.0833656    .1196728
+                 |
+           ppt_q |
+              2  |  -.0636563   .1639138    -0.39   0.698    -.3850517    .2577391
+              3  |   .1329959   .1845796     0.72   0.471    -.2289203    .4949121
+              4  |   .1812695   .2093169     0.87   0.387    -.2291504    .5916895
+              5  |    .171395   .2220031     0.77   0.440    -.2638995    .6066895
+                 |
+           _cons |   9.524804   2.813236     3.39   0.001     4.008726    15.04088
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pA_c2_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  18,   2985) =       6.43
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9288
+                                                  Adj R-squared   =     0.9236
+                                                  Within R-sq.    =     0.0115
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.2818
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+    animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+mean_winter_temp |   .1480959   .0684409     2.16   0.031     .0138997    .2822921
+   pop_share_5_9 |  -10.38257   22.97533    -0.45   0.651    -55.43166    34.66652
+ pop_share_10_14 |  -59.47866   24.15305    -2.46   0.014     -106.837   -12.12035
+ pop_share_15_19 |   1.007381   19.57919     0.05   0.959    -37.38268    39.39745
+ pop_share_20_24 |   16.59589   18.58859     0.89   0.372    -19.85186    53.04364
+ pop_share_25_29 |   24.26162   21.86128     1.11   0.267    -18.60308    67.12633
+ pop_share_30_34 |    63.2915   24.45312     2.59   0.010     15.34482    111.2382
+ pop_share_35_39 |   46.19768   19.72139     2.34   0.019     7.528783    84.86657
+ pop_share_40_44 |   39.58127   20.93268     1.89   0.059    -1.462665    80.62521
+ pop_share_45_49 |   46.55352   20.02717     2.32   0.020     7.285074    85.82196
+ pop_share_50_54 |   71.85836   19.27146     3.73   0.000     34.07166    109.6451
+ pop_share_55_59 |   33.13656   20.29679     1.63   0.103    -6.660556    72.93368
+ pop_share_60_64 |   29.16749    18.7291     1.56   0.119    -7.555759    65.89075
+ pop_share_65_69 |   26.01415   22.14752     1.17   0.240     -17.4118    69.44011
+ pop_share_70_74 |   79.69034   25.18161     3.16   0.002     30.31528    129.0654
+ pop_share_75_79 |   44.40567   25.58642     1.74   0.083    -5.763132    94.57448
+ pop_share_80_84 |   40.12383   31.05472     1.29   0.196    -20.76699    101.0146
+pop_share_85plus |   14.02756   30.19251     0.46   0.642    -45.17268    73.22779
+           _cons |  -13.53366   15.09892    -0.90   0.370    -43.13899    16.07168
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pA_c3_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  34,   2985) =       4.73
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9289
+                                                  Adj R-squared   =     0.9237
+                                                  Within R-sq.    =     0.0127
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.2794
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+    animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+mean_winter_temp |  -.0460424   .1544532    -0.30   0.766     -.348888    .2568032
+  mean_temp_c_m1 |   .1219336   .0770795     1.58   0.114    -.0292008     .273068
+  mean_temp_c_m2 |   .0241498   .0632387     0.38   0.703     -.099846    .1481456
+  mean_temp_c_m3 |   .1801537    .051616     3.49   0.000     .0789471    .2813603
+  mean_temp_c_m4 |  -.1164616   .0653154    -1.78   0.075    -.2445294    .0116061
+  mean_temp_c_m5 |  -.1111016   .0749941    -1.48   0.139    -.2581469    .0359438
+  mean_temp_c_m6 |   .3295925   .0750162     4.39   0.000     .1825039    .4766811
+  mean_temp_c_m7 |  -.0805114   .0648009    -1.24   0.214    -.2075703    .0465475
+  mean_temp_c_m8 |   .1618499   .0686064     2.36   0.018     .0273292    .2963705
+  mean_temp_c_m9 |  -.1930306   .0608559    -3.17   0.002    -.3123544   -.0737068
+ mean_temp_c_m10 |   .0225516   .0642098     0.35   0.725    -.1033483    .1484514
+ mean_temp_c_m11 |  -.0484909   .0537267    -0.90   0.367    -.1538361    .0568543
+ mean_temp_c_m12 |   .0186631   .0516976     0.36   0.718    -.0827036    .1200297
+                 |
+           ppt_q |
+              2  |  -.0589511   .1630651    -0.36   0.718    -.3786824    .2607802
+              3  |   .1315986   .1840638     0.71   0.475    -.2293061    .4925033
+              4  |   .2144473   .2091162     1.03   0.305     -.195579    .6244737
+              5  |   .1953126   .2210692     0.88   0.377    -.2381508     .628776
+                 |
+   pop_share_5_9 |  -11.26634    22.9464    -0.49   0.623    -56.25871    33.72603
+ pop_share_10_14 |  -60.10135   24.11441    -2.49   0.013    -107.3839   -12.81881
+ pop_share_15_19 |   .9251993   19.52295     0.05   0.962    -37.35461    39.20501
+ pop_share_20_24 |   16.61357   18.54451     0.90   0.370    -19.74774    52.97488
+ pop_share_25_29 |   23.36526   21.82218     1.07   0.284    -19.42278     66.1533
+ pop_share_30_34 |    63.3854   24.42421     2.60   0.010      15.4954    111.2754
+ pop_share_35_39 |   45.85506   19.68727     2.33   0.020     7.253072    84.45705
+ pop_share_40_44 |   40.20573   20.85066     1.93   0.054    -.6773909    81.08885
+ pop_share_45_49 |   47.04861   19.98852     2.35   0.019     7.855936    86.24128
+ pop_share_50_54 |   72.71515   19.27475     3.77   0.000     34.92201    110.5083
+ pop_share_55_59 |   33.66048   20.25523     1.66   0.097    -6.055131     73.3761
+ pop_share_60_64 |   28.73708   18.70105     1.54   0.124    -7.931171    65.40533
+ pop_share_65_69 |   25.98045   22.07941     1.18   0.239    -17.31195    69.27286
+ pop_share_70_74 |   79.94681   25.16409     3.18   0.002     30.60608    129.2875
+ pop_share_75_79 |    43.3362   25.59573     1.69   0.091    -6.850866    93.52327
+ pop_share_80_84 |   40.36977    31.0387     1.30   0.193    -20.48963    101.2292
+pop_share_85plus |   14.02062     30.062     0.47   0.641    -44.92372    72.96496
+           _cons |  -16.59953   15.16889    -1.09   0.274    -46.34207    13.14301
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pA_c4_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(   1,   2985) =       1.20
+Statistics robust to heteroskedasticity           Prob > F        =     0.2736
+                                                  R-squared       =     0.9280
+                                                  Adj R-squared   =     0.9227
+                                                  Within R-sq.    =     0.0000
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.3117
+
+                              (Std. Err. adjusted for 2,986 clusters in fips_num)
+---------------------------------------------------------------------------------
+                |               Robust
+   animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+----------------+----------------------------------------------------------------
+warm_winter_1sd |  -.1271042   .1160796    -1.09   0.274    -.3547083       .1005
+          _cons |   12.76381   .0199967   638.29   0.000     12.72461    12.80302
+---------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pB1_c1_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  17,   2985) =       3.48
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9281
+                                                  Adj R-squared   =     0.9228
+                                                  Within R-sq.    =     0.0013
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.3090
+
+                              (Std. Err. adjusted for 2,986 clusters in fips_num)
+---------------------------------------------------------------------------------
+                |               Robust
+   animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+----------------+----------------------------------------------------------------
+warm_winter_1sd |  -.2730146    .123413    -2.21   0.027    -.5149977   -.0310315
+ mean_temp_c_m1 |   .1291058   .0482242     2.68   0.007     .0345498    .2236617
+ mean_temp_c_m2 |    .049009   .0419822     1.17   0.243     -.033308     .131326
+ mean_temp_c_m3 |   .1496258   .0508312     2.94   0.003     .0499581    .2492934
+ mean_temp_c_m4 |  -.1049992   .0659929    -1.59   0.112    -.2343953    .0243969
+ mean_temp_c_m5 |  -.0976765    .075889    -1.29   0.198    -.2464765    .0511236
+ mean_temp_c_m6 |   .2932093    .074695     3.93   0.000     .1467504    .4396682
+ mean_temp_c_m7 |  -.0676534   .0654273    -1.03   0.301    -.1959404    .0606337
+ mean_temp_c_m8 |   .1682577   .0689677     2.44   0.015     .0330287    .3034866
+ mean_temp_c_m9 |  -.2084274   .0606978    -3.43   0.001    -.3274412   -.0894136
+mean_temp_c_m10 |   .0604246   .0643872     0.94   0.348    -.0658233    .1866725
+mean_temp_c_m11 |  -.0490736   .0549186    -0.89   0.372    -.1567557    .0586085
+mean_temp_c_m12 |   .0181922   .0503635     0.36   0.718    -.0805586    .1169429
+                |
+          ppt_q |
+             2  |  -.0681396   .1638109    -0.42   0.677    -.3893333     .253054
+             3  |   .1284132    .184449     0.70   0.486    -.2332469    .4900733
+             4  |   .1749998   .2090826     0.84   0.403    -.2349607    .5849604
+             5  |   .1632005   .2215909     0.74   0.461    -.2712858    .5976868
+                |
+          _cons |   9.478629   2.819607     3.36   0.001     3.950058     15.0072
+---------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pB1_c2_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  18,   2985) =       6.14
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9288
+                                                  Adj R-squared   =     0.9236
+                                                  Within R-sq.    =     0.0115
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.2820
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+    animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+ warm_winter_1sd |  -.2099356   .1151881    -1.82   0.068    -.4357918    .0159205
+   pop_share_5_9 |  -10.28133   22.98245    -0.45   0.655    -55.34437    34.78171
+ pop_share_10_14 |  -59.25871   24.14887    -2.45   0.014    -106.6088   -11.90859
+ pop_share_15_19 |   1.497598   19.56088     0.08   0.939    -36.85657    39.85177
+ pop_share_20_24 |   16.71016   18.57228     0.90   0.368     -19.7056    53.12593
+ pop_share_25_29 |   24.30683   21.84929     1.11   0.266    -18.53436    67.14802
+ pop_share_30_34 |   63.68923   24.45347     2.60   0.009     15.74187    111.6366
+ pop_share_35_39 |   46.67195   19.71056     2.37   0.018     8.024282    85.31961
+ pop_share_40_44 |   40.28018   20.93142     1.92   0.054    -.7612932    81.32166
+ pop_share_45_49 |   46.76341   20.02861     2.33   0.020     7.492142    86.03469
+ pop_share_50_54 |   72.25688   19.25925     3.75   0.000     34.49413    110.0196
+ pop_share_55_59 |   33.37153   20.30971     1.64   0.100    -6.450911    73.19398
+ pop_share_60_64 |   29.55335   18.73008     1.58   0.115    -7.171831    66.27853
+ pop_share_65_69 |   26.85436   22.13046     1.21   0.225    -16.53814    70.24686
+ pop_share_70_74 |    80.6591    25.1784     3.20   0.001     31.29033    130.0279
+ pop_share_75_79 |   45.06272   25.60748     1.76   0.079    -5.147373    95.27282
+ pop_share_80_84 |    40.2556   31.04132     1.30   0.195    -20.60895    101.1201
+pop_share_85plus |   14.42268   30.21408     0.48   0.633    -44.81985    73.66521
+           _cons |  -13.73126   15.09419    -0.91   0.363    -43.32733    15.86482
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pB1_c3_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  34,   2985) =       4.77
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9289
+                                                  Adj R-squared   =     0.9237
+                                                  Within R-sq.    =     0.0129
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.2791
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+    animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+ warm_winter_1sd |  -.3333683   .1226023    -2.72   0.007    -.5737618   -.0929748
+  mean_temp_c_m1 |   .1221698   .0480094     2.54   0.011     .0280349    .2163047
+  mean_temp_c_m2 |   .0241567   .0417012     0.58   0.562    -.0576093    .1059226
+  mean_temp_c_m3 |   .1774044   .0506349     3.50   0.000     .0781215    .2766873
+  mean_temp_c_m4 |  -.1179041    .065907    -1.79   0.074    -.2471318    .0113236
+  mean_temp_c_m5 |  -.1089024   .0752928    -1.45   0.148    -.2565334    .0387286
+  mean_temp_c_m6 |   .3270175    .074605     4.38   0.000     .1807352    .4732999
+  mean_temp_c_m7 |  -.0777718   .0648623    -1.20   0.231    -.2049511    .0494076
+  mean_temp_c_m8 |   .1647945   .0687533     2.40   0.017     .0299859    .2996032
+  mean_temp_c_m9 |  -.1964514   .0609455    -3.22   0.001    -.3159509    -.076952
+ mean_temp_c_m10 |   .0240181   .0643207     0.37   0.709    -.1020994    .1501355
+ mean_temp_c_m11 |   -.046904   .0538361    -0.87   0.384    -.1524637    .0586556
+ mean_temp_c_m12 |   .0189977   .0502248     0.38   0.705     -.079481    .1174764
+                 |
+           ppt_q |
+              2  |  -.0642861   .1629754    -0.39   0.693    -.3838416    .2552694
+              3  |    .125582   .1839777     0.68   0.495    -.2351539     .486318
+              4  |    .206217    .208965     0.99   0.324     -.203513    .6159469
+              5  |   .1843431   .2207585     0.84   0.404    -.2485112    .6171973
+                 |
+   pop_share_5_9 |  -11.48826   22.96164    -0.50   0.617    -56.51051    33.53399
+ pop_share_10_14 |  -59.89075   24.10034    -2.49   0.013    -107.1457   -12.63579
+ pop_share_15_19 |   .8449762   19.51493     0.04   0.965    -37.41911    39.10906
+ pop_share_20_24 |   16.70094   18.53745     0.90   0.368    -19.64654    53.04841
+ pop_share_25_29 |   23.19679   21.81537     1.06   0.288    -19.57789    65.97146
+ pop_share_30_34 |   63.66724    24.4223     2.61   0.009     15.78099    111.5535
+ pop_share_35_39 |   45.95418    19.6848     2.33   0.020     7.357036    84.55133
+ pop_share_40_44 |   40.41963   20.86497     1.94   0.053    -.4915459     81.3308
+ pop_share_45_49 |    47.0606   19.98764     2.35   0.019     7.869666    86.25154
+ pop_share_50_54 |   72.74916   19.26989     3.78   0.000     34.96556    110.5328
+ pop_share_55_59 |   33.64819   20.25373     1.66   0.097    -6.064481    73.36087
+ pop_share_60_64 |   28.90203   18.69399     1.55   0.122    -7.752377    65.55645
+ pop_share_65_69 |   26.21778    22.0836     1.19   0.235    -17.08284     69.5184
+ pop_share_70_74 |    80.2576   25.15998     3.19   0.001     30.92494    129.5903
+ pop_share_75_79 |   43.55006   25.59822     1.70   0.089    -6.641884      93.742
+ pop_share_80_84 |    40.2917   31.03389     1.30   0.194    -20.55827    101.1417
+pop_share_85plus |   13.95653    30.0394     0.46   0.642     -44.9435    72.85656
+           _cons |  -16.68675   15.19226    -1.10   0.272    -46.47511    13.10161
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pB1_c4_Wnone.ster saved
+(MWFE estimator converged in 4 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(   1,   2985) =       5.82
+Statistics robust to heteroskedasticity           Prob > F        =     0.0159
+                                                  R-squared       =     0.9280
+                                                  Adj R-squared   =     0.9227
+                                                  Within R-sq.    =     0.0001
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.3114
+
+                              (Std. Err. adjusted for 2,986 clusters in fips_num)
+---------------------------------------------------------------------------------
+                |               Robust
+   animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+----------------+----------------------------------------------------------------
+warm_winter_2sd |   -1.09162   .4523193    -2.41   0.016     -1.97851   -.2047313
+          _cons |   12.75028   .0034654  3679.30   0.000     12.74349    12.75708
+---------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pB2_c1_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  17,   2985) =       3.85
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9281
+                                                  Adj R-squared   =     0.9228
+                                                  Within R-sq.    =     0.0014
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.3088
+
+                              (Std. Err. adjusted for 2,986 clusters in fips_num)
+---------------------------------------------------------------------------------
+                |               Robust
+   animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+----------------+----------------------------------------------------------------
+warm_winter_2sd |  -1.225348   .4567093    -2.68   0.007    -2.120845   -.3298511
+ mean_temp_c_m1 |   .1223769   .0472251     2.59   0.010     .0297797     .214974
+ mean_temp_c_m2 |   .0411555   .0411426     1.00   0.317    -.0395153    .1218262
+ mean_temp_c_m3 |   .1488049   .0508847     2.92   0.003     .0490323    .2485775
+ mean_temp_c_m4 |  -.0986352   .0661562    -1.49   0.136    -.2283515    .0310811
+ mean_temp_c_m5 |   -.102141   .0760623    -1.34   0.179    -.2512808    .0469989
+ mean_temp_c_m6 |   .2939146   .0748526     3.93   0.000     .1471467    .4406824
+ mean_temp_c_m7 |  -.0723436   .0653224    -1.11   0.268    -.2004252    .0557379
+ mean_temp_c_m8 |   .1673077   .0688021     2.43   0.015     .0324034     .302212
+ mean_temp_c_m9 |  -.2075844   .0607364    -3.42   0.001    -.3266738    -.088495
+mean_temp_c_m10 |   .0612226   .0643907     0.95   0.342    -.0650321    .1874772
+mean_temp_c_m11 |  -.0505932   .0549344    -0.92   0.357    -.1583062    .0571199
+mean_temp_c_m12 |    .014911   .0503485     0.30   0.767    -.0838102    .1136322
+                |
+          ppt_q |
+             2  |  -.0662637   .1639712    -0.40   0.686    -.3877716    .2552442
+             3  |   .1292175    .184581     0.70   0.484    -.2327014    .4911363
+             4  |   .1765514   .2093212     0.84   0.399     -.233877    .5869799
+             5  |   .1667663   .2219563     0.75   0.453    -.2684365    .6019691
+                |
+          _cons |   9.562874   2.814816     3.40   0.001     4.043699    15.08205
+---------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pB2_c2_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  18,   2985) =       6.59
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9288
+                                                  Adj R-squared   =     0.9236
+                                                  Within R-sq.    =     0.0116
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.2817
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+    animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+ warm_winter_2sd |  -1.274166   .4422192    -2.88   0.004    -2.141251   -.4070805
+   pop_share_5_9 |  -10.39601   22.97214    -0.45   0.651    -55.43884    34.64682
+ pop_share_10_14 |  -59.52691   24.14852    -2.47   0.014    -106.8763   -12.17749
+ pop_share_15_19 |   1.346146    19.5562     0.07   0.945    -36.99886    39.69115
+ pop_share_20_24 |   16.36409   18.55843     0.88   0.378    -20.02451    52.75269
+ pop_share_25_29 |   24.08729   21.83679     1.10   0.270    -18.72939    66.90396
+ pop_share_30_34 |   63.50334   24.44652     2.60   0.009     15.56959    111.4371
+ pop_share_35_39 |   46.44123   19.70912     2.36   0.019     7.796396    85.08606
+ pop_share_40_44 |    39.9218   20.93266     1.91   0.057    -1.122096    80.96571
+ pop_share_45_49 |   46.50614    20.0406     2.32   0.020     7.211367    85.80092
+ pop_share_50_54 |   71.88589   19.25995     3.73   0.000     34.12176      109.65
+ pop_share_55_59 |   32.88028   20.30099     1.62   0.105    -6.925072    72.68563
+ pop_share_60_64 |      29.34   18.72459     1.57   0.117    -7.374423    66.05441
+ pop_share_65_69 |   26.53995   22.12242     1.20   0.230    -16.83678    69.91668
+ pop_share_70_74 |   80.70553   25.17895     3.21   0.001     31.33568    130.0754
+ pop_share_75_79 |    44.9867   25.59455     1.76   0.079    -5.198055    95.17145
+ pop_share_80_84 |   40.83154   31.03254     1.32   0.188     -20.0158    101.6789
+pop_share_85plus |   14.26999   30.20681     0.47   0.637    -44.95829    73.49828
+           _cons |  -13.54319   15.09326    -0.90   0.370    -43.13745    16.05106
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pB2_c3_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  34,   2985) =       5.07
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9289
+                                                  Adj R-squared   =     0.9237
+                                                  Within R-sq.    =     0.0129
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.2789
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+    animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+ warm_winter_2sd |  -1.370023   .4473685    -3.06   0.002    -2.247205   -.4928411
+  mean_temp_c_m1 |   .1131097   .0470559     2.40   0.016     .0208443    .2053751
+  mean_temp_c_m2 |    .013958   .0408799     0.34   0.733    -.0661976    .0941136
+  mean_temp_c_m3 |   .1764499   .0506877     3.48   0.001     .0770635    .2758363
+  mean_temp_c_m4 |  -.1108103   .0660696    -1.68   0.094    -.2403568    .0187362
+  mean_temp_c_m5 |  -.1141706   .0754764    -1.51   0.130    -.2621617    .0338204
+  mean_temp_c_m6 |     .32791   .0747718     4.39   0.000     .1813005    .4745195
+  mean_temp_c_m7 |  -.0832662   .0647536    -1.29   0.199    -.2102324       .0437
+  mean_temp_c_m8 |   .1634127   .0685806     2.38   0.017     .0289427    .2978827
+  mean_temp_c_m9 |   -.195183   .0609867    -3.20   0.001    -.3147631   -.0756028
+ mean_temp_c_m10 |   .0246199   .0643159     0.38   0.702    -.1014881    .1507278
+ mean_temp_c_m11 |  -.0487164   .0538391    -0.90   0.366    -.1542819    .0568491
+ mean_temp_c_m12 |   .0153822   .0501872     0.31   0.759    -.0830227    .1137871
+                 |
+           ppt_q |
+              2  |  -.0618565   .1631092    -0.38   0.705    -.3816744    .2579614
+              3  |   .1268036   .1840904     0.69   0.491    -.2341534    .4877606
+              4  |   .2084487   .2091697     1.00   0.319    -.2016828    .6185801
+              5  |   .1890518   .2210913     0.86   0.393     -.244455    .6225586
+                 |
+   pop_share_5_9 |  -11.55271   22.94819    -0.50   0.615    -56.54859    33.44316
+ pop_share_10_14 |  -60.23683   24.10548    -2.50   0.013    -107.5019   -12.97179
+ pop_share_15_19 |   .7234677   19.51486     0.04   0.970    -37.54047    38.98741
+ pop_share_20_24 |   16.29161   18.52607     0.88   0.379    -20.03354    52.61677
+ pop_share_25_29 |   23.01542   21.80219     1.06   0.291    -19.73343    65.76426
+ pop_share_30_34 |   63.36859   24.42042     2.59   0.010     15.48602    111.2512
+ pop_share_35_39 |   45.68635   19.68407     2.32   0.020      7.09063    84.28206
+ pop_share_40_44 |   39.95854   20.86843     1.91   0.056    -.9594252     80.8765
+ pop_share_45_49 |   46.77339   20.00283     2.34   0.019     7.552649    85.99413
+ pop_share_50_54 |   72.36102   19.27154     3.75   0.000     34.57416    110.1479
+ pop_share_55_59 |    33.1213    20.2459     1.64   0.102    -6.576029    72.81862
+ pop_share_60_64 |   28.61869   18.69038     1.53   0.126    -8.028633    65.26602
+ pop_share_65_69 |   25.84289   22.07901     1.17   0.242    -17.44873    69.13452
+ pop_share_70_74 |   80.20357   25.16754     3.19   0.001     30.85609     129.551
+ pop_share_75_79 |   43.43763   25.58269     1.70   0.090    -6.723861    93.59913
+ pop_share_80_84 |   40.92934   31.02719     1.32   0.187     -19.9075    101.7662
+pop_share_85plus |   13.84145   30.04144     0.46   0.645    -45.06257    72.74548
+           _cons |  -16.33383   15.19503    -1.07   0.282    -46.12763    13.45997
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pB2_c4_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(   1,   2985) =      17.60
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9280
+                                                  Adj R-squared   =     0.9228
+                                                  Within R-sq.    =     0.0005
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.3104
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+     animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_days_be~0f |  -.0473581    .011288    -4.20   0.000    -.0694911   -.0252252
+            _cons |   13.05897   .0755707   172.80   0.000      12.9108    13.20715
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pC_c1_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  17,   2985) =       3.99
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9281
+                                                  Adj R-squared   =     0.9228
+                                                  Within R-sq.    =     0.0015
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.3085
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+     animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_days_be~0f |  -.0393562   .0119238    -3.30   0.001    -.0627359   -.0159764
+   mean_temp_c_m1 |   .0755574   .0464022     1.63   0.104    -.0154261    .1665409
+   mean_temp_c_m2 |  -.0061907   .0428361    -0.14   0.885    -.0901819    .0778006
+   mean_temp_c_m3 |   .1324189   .0511297     2.59   0.010     .0321658    .2326719
+   mean_temp_c_m4 |  -.1101122    .065831    -1.67   0.095     -.239191    .0189666
+   mean_temp_c_m5 |  -.1039505   .0760168    -1.37   0.172    -.2530012    .0451002
+   mean_temp_c_m6 |   .2962547   .0748303     3.96   0.000     .1495306    .4429789
+   mean_temp_c_m7 |  -.0687978   .0654942    -1.05   0.294    -.1972161    .0596204
+   mean_temp_c_m8 |   .1734424   .0689482     2.52   0.012     .0382516    .3086333
+   mean_temp_c_m9 |  -.1986336   .0608307    -3.27   0.001     -.317908   -.0793592
+  mean_temp_c_m10 |    .058977   .0643835     0.92   0.360    -.0672636    .1852175
+  mean_temp_c_m11 |  -.0468489   .0549094    -0.85   0.394     -.154513    .0608151
+  mean_temp_c_m12 |   .0229488   .0506172     0.45   0.650    -.0762994    .1221969
+                  |
+            ppt_q |
+               2  |   -.058777    .164113    -0.36   0.720    -.3805632    .2630091
+               3  |    .139219   .1846996     0.75   0.451    -.2229324    .5013704
+               4  |   .1899427   .2094081     0.91   0.364     -.220656    .6005415
+               5  |   .1794579     .22202     0.81   0.419    -.2558698    .6147857
+                  |
+            _cons |   9.675039   2.809989     3.44   0.001     4.165328    15.18475
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pC_c2_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  18,   2985) =       6.55
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9289
+                                                  Adj R-squared   =     0.9236
+                                                  Within R-sq.    =     0.0119
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.2809
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+     animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_days_be~0f |  -.0463314   .0112578    -4.12   0.000    -.0684053   -.0242575
+    pop_share_5_9 |  -10.34032   22.98106    -0.45   0.653    -55.40063       34.72
+  pop_share_10_14 |   -59.8022   24.16287    -2.47   0.013    -107.1798   -12.42463
+  pop_share_15_19 |   1.150103   19.57382     0.06   0.953    -37.22944    39.52964
+  pop_share_20_24 |   16.61623   18.58874     0.89   0.371     -19.8318    53.06426
+  pop_share_25_29 |   23.93177   21.85767     1.09   0.274    -18.92586     66.7894
+  pop_share_30_34 |   63.20362   24.45748     2.58   0.010     15.24839    111.1588
+  pop_share_35_39 |   46.33578   19.73262     2.35   0.019     7.644876    85.02669
+  pop_share_40_44 |   39.63027   20.92627     1.89   0.058    -1.401107    80.66165
+  pop_share_45_49 |    46.5718   20.03171     2.32   0.020     7.294445    85.84915
+  pop_share_50_54 |   72.12488   19.26856     3.74   0.000     34.34387    109.9059
+  pop_share_55_59 |   33.45447   20.29159     1.65   0.099    -6.332448    73.24139
+  pop_share_60_64 |   29.02502   18.73899     1.55   0.122    -7.717623    65.76765
+  pop_share_65_69 |   26.13554   22.14475     1.18   0.238    -17.28499    69.55606
+  pop_share_70_74 |   79.72198   25.16916     3.17   0.002     30.37132    129.0726
+  pop_share_75_79 |   44.39526   25.60409     1.73   0.083    -5.808193    94.59871
+  pop_share_80_84 |    39.9817   31.06855     1.29   0.198    -20.93624    100.8996
+ pop_share_85plus |   14.11429   30.23392     0.47   0.641    -45.16715    73.39572
+            _cons |  -13.11605   15.10121    -0.87   0.385    -42.72589    16.49379
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pC_c3_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  34,   2985) =       4.82
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9289
+                                                  Adj R-squared   =     0.9237
+                                                  Within R-sq.    =     0.0130
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.2786
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+     animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_days_be~0f |  -.0409324   .0119332    -3.43   0.001    -.0643306   -.0175342
+   mean_temp_c_m1 |   .0638055   .0463596     1.38   0.169    -.0270944    .1547055
+   mean_temp_c_m2 |  -.0355597   .0426291    -0.83   0.404    -.1191452    .0480257
+   mean_temp_c_m3 |   .1596791   .0508959     3.14   0.002     .0598846    .2594737
+   mean_temp_c_m4 |     -.1231   .0657321    -1.87   0.061    -.2519847    .0057847
+   mean_temp_c_m5 |  -.1160762   .0754351    -1.54   0.124    -.2639862    .0318339
+   mean_temp_c_m6 |   .3306297   .0747256     4.42   0.000     .1841108    .4771486
+   mean_temp_c_m7 |  -.0794086   .0649219    -1.22   0.221    -.2067048    .0478877
+   mean_temp_c_m8 |    .169842   .0687265     2.47   0.014     .0350859    .3045982
+   mean_temp_c_m9 |   -.186036    .061075    -3.05   0.002    -.3057893   -.0662826
+  mean_temp_c_m10 |   .0222049    .064308     0.35   0.730    -.1038877    .1482974
+  mean_temp_c_m11 |  -.0447311   .0537923    -0.83   0.406    -.1502048    .0607425
+  mean_temp_c_m12 |   .0242635   .0504716     0.48   0.631    -.0746991     .123226
+                  |
+            ppt_q |
+               2  |  -.0536347   .1632538    -0.33   0.743    -.3737361    .2664667
+               3  |   .1378791   .1842109     0.75   0.454    -.2233141    .4990723
+               4  |   .2229574   .2092564     1.07   0.287    -.1873441    .6332588
+               5  |    .202796   .2211623     0.92   0.359      -.23085    .6364419
+                  |
+    pop_share_5_9 |   -11.2989   22.95907    -0.49   0.623    -56.31611     33.7183
+  pop_share_10_14 |  -60.43375   24.12892    -2.50   0.012    -107.7448   -13.12275
+  pop_share_15_19 |   .7811985   19.53496     0.04   0.968    -37.52215    39.08455
+  pop_share_20_24 |    16.6063   18.55352     0.90   0.371    -19.77269    52.98529
+  pop_share_25_29 |    22.9793   21.82511     1.05   0.292    -19.81449    65.77309
+  pop_share_30_34 |   63.26629   24.42993     2.59   0.010     15.36509    111.1675
+  pop_share_35_39 |   45.85218   19.70634     2.33   0.020     7.212795    84.49157
+  pop_share_40_44 |    39.9438   20.86728     1.91   0.056    -.9718974     80.8595
+  pop_share_45_49 |   46.94655   19.99543     2.35   0.019     7.740336    86.15276
+  pop_share_50_54 |   72.85329    19.2797     3.78   0.000     35.05045    110.6561
+  pop_share_55_59 |   33.85839   20.25492     1.67   0.095    -5.856637    73.57341
+  pop_share_60_64 |     28.445   18.71575     1.52   0.129    -8.252076    65.14208
+  pop_share_65_69 |   25.82056   22.10087     1.17   0.243    -17.51393    69.15504
+  pop_share_70_74 |   79.61018   25.15618     3.16   0.002     30.28498    128.9354
+  pop_share_75_79 |   43.31745   25.59817     1.69   0.091    -6.874388    93.50929
+  pop_share_80_84 |   40.32006   31.05387     1.30   0.194     -20.5691    101.2092
+ pop_share_85plus |   14.01062   30.10313     0.47   0.642    -45.01436    73.03561
+            _cons |  -16.29651   15.19825    -1.07   0.284    -46.09661    13.50359
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pC_c4_Wnone.ster saved
+(MWFE estimator converged in 4 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(   1,   2985) =      27.70
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9281
+                                                  Adj R-squared   =     0.9228
+                                                  Within R-sq.    =     0.0008
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.3097
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+     animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_severity~x |  -.0162507   .0030876    -5.26   0.000    -.0223048   -.0101966
+            _cons |   12.93235   .0361809   357.44   0.000      12.8614    13.00329
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pD_c1_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  17,   2985) =       4.67
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9281
+                                                  Adj R-squared   =     0.9228
+                                                  Within R-sq.    =     0.0018
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.3077
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+     animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_severity~x |  -.0143705   .0031202    -4.61   0.000    -.0204885   -.0082526
+   mean_temp_c_m1 |   .0883876   .0464778     1.90   0.057    -.0027443    .1795195
+   mean_temp_c_m2 |   .0086164   .0414944     0.21   0.836     -.072744    .0899769
+   mean_temp_c_m3 |   .1288262   .0508895     2.53   0.011     .0290441    .2286082
+   mean_temp_c_m4 |  -.1132505   .0660941    -1.71   0.087    -.2428451    .0163441
+   mean_temp_c_m5 |   -.102779   .0759764    -1.35   0.176    -.2517505    .0461925
+   mean_temp_c_m6 |   .2894122   .0747934     3.87   0.000     .1427604    .4360639
+   mean_temp_c_m7 |  -.0629362    .065442    -0.96   0.336    -.1912523    .0653798
+   mean_temp_c_m8 |   .1678849   .0686968     2.44   0.015     .0331872    .3025827
+   mean_temp_c_m9 |  -.1991378   .0608074    -3.27   0.001    -.3183664   -.0799092
+  mean_temp_c_m10 |   .0609581   .0642705     0.95   0.343    -.0650608     .186977
+  mean_temp_c_m11 |  -.0415921   .0549412    -0.76   0.449    -.1493186    .0661344
+  mean_temp_c_m12 |   .0277797   .0501117     0.55   0.579    -.0704772    .1260366
+                  |
+            ppt_q |
+               2  |  -.0381138   .1638428    -0.23   0.816      -.35937    .2831424
+               3  |   .1667845   .1845162     0.90   0.366    -.1950073    .5285762
+               4  |   .2181245   .2091333     1.04   0.297    -.1919355    .6281845
+               5  |   .2131602   .2217689     0.96   0.337    -.2216751    .6479956
+                  |
+            _cons |   9.660562   2.813273     3.43   0.001     4.144412    15.17671
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pD_c2_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  18,   2985) =       7.28
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9289
+                                                  Adj R-squared   =     0.9236
+                                                  Within R-sq.    =     0.0121
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.2802
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+     animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_severity~x |  -.0159742   .0030906    -5.17   0.000    -.0220342   -.0099142
+    pop_share_5_9 |  -10.54951   22.99775    -0.46   0.646    -55.64255    34.54354
+  pop_share_10_14 |   -59.6977   24.17296    -2.47   0.014     -107.095   -12.30035
+  pop_share_15_19 |   1.031412    19.5733     0.05   0.958    -37.34711    39.40994
+  pop_share_20_24 |   16.42676   18.59595     0.88   0.377    -20.03543    52.88894
+  pop_share_25_29 |   23.87799   21.86328     1.09   0.275    -18.99065    66.74662
+  pop_share_30_34 |    63.0875   24.43947     2.58   0.010     15.16758    111.0074
+  pop_share_35_39 |   46.50723   19.72244     2.36   0.018     7.836281    85.17818
+  pop_share_40_44 |   39.37241   20.92727     1.88   0.060    -1.660925    80.40575
+  pop_share_45_49 |   46.88048   20.02941     2.34   0.019      7.60762    86.15333
+  pop_share_50_54 |    71.6468   19.28076     3.72   0.000     33.84187    109.4517
+  pop_share_55_59 |   33.08316   20.29197     1.63   0.103    -6.704501    72.87083
+  pop_share_60_64 |   29.13206   18.74685     1.55   0.120    -7.626002    65.89012
+  pop_share_65_69 |   25.91908   22.14075     1.17   0.242     -17.4936    69.33176
+  pop_share_70_74 |   79.79243   25.16151     3.17   0.002     30.45676    129.1281
+  pop_share_75_79 |   45.05916   25.57964     1.76   0.078    -5.096359    95.21467
+  pop_share_80_84 |    39.6532   31.04182     1.28   0.202    -21.21233    100.5187
+ pop_share_85plus |   13.91532   30.21246     0.46   0.645    -45.32403    73.15468
+            _cons |  -13.16808   15.10756    -0.87   0.383    -42.79036    16.45421
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pD_c3_Wnone.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  34,   2985) =       5.20
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9290
+                                                  Adj R-squared   =     0.9237
+                                                  Within R-sq.    =     0.0133
+Number of clusters (fips_num) =      2,986        Root MSE        =     5.2780
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+     animal_share |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_severity~x |  -.0143639   .0031234    -4.60   0.000    -.0204882   -.0082397
+   mean_temp_c_m1 |   .0782652   .0463252     1.69   0.091    -.0125673    .1690978
+   mean_temp_c_m2 |  -.0190975   .0412151    -0.46   0.643    -.0999104    .0617153
+   mean_temp_c_m3 |   .1567007   .0506887     3.09   0.002     .0573124     .256089
+   mean_temp_c_m4 |  -.1260418   .0659927    -1.91   0.056    -.2554376    .0033539
+   mean_temp_c_m5 |  -.1147136   .0754105    -1.52   0.128    -.2625754    .0331482
+   mean_temp_c_m6 |   .3235608   .0746745     4.33   0.000     .1771421    .4699795
+   mean_temp_c_m7 |  -.0734721   .0648711    -1.13   0.257    -.2006688    .0537246
+   mean_temp_c_m8 |   .1638778   .0685099     2.39   0.017     .0295464    .2982092
+   mean_temp_c_m9 |  -.1868152     .06109    -3.06   0.002    -.3065979   -.0670325
+  mean_temp_c_m10 |   .0242441   .0641895     0.38   0.706    -.1016161    .1501043
+  mean_temp_c_m11 |  -.0395901   .0538323    -0.74   0.462    -.1451422     .065962
+  mean_temp_c_m12 |   .0288411   .0499506     0.58   0.564       -.0691    .1267821
+                  |
+            ppt_q |
+               2  |  -.0331938   .1629572    -0.20   0.839    -.3527135     .286326
+               3  |   .1650083   .1839935     0.90   0.370    -.1957587    .5257753
+               4  |   .2505613   .2089562     1.20   0.231    -.1591515    .6602742
+               5  |   .2358436   .2208887     1.07   0.286    -.1972659    .6689531
+                  |
+    pop_share_5_9 |  -11.51043     22.974    -0.50   0.616    -56.55691    33.53604
+  pop_share_10_14 |  -60.35014   24.13652    -2.50   0.012     -107.676   -13.02424
+  pop_share_15_19 |   .5968411   19.53726     0.03   0.976    -37.71102     38.9047
+  pop_share_20_24 |   16.40246   18.56119     0.88   0.377    -19.99156    52.79649
+  pop_share_25_29 |   22.92751   21.83236     1.05   0.294    -19.88049    65.73551
+  pop_share_30_34 |   63.10865   24.41502     2.58   0.010     15.23668    110.9806
+  pop_share_35_39 |   45.93214   19.69967     2.33   0.020     7.305838    84.55845
+  pop_share_40_44 |   39.62122   20.86946     1.90   0.058    -1.298765     80.5412
+  pop_share_45_49 |   47.16696   19.99208     2.36   0.018     7.967316    86.36661
+  pop_share_50_54 |    72.3312   19.28907     3.75   0.000     34.50998    110.1524
+  pop_share_55_59 |   33.49729   20.25029     1.65   0.098    -6.208637    73.20322
+  pop_share_60_64 |   28.49685   18.72165     1.52   0.128     -8.21179    65.20548
+  pop_share_65_69 |   25.47537   22.10073     1.15   0.249    -17.85884    68.80957
+  pop_share_70_74 |   79.56974   25.14643     3.16   0.002     30.26365    128.8758
+  pop_share_75_79 |   43.79699   25.57554     1.71   0.087    -6.350475    93.94446
+  pop_share_80_84 |   39.94382   31.03537     1.29   0.198    -20.90906    100.7967
+ pop_share_85plus |   13.72174    30.0763     0.46   0.648    -45.25064    72.69413
+            _cons |  -16.19272   15.20371    -1.07   0.287    -46.00353     13.6181
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  12.741919
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_share_pD_c4_Wnone.ster saved
+
+=== Outcome: animal_rate_100k  (weights: pop) ===
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(   1,   2985) =       1.04
+Statistics robust to heteroskedasticity           Prob > F        =     0.3078
+                                                  R-squared       =     0.9336
+                                                  Adj R-squared   =     0.9287
+                                                  Within R-sq.    =     0.0000
+Number of clusters (fips_num) =      2,986        Root MSE        =    96.3605
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+mean_winter_temp |   -1.37035   1.343542    -1.02   0.308    -4.004713    1.264012
+           _cons |    123.622   4.541134    27.22   0.000      114.718    132.5261
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pA_c1_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  17,   2985) =       4.23
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9338
+                                                  Adj R-squared   =     0.9289
+                                                  Within R-sq.    =     0.0026
+Number of clusters (fips_num) =      2,986        Root MSE        =    96.2485
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+mean_winter_temp |   7.567457   4.052872     1.87   0.062     -.379248    15.51416
+  mean_temp_c_m1 |  -3.319969   1.582132    -2.10   0.036    -6.422148     -.21779
+  mean_temp_c_m2 |  -6.121036   1.832343    -3.34   0.001     -9.71382   -2.528253
+  mean_temp_c_m3 |   2.760023   1.391324     1.98   0.047      .031972    5.488074
+  mean_temp_c_m4 |   1.169792   2.141707     0.55   0.585     -3.02958    5.369164
+  mean_temp_c_m5 |   3.158204   1.342496     2.35   0.019     .5258928    5.790516
+  mean_temp_c_m6 |  -3.544576   1.563108    -2.27   0.023    -6.609454   -.4796985
+  mean_temp_c_m7 |  -3.257441   1.749437    -1.86   0.063    -6.687665    .1727822
+  mean_temp_c_m8 |   8.932652   1.517474     5.89   0.000     5.957252    11.90805
+  mean_temp_c_m9 |  -5.671875   1.295027    -4.38   0.000    -8.211111   -3.132638
+ mean_temp_c_m10 |   1.615802   1.135784     1.42   0.155    -.6111968    3.842801
+ mean_temp_c_m11 |   .6169803   1.763267     0.35   0.726     -2.84036    4.074321
+ mean_temp_c_m12 |    3.00456   1.046669     2.87   0.004     .9522934    5.056826
+                 |
+           ppt_q |
+              2  |  -1.116457    2.68561    -0.42   0.678    -6.382291    4.149378
+              3  |   11.65785   3.903967     2.99   0.003     4.003109    19.31259
+              4  |   10.68586    4.00056     2.67   0.008     2.841727    18.52999
+              5  |    10.0881   4.330751     2.33   0.020     1.596538    18.57966
+                 |
+           _cons |   43.30009   72.68388     0.60   0.551    -99.21548    185.8157
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pA_c2_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  18,   2985) =       5.12
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9351
+                                                  Adj R-squared   =     0.9303
+                                                  Within R-sq.    =     0.0222
+Number of clusters (fips_num) =      2,986        Root MSE        =    95.3013
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+mean_winter_temp |  -2.390132    1.40629    -1.70   0.089    -5.147527    .3672638
+   pop_share_5_9 |  -4220.931   2024.645    -2.08   0.037    -8190.772   -251.0895
+ pop_share_10_14 |  -6351.228   1197.131    -5.31   0.000    -8698.514   -4003.943
+ pop_share_15_19 |  -1165.438   950.9299    -1.23   0.220    -3029.983     699.106
+ pop_share_20_24 |  -1060.848   1020.609    -1.04   0.299    -3062.015      940.32
+ pop_share_25_29 |  -2797.754   1184.411    -2.36   0.018    -5120.099   -475.4082
+ pop_share_30_34 |  -2314.597   1365.912    -1.69   0.090     -4992.82    363.6267
+ pop_share_35_39 |  -2741.582    1030.49    -2.66   0.008    -4762.124   -721.0406
+ pop_share_40_44 |   1097.088     923.85     1.19   0.235    -714.3595    2908.535
+ pop_share_45_49 |   -1759.35   1060.831    -1.66   0.097    -3839.384    320.6834
+ pop_share_50_54 |  -1228.623   1164.839    -1.05   0.292    -3512.592    1055.346
+ pop_share_55_59 |  -2939.693    1002.25    -2.93   0.003    -4904.863   -974.5231
+ pop_share_60_64 |  -345.8026   1025.763    -0.34   0.736    -2357.076    1665.471
+ pop_share_65_69 |   -948.981   1110.331    -0.85   0.393    -3126.072     1228.11
+ pop_share_70_74 |  -2708.589   1152.844    -2.35   0.019    -4969.039   -448.1387
+ pop_share_75_79 |  -3446.099    1372.72    -2.51   0.012    -6137.673   -754.5257
+ pop_share_80_84 |  -1999.396   1504.039    -1.33   0.184    -4948.455    949.6629
+pop_share_85plus |  -535.2887   1394.237    -0.38   0.701    -3269.052    2198.474
+           _cons |   2123.026   958.6179     2.21   0.027     243.4076    4002.645
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pA_c3_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  34,   2985) =       4.81
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9352
+                                                  Adj R-squared   =     0.9304
+                                                  Within R-sq.    =     0.0246
+Number of clusters (fips_num) =      2,986        Root MSE        =    95.1964
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+mean_winter_temp |   5.125627   3.882645     1.32   0.187    -2.487305    12.73856
+  mean_temp_c_m1 |  -2.692639   1.607808    -1.67   0.094    -5.845162    .4598842
+  mean_temp_c_m2 |  -5.586861   1.805694    -3.09   0.002    -9.127392    -2.04633
+  mean_temp_c_m3 |   3.868215   1.335941     2.90   0.004     1.248757    6.487673
+  mean_temp_c_m4 |   .6110163   1.966443     0.31   0.756    -3.244704    4.466736
+  mean_temp_c_m5 |   3.362862   1.402289     2.40   0.017     .6133099    6.112413
+  mean_temp_c_m6 |  -3.458837   1.574741    -2.20   0.028    -6.546524   -.3711495
+  mean_temp_c_m7 |  -4.117354   1.660907    -2.48   0.013    -7.373993   -.8607146
+  mean_temp_c_m8 |   9.494795   1.489371     6.38   0.000     6.574498    12.41509
+  mean_temp_c_m9 |  -5.213205    1.27069    -4.10   0.000    -7.704722   -2.721688
+ mean_temp_c_m10 |   .8727867   1.161519     0.75   0.452    -1.404673    3.150246
+ mean_temp_c_m11 |  -.2244816    1.74028    -0.13   0.897    -3.636752    3.187789
+ mean_temp_c_m12 |   2.558394   1.072998     2.38   0.017     .4545035    4.662284
+                 |
+           ppt_q |
+              2  |   1.032966   2.640105     0.39   0.696    -4.143643    6.209576
+              3  |   11.54292   3.612569     3.20   0.001     4.459541     18.6263
+              4  |   11.40306   3.777994     3.02   0.003     3.995321    18.81079
+              5  |   10.76031   4.166491     2.58   0.010     2.590827     18.9298
+                 |
+   pop_share_5_9 |  -4250.603   2028.747    -2.10   0.036    -8228.488   -272.7186
+ pop_share_10_14 |  -6358.224   1186.294    -5.36   0.000     -8684.26   -4032.187
+ pop_share_15_19 |   -1224.78    947.496    -1.29   0.196    -3082.592    633.0311
+ pop_share_20_24 |  -1093.915   1026.121    -1.07   0.286    -3105.891    918.0603
+ pop_share_25_29 |  -2861.342   1191.348    -2.40   0.016    -5197.288   -525.3969
+ pop_share_30_34 |  -2350.916   1358.378    -1.73   0.084    -5014.368     312.537
+ pop_share_35_39 |  -2826.913   1024.693    -2.76   0.006    -4836.089   -817.7377
+ pop_share_40_44 |   1083.371   917.9038     1.18   0.238    -716.4172    2883.159
+ pop_share_45_49 |  -1783.638   1065.171    -1.67   0.094    -3872.183    304.9059
+ pop_share_50_54 |  -1225.696   1155.678    -1.06   0.289    -3491.702    1040.309
+ pop_share_55_59 |  -2991.077   1005.198    -2.98   0.003    -4962.028   -1020.125
+ pop_share_60_64 |  -360.1051   1025.582    -0.35   0.726    -2371.024    1650.813
+ pop_share_65_69 |  -1027.259   1110.168    -0.93   0.355     -3204.03    1149.513
+ pop_share_70_74 |  -2736.709   1146.665    -2.39   0.017    -4985.043   -488.3748
+ pop_share_75_79 |  -3439.311   1368.629    -2.51   0.012    -6122.863   -755.7589
+ pop_share_80_84 |  -2113.093   1498.115    -1.41   0.158    -5050.536     824.349
+pop_share_85plus |  -600.4776   1376.526    -0.44   0.663    -3299.514    2098.559
+           _cons |   2089.834   953.3375     2.19   0.028     220.5684    3959.099
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pA_c4_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(   1,   2985) =       1.89
+Statistics robust to heteroskedasticity           Prob > F        =     0.1694
+                                                  R-squared       =     0.9336
+                                                  Adj R-squared   =     0.9287
+                                                  Within R-sq.    =     0.0000
+Number of clusters (fips_num) =      2,986        Root MSE        =    96.3608
+
+                              (Std. Err. adjusted for 2,986 clusters in fips_num)
+---------------------------------------------------------------------------------
+                |               Robust
+animal_rat~100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+----------------+----------------------------------------------------------------
+warm_winter_1sd |  -2.158861   1.570586    -1.37   0.169    -5.238401    .9206789
+          _cons |   119.3922   .2924148   408.30   0.000     118.8189    119.9656
+---------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pB1_c1_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  17,   2985) =       4.11
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9338
+                                                  Adj R-squared   =     0.9289
+                                                  Within R-sq.    =     0.0025
+Number of clusters (fips_num) =      2,986        Root MSE        =    96.2536
+
+                              (Std. Err. adjusted for 2,986 clusters in fips_num)
+---------------------------------------------------------------------------------
+                |               Robust
+animal_rat~100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+----------------+----------------------------------------------------------------
+warm_winter_1sd |  -1.360214   1.656962    -0.82   0.412    -4.609117     1.88869
+ mean_temp_c_m1 |  -.4730052   .8177938    -0.58   0.563    -2.076502    1.130491
+ mean_temp_c_m2 |  -3.473834   .9620919    -3.61   0.000    -5.360265   -1.587404
+ mean_temp_c_m3 |   3.023294   1.328954     2.27   0.023     .4175358    5.629051
+ mean_temp_c_m4 |   1.387739   2.154416     0.64   0.520    -2.836552     5.61203
+ mean_temp_c_m5 |   3.280832   1.336692     2.45   0.014     .6599021    5.901762
+ mean_temp_c_m6 |  -3.514909   1.562584    -2.25   0.025    -6.578759   -.4510593
+ mean_temp_c_m7 |  -3.055405   1.769486    -1.73   0.084    -6.524941    .4141305
+ mean_temp_c_m8 |   8.903033   1.514525     5.88   0.000     5.933413    11.87265
+ mean_temp_c_m9 |  -5.554985    1.30649    -4.25   0.000    -8.116697   -2.993273
+mean_temp_c_m10 |   1.778284   1.121526     1.59   0.113     -.420759    3.977327
+mean_temp_c_m11 |   .4163585   1.722449     0.24   0.809     -2.96095    3.793667
+mean_temp_c_m12 |   2.866815   1.011451     2.83   0.005      .883604    4.850027
+                |
+          ppt_q |
+             2  |  -1.229884   2.678862    -0.46   0.646    -6.482487    4.022719
+             3  |   11.65509   3.897095     2.99   0.003     4.013824    19.29635
+             4  |   10.71259   4.001972     2.68   0.007     2.865691     18.5595
+             5  |   10.20344    4.35128     2.34   0.019     1.671633    18.73526
+                |
+          _cons |    37.9875   73.75247     0.52   0.607    -106.6233    182.5983
+---------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pB1_c2_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  18,   2985) =       5.35
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9351
+                                                  Adj R-squared   =     0.9303
+                                                  Within R-sq.    =     0.0222
+Number of clusters (fips_num) =      2,986        Root MSE        =    95.3015
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+ warm_winter_1sd |  -4.184903   1.656283    -2.53   0.012    -7.432475   -.9373308
+   pop_share_5_9 |  -4227.166    2025.37    -2.09   0.037    -8198.429   -255.9031
+ pop_share_10_14 |  -6342.134   1195.075    -5.31   0.000    -8685.388    -3998.88
+ pop_share_15_19 |  -1180.706   951.7828    -1.24   0.215    -3046.923    685.5103
+ pop_share_20_24 |  -1061.206   1020.122    -1.04   0.298     -3061.42    939.0085
+ pop_share_25_29 |  -2802.772   1184.803    -2.37   0.018    -5125.885     -479.66
+ pop_share_30_34 |  -2316.026   1364.948    -1.70   0.090    -4992.359    360.3073
+ pop_share_35_39 |  -2746.482   1030.137    -2.67   0.008    -4766.333   -726.6307
+ pop_share_40_44 |   1097.696   922.1359     1.19   0.234    -710.3905    2905.782
+ pop_share_45_49 |  -1760.211   1060.767    -1.66   0.097    -3840.119    319.6974
+ pop_share_50_54 |  -1224.175   1163.872    -1.05   0.293    -3506.247    1057.898
+ pop_share_55_59 |  -2938.584   1001.408    -2.93   0.003    -4902.103   -975.0648
+ pop_share_60_64 |  -338.3263   1026.421    -0.33   0.742     -2350.89    1674.237
+ pop_share_65_69 |  -959.6352   1110.289    -0.86   0.387    -3136.644    1217.374
+ pop_share_70_74 |  -2715.603   1152.629    -2.36   0.019    -4975.631   -455.5759
+ pop_share_75_79 |  -3433.174   1372.174    -2.50   0.012    -6123.677   -742.6722
+ pop_share_80_84 |  -2004.132   1505.515    -1.33   0.183    -4956.084    947.8193
+pop_share_85plus |  -530.9788   1394.473    -0.38   0.703    -3265.205    2203.247
+           _cons |   2117.022   957.9087     2.21   0.027     238.7937     3995.25
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pB1_c3_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  34,   2985) =       4.66
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9352
+                                                  Adj R-squared   =     0.9304
+                                                  Within R-sq.    =     0.0246
+Number of clusters (fips_num) =      2,986        Root MSE        =    95.1975
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+ warm_winter_1sd |   -3.23302   1.712635    -1.89   0.059    -6.591084    .1250443
+  mean_temp_c_m1 |  -.6266912   .9074435    -0.69   0.490    -2.405969    1.152587
+  mean_temp_c_m2 |  -3.704479   1.046822    -3.54   0.000    -5.757045   -1.651913
+  mean_temp_c_m3 |   4.059412   1.290321     3.15   0.002     1.529403    6.589421
+  mean_temp_c_m4 |   .8059749   1.976965     0.41   0.684    -3.070378    4.682328
+  mean_temp_c_m5 |   3.470577   1.395161     2.49   0.013     .7350016    6.206152
+  mean_temp_c_m6 |  -3.464714   1.575496    -2.20   0.028    -6.553881   -.3755462
+  mean_temp_c_m7 |   -3.95639   1.675388    -2.36   0.018    -7.241423    -.671357
+  mean_temp_c_m8 |   9.480716   1.487578     6.37   0.000     6.563934     12.3975
+  mean_temp_c_m9 |  -5.100039   1.280246    -3.98   0.000    -7.610294   -2.589785
+ mean_temp_c_m10 |   .9700659     1.1588     0.84   0.403    -1.302062    3.242194
+ mean_temp_c_m11 |  -.3570933   1.715268    -0.21   0.835    -3.720321    3.006134
+ mean_temp_c_m12 |   2.421125   1.038074     2.33   0.020     .3857111    4.456538
+                 |
+           ppt_q |
+              2  |   .9464884    2.61633     0.36   0.718    -4.183505    6.076482
+              3  |   11.55156   3.593146     3.21   0.001      4.50627    18.59686
+              4  |   11.41864   3.764929     3.03   0.002      4.03652    18.80076
+              5  |    10.7968   4.166969     2.59   0.010     2.626381    18.96722
+                 |
+   pop_share_5_9 |  -4249.786   2027.605    -2.10   0.036    -8225.432    -274.141
+ pop_share_10_14 |  -6360.949   1187.142    -5.36   0.000    -8688.649   -4033.249
+ pop_share_15_19 |  -1215.434   947.1086    -1.28   0.199    -3072.486    641.6178
+ pop_share_20_24 |  -1087.679   1025.477    -1.06   0.289    -3098.392    923.0341
+ pop_share_25_29 |  -2848.346    1189.77    -2.39   0.017    -5181.199   -515.4933
+ pop_share_30_34 |  -2345.699   1358.543    -1.73   0.084    -5009.475    318.0767
+ pop_share_35_39 |  -2814.461   1023.736    -2.75   0.006    -4821.761   -807.1602
+ pop_share_40_44 |   1104.299   916.9649     1.20   0.229    -693.6485    2902.246
+ pop_share_45_49 |  -1779.589   1064.865    -1.67   0.095    -3867.533    308.3553
+ pop_share_50_54 |  -1223.227   1156.569    -1.06   0.290     -3490.98    1044.527
+ pop_share_55_59 |  -2986.744    1004.52    -2.97   0.003    -4956.366   -1017.123
+ pop_share_60_64 |  -343.6829   1025.645    -0.34   0.738    -2354.725    1667.359
+ pop_share_65_69 |  -1025.942   1108.718    -0.93   0.355     -3199.87    1147.987
+ pop_share_70_74 |  -2729.195    1146.56    -2.38   0.017    -4977.322   -481.0676
+ pop_share_75_79 |  -3428.321   1369.997    -2.50   0.012    -6114.556   -742.0868
+ pop_share_80_84 |  -2084.228   1499.256    -1.39   0.165    -5023.909    855.4523
+pop_share_85plus |  -592.5566   1376.571    -0.43   0.667    -3291.681    2106.567
+           _cons |   2076.988   952.5992     2.18   0.029     209.1705    3944.805
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pB1_c4_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(   1,   2985) =       1.18
+Statistics robust to heteroskedasticity           Prob > F        =     0.2766
+                                                  R-squared       =     0.9336
+                                                  Adj R-squared   =     0.9287
+                                                  Within R-sq.    =     0.0000
+Number of clusters (fips_num) =      2,986        Root MSE        =    96.3611
+
+                              (Std. Err. adjusted for 2,986 clusters in fips_num)
+---------------------------------------------------------------------------------
+                |               Robust
+animal_rat~100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+----------------+----------------------------------------------------------------
+warm_winter_2sd |  -2.848413   2.617606    -1.09   0.277    -7.980907    2.284082
+          _cons |     119.04   .0456619  2606.99   0.000     118.9504    119.1295
+---------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pB2_c1_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  17,   2985) =       4.13
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9338
+                                                  Adj R-squared   =     0.9289
+                                                  Within R-sq.    =     0.0025
+Number of clusters (fips_num) =      2,986        Root MSE        =    96.2536
+
+                              (Std. Err. adjusted for 2,986 clusters in fips_num)
+---------------------------------------------------------------------------------
+                |               Robust
+animal_rat~100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+----------------+----------------------------------------------------------------
+warm_winter_2sd |   2.696459   2.886625     0.93   0.350    -2.963517    8.356435
+ mean_temp_c_m1 |  -.5976086   .8251958    -0.72   0.469    -2.215619    1.020401
+ mean_temp_c_m2 |  -3.563114   .9638794    -3.70   0.000     -5.45305   -1.673179
+ mean_temp_c_m3 |   3.031194   1.327339     2.28   0.022     .4286012    5.633786
+ mean_temp_c_m4 |   1.340218   2.150831     0.62   0.533    -2.877044     5.55748
+ mean_temp_c_m5 |     3.2714   1.337843     2.45   0.015     .6482127    5.894588
+ mean_temp_c_m6 |  -3.485164   1.561835    -2.23   0.026    -6.547546   -.4227826
+ mean_temp_c_m7 |  -3.108475   1.773143    -1.75   0.080    -6.585181    .3682303
+ mean_temp_c_m8 |   8.935107   1.515405     5.90   0.000     5.963762    11.90645
+ mean_temp_c_m9 |  -5.601615   1.307283    -4.28   0.000    -8.164881   -3.038348
+mean_temp_c_m10 |   1.782146   1.120639     1.59   0.112    -.4151566    3.979449
+mean_temp_c_m11 |   .4022763   1.724797     0.23   0.816    -2.979635    3.784187
+mean_temp_c_m12 |    2.92969   1.011434     2.90   0.004     .9465122    4.912867
+                |
+          ppt_q |
+             2  |  -1.201055   2.677592    -0.45   0.654    -6.451168    4.049057
+             3  |   11.67159   3.896402     3.00   0.003     4.031684     19.3115
+             4  |   10.73331   4.002839     2.68   0.007     2.884703    18.58191
+             5  |   10.23681   4.353749     2.35   0.019     1.700157    18.77346
+                |
+          _cons |   39.65465   73.63821     0.54   0.590    -104.7321    184.0414
+---------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pB2_c2_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  18,   2985) =       5.10
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9351
+                                                  Adj R-squared   =     0.9303
+                                                  Within R-sq.    =     0.0222
+Number of clusters (fips_num) =      2,986        Root MSE        =    95.3031
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+ warm_winter_2sd |  -4.733634   3.441017    -1.38   0.169    -11.48064    2.013371
+   pop_share_5_9 |   -4225.66   2025.802    -2.09   0.037    -8197.769   -253.5507
+ pop_share_10_14 |  -6344.886   1195.258    -5.31   0.000    -8688.499   -4001.274
+ pop_share_15_19 |  -1183.127   951.5087    -1.24   0.214    -3048.806    682.5521
+ pop_share_20_24 |  -1065.656   1020.236    -1.04   0.296    -3066.092    934.7803
+ pop_share_25_29 |  -2805.833    1184.89    -2.37   0.018    -5129.117   -482.5488
+ pop_share_30_34 |  -2320.038   1364.965    -1.70   0.089    -4996.407    356.3297
+ pop_share_35_39 |  -2753.733   1029.767    -2.67   0.008    -4772.859    -734.607
+ pop_share_40_44 |   1084.071   922.9417     1.17   0.240    -725.5956    2893.737
+ pop_share_45_49 |  -1757.629   1061.135    -1.66   0.098    -3838.259     323.002
+ pop_share_50_54 |  -1232.295    1163.91    -1.06   0.290    -3514.443    1049.853
+ pop_share_55_59 |  -2938.181   1001.528    -2.93   0.003    -4901.936   -974.4265
+ pop_share_60_64 |  -352.4456   1026.106    -0.34   0.731    -2364.392    1659.501
+ pop_share_65_69 |  -951.2795   1110.392    -0.86   0.392     -3128.49    1225.931
+ pop_share_70_74 |  -2723.511   1152.609    -2.36   0.018    -4983.499   -463.5235
+ pop_share_75_79 |  -3450.486   1372.504    -2.51   0.012    -6141.635   -759.3372
+ pop_share_80_84 |  -2006.616   1505.755    -1.33   0.183    -4959.038    945.8066
+pop_share_85plus |  -533.7126    1394.28    -0.38   0.702    -3267.561    2200.135
+           _cons |   2120.351   958.0148     2.21   0.027     241.9146    3998.787
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pB2_c3_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  34,   2985) =       4.58
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9352
+                                                  Adj R-squared   =     0.9304
+                                                  Within R-sq.    =     0.0246
+Number of clusters (fips_num) =      2,986        Root MSE        =    95.1988
+
+                               (Std. Err. adjusted for 2,986 clusters in fips_num)
+----------------------------------------------------------------------------------
+                 |               Robust
+animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+-----------------+----------------------------------------------------------------
+ warm_winter_2sd |   1.453146   3.897903     0.37   0.709    -6.189702    9.095994
+  mean_temp_c_m1 |  -.8441304   .9183412    -0.92   0.358    -2.644776    .9565155
+  mean_temp_c_m2 |  -3.852582   1.043848    -3.69   0.000    -5.899316   -1.805848
+  mean_temp_c_m3 |   4.050982   1.288455     3.14   0.002     1.524632    6.577333
+  mean_temp_c_m4 |   .7286513   1.974481     0.37   0.712     -3.14283    4.600132
+  mean_temp_c_m5 |   3.438311   1.397989     2.46   0.014     .6971915     6.17943
+  mean_temp_c_m6 |  -3.421345   1.578629    -2.17   0.030    -6.516657   -.3260335
+  mean_temp_c_m7 |  -4.007426   1.680342    -2.38   0.017    -7.302172   -.7126797
+  mean_temp_c_m8 |   9.488332   1.491023     6.36   0.000     6.564794    12.41187
+  mean_temp_c_m9 |  -5.159633   1.281975    -4.02   0.000    -7.673277   -2.645989
+ mean_temp_c_m10 |   .9822938   1.155969     0.85   0.396    -1.284283    3.248871
+ mean_temp_c_m11 |  -.3705483   1.719671    -0.22   0.829    -3.742408    3.001311
+ mean_temp_c_m12 |   2.497756   1.048883     2.38   0.017     .4411502    4.554362
+                 |
+           ppt_q |
+              2  |   .9700093   2.614341     0.37   0.711    -4.156084    6.096102
+              3  |   11.54417   3.592424     3.21   0.001     4.500294    18.58805
+              4  |   11.42735   3.766177     3.03   0.002     4.042782    18.81191
+              5  |   10.85347   4.173633     2.60   0.009     2.669977    19.03696
+                 |
+   pop_share_5_9 |  -4249.644   2027.756    -2.10   0.036    -8225.585   -273.7031
+ pop_share_10_14 |  -6360.959   1187.567    -5.36   0.000    -8689.492   -4032.426
+ pop_share_15_19 |  -1214.574   947.1188    -1.28   0.200    -3071.646    642.4978
+ pop_share_20_24 |  -1089.832   1025.623    -1.06   0.288    -3100.833    921.1679
+ pop_share_25_29 |  -2852.825   1189.946    -2.40   0.017    -5186.022   -519.6279
+ pop_share_30_34 |  -2347.418    1358.64    -1.73   0.084    -5011.384    316.5483
+ pop_share_35_39 |  -2818.848   1023.872    -2.75   0.006    -4826.415   -811.2812
+ pop_share_40_44 |   1096.614   917.0894     1.20   0.232    -701.5774    2894.805
+ pop_share_45_49 |  -1783.712   1065.437    -1.67   0.094    -3872.777    305.3527
+ pop_share_50_54 |  -1224.551   1156.219    -1.06   0.290    -3491.617    1042.515
+ pop_share_55_59 |   -2987.14    1004.84    -2.97   0.003    -4957.389    -1016.89
+ pop_share_60_64 |   -356.504   1025.282    -0.35   0.728    -2366.835    1653.827
+ pop_share_65_69 |  -1019.427   1109.037    -0.92   0.358    -3193.981    1155.126
+ pop_share_70_74 |   -2732.28   1146.707    -2.38   0.017    -4980.697    -483.863
+ pop_share_75_79 |  -3441.322   1369.671    -2.51   0.012    -6126.916    -755.728
+ pop_share_80_84 |  -2094.724   1499.593    -1.40   0.163    -5035.065     845.617
+pop_share_85plus |  -595.0874   1376.234    -0.43   0.665    -3293.551    2103.377
+           _cons |   2082.825   952.6877     2.19   0.029     214.8342    3950.816
+----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pB2_c4_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(   1,   2985) =       1.23
+Statistics robust to heteroskedasticity           Prob > F        =     0.2682
+                                                  R-squared       =     0.9336
+                                                  Adj R-squared   =     0.9287
+                                                  Within R-sq.    =     0.0000
+Number of clusters (fips_num) =      2,986        Root MSE        =    96.3598
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+ animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_days_be~0f |  -.2871941   .2593545    -1.11   0.268    -.7957258    .2213376
+            _cons |   119.9469   .8639242   138.84   0.000      118.253    121.6409
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pC_c1_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  17,   2985) =       4.16
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9338
+                                                  Adj R-squared   =     0.9289
+                                                  Within R-sq.    =     0.0026
+Number of clusters (fips_num) =      2,986        Root MSE        =    96.2494
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+ animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_days_be~0f |  -.5129696   .2918211    -1.76   0.079    -1.085161    .0592213
+   mean_temp_c_m1 |  -.9711118   .8132609    -1.19   0.233     -2.56572    .6234969
+   mean_temp_c_m2 |  -4.009099   1.051505    -3.81   0.000    -6.070847    -1.94735
+   mean_temp_c_m3 |   2.807063   1.341125     2.09   0.036       .17744    5.436686
+   mean_temp_c_m4 |   1.374192   2.153613     0.64   0.523    -2.848524    5.596908
+   mean_temp_c_m5 |   3.290568   1.339592     2.46   0.014     .6639501    5.917186
+   mean_temp_c_m6 |  -3.387596   1.559739    -2.17   0.030     -6.44587   -.3293231
+   mean_temp_c_m7 |  -3.101656    1.76823    -1.75   0.080     -6.56873    .3654172
+   mean_temp_c_m8 |   8.934351   1.518969     5.88   0.000     5.956019    11.91268
+   mean_temp_c_m9 |  -5.421302   1.319954    -4.11   0.000    -8.009414   -2.833191
+  mean_temp_c_m10 |   1.738424   1.120445     1.55   0.121     -.458499    3.935347
+  mean_temp_c_m11 |   .4817376   1.735211     0.28   0.781    -2.920594    3.884069
+  mean_temp_c_m12 |   2.941433   1.013947     2.90   0.004     .9533277    4.929538
+                  |
+            ppt_q |
+               2  |  -1.091492   2.681469    -0.41   0.684    -6.349206    4.166222
+               3  |   11.87032   3.917563     3.03   0.002     4.188928    19.55172
+               4  |   10.92396   4.019975     2.72   0.007     3.041755    18.80616
+               5  |   10.33575   4.369717     2.37   0.018     1.767788    18.90371
+                  |
+            _cons |   38.69125   73.57781     0.53   0.599    -105.5771    182.9596
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pC_c2_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  18,   2985) =       5.14
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9351
+                                                  Adj R-squared   =     0.9303
+                                                  Within R-sq.    =     0.0222
+Number of clusters (fips_num) =      2,986        Root MSE        =    95.3019
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+ animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_days_be~0f |  -.3134523   .2548377    -1.23   0.219    -.8131276    .1862231
+    pop_share_5_9 |  -4219.289   2026.028    -2.08   0.037    -8191.842   -246.7365
+  pop_share_10_14 |  -6340.736   1195.442    -5.30   0.000     -8684.71   -3996.762
+  pop_share_15_19 |  -1179.445   951.7339    -1.24   0.215    -3045.566    686.6757
+  pop_share_20_24 |   -1060.48   1020.082    -1.04   0.299    -3060.616    939.6553
+  pop_share_25_29 |   -2808.42   1184.751    -2.37   0.018    -5131.432   -485.4088
+  pop_share_30_34 |  -2314.793   1364.953    -1.70   0.090    -4991.137    361.5505
+  pop_share_35_39 |  -2753.062   1029.056    -2.68   0.008    -4770.793   -735.3308
+  pop_share_40_44 |   1083.598   921.6019     1.18   0.240    -723.4415    2890.637
+  pop_share_45_49 |  -1755.382   1061.867    -1.65   0.098    -3837.448    326.6835
+  pop_share_50_54 |  -1228.655   1163.187    -1.06   0.291    -3509.385    1052.075
+  pop_share_55_59 |    -2935.1    1001.13    -2.93   0.003    -4898.075   -972.1262
+  pop_share_60_64 |  -350.4752   1026.268    -0.34   0.733     -2362.74    1661.789
+  pop_share_65_69 |  -948.7297   1110.218    -0.85   0.393    -3125.601    1228.141
+  pop_share_70_74 |   -2714.75   1151.809    -2.36   0.018     -4973.17   -456.3307
+  pop_share_75_79 |   -3454.49   1371.793    -2.52   0.012    -6144.246   -764.7339
+  pop_share_80_84 |  -2018.975   1504.405    -1.34   0.180    -4968.751     930.801
+ pop_share_85plus |  -524.1174   1395.533    -0.38   0.707    -3260.421    2212.187
+            _cons |   2118.873   957.7443     2.21   0.027     240.9666    3996.778
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pC_c3_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  34,   2985) =       4.62
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9352
+                                                  Adj R-squared   =     0.9304
+                                                  Within R-sq.    =     0.0247
+Number of clusters (fips_num) =      2,986        Root MSE        =    95.1935
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+ animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_days_be~0f |  -.5610252   .2882686    -1.95   0.052     -1.12625    .0042001
+   mean_temp_c_m1 |  -1.279351   .8896877    -1.44   0.151    -3.023815    .4651119
+   mean_temp_c_m2 |  -4.358599   1.141686    -3.82   0.000    -6.597169   -2.120028
+   mean_temp_c_m3 |   3.815165   1.299615     2.94   0.003     1.266934    6.363396
+   mean_temp_c_m4 |    .755183   1.978948     0.38   0.703    -3.125058    4.635424
+   mean_temp_c_m5 |   3.460006   1.400082     2.47   0.014     .7147832    6.205229
+   mean_temp_c_m6 |   -3.30465   1.575439    -2.10   0.036    -6.393706   -.2155947
+   mean_temp_c_m7 |  -4.025738   1.673751    -2.41   0.016     -7.30756   -.7439148
+   mean_temp_c_m8 |   9.510027   1.492364     6.37   0.000      6.58386    12.43619
+   mean_temp_c_m9 |  -4.980894    1.29636    -3.84   0.000    -7.522744   -2.439043
+  mean_temp_c_m10 |   .9311985   1.157408     0.80   0.421      -1.3382    3.200597
+  mean_temp_c_m11 |  -.2877595   1.729225    -0.17   0.868    -3.678353    3.102834
+  mean_temp_c_m12 |   2.531711   1.040287     2.43   0.015     .4919584    4.571464
+                  |
+            ppt_q |
+               2  |   1.103406   2.626332     0.42   0.674    -4.046197    6.253009
+               3  |   11.76993   3.618455     3.25   0.001     4.675017    18.86485
+               4  |    11.6398   3.789514     3.07   0.002     4.209481    19.07013
+               5  |   10.95904   4.192183     2.61   0.009     2.739185     19.1789
+                  |
+    pop_share_5_9 |  -4228.588   2026.868    -2.09   0.037    -8202.787   -254.3888
+  pop_share_10_14 |  -6363.985   1187.756    -5.36   0.000    -8692.889   -4035.081
+  pop_share_15_19 |  -1200.803   947.4083    -1.27   0.205    -3058.443    656.8362
+  pop_share_20_24 |  -1080.215     1024.9    -1.05   0.292    -3089.797    929.3658
+  pop_share_25_29 |  -2846.286   1189.626    -2.39   0.017    -5178.856   -513.7158
+  pop_share_30_34 |   -2336.12   1358.331    -1.72   0.086    -4999.481    327.2399
+  pop_share_35_39 |  -2812.438   1022.932    -2.75   0.006    -4818.161   -806.7155
+  pop_share_40_44 |   1096.132   916.2556     1.20   0.232    -700.4241    2892.689
+  pop_share_45_49 |  -1764.122   1065.309    -1.66   0.098    -3852.935    324.6916
+  pop_share_50_54 |    -1225.8   1155.922    -1.06   0.289    -3492.285    1040.685
+  pop_share_55_59 |  -2982.849   1003.837    -2.97   0.003    -4951.131   -1014.568
+  pop_share_60_64 |  -340.6951    1024.71    -0.33   0.740    -2349.904    1668.514
+  pop_share_65_69 |  -1014.708   1108.522    -0.92   0.360    -3188.252    1158.837
+  pop_share_70_74 |  -2711.973   1145.178    -2.37   0.018    -4957.392   -466.5549
+  pop_share_75_79 |   -3442.72   1368.958    -2.51   0.012    -6126.918   -758.5224
+  pop_share_80_84 |  -2093.434   1498.409    -1.40   0.162    -5031.453    844.5856
+ pop_share_85plus |  -581.2278   1378.299    -0.42   0.673     -3283.74    2121.285
+            _cons |   2074.254   952.1343     2.18   0.029     207.3477     3941.16
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pC_c4_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(   1,   2985) =       9.28
+Statistics robust to heteroskedasticity           Prob > F        =     0.0023
+                                                  R-squared       =     0.9336
+                                                  Adj R-squared   =     0.9287
+                                                  Within R-sq.    =     0.0001
+Number of clusters (fips_num) =      2,986        Root MSE        =    96.3578
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+ animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_severity~x |  -.1158165   .0380128    -3.05   0.002    -.1903506   -.0412825
+            _cons |    119.741   .2464132   485.94   0.000     119.2579    120.2242
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pD_c1_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  17,   2985) =       4.47
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9338
+                                                  Adj R-squared   =     0.9289
+                                                  Within R-sq.    =     0.0026
+Number of clusters (fips_num) =      2,986        Root MSE        =    96.2488
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+ animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_severity~x |  -.1413605   .0428666    -3.30   0.001    -.2254115   -.0573095
+   mean_temp_c_m1 |  -.7579005   .8088071    -0.94   0.349    -2.343776    .8279754
+   mean_temp_c_m2 |  -3.744113   .9775524    -3.83   0.000    -5.660858   -1.827369
+   mean_temp_c_m3 |   2.804291   1.336205     2.10   0.036     .1843159    5.424266
+   mean_temp_c_m4 |   1.308055   2.153564     0.61   0.544    -2.914565    5.530676
+   mean_temp_c_m5 |   3.259842   1.336997     2.44   0.015     .6383128    5.881372
+   mean_temp_c_m6 |  -3.451311   1.561594    -2.21   0.027    -6.513222    -.389401
+   mean_temp_c_m7 |  -3.115371   1.767775    -1.76   0.078    -6.581553      .35081
+   mean_temp_c_m8 |   8.939772    1.51688     5.89   0.000     5.965537    11.91401
+   mean_temp_c_m9 |  -5.469563   1.310534    -4.17   0.000    -8.039205   -2.899922
+  mean_temp_c_m10 |   1.761653   1.121426     1.57   0.116    -.4371926    3.960498
+  mean_temp_c_m11 |   .5047087   1.729521     0.29   0.770    -2.886465    3.895882
+  mean_temp_c_m12 |   3.018251   1.013161     2.98   0.003     1.031687    5.004815
+                  |
+            ppt_q |
+               2  |  -.9243505   2.678737    -0.35   0.730    -6.176708    4.328007
+               3  |   12.04212   3.909841     3.08   0.002     4.375866    19.70838
+               4  |   11.14623   4.014667     2.78   0.006     3.274439    19.01803
+               5  |   10.70499    4.36603     2.45   0.014     2.144255    19.26572
+                  |
+            _cons |   39.41394   73.56192     0.54   0.592    -104.8233    183.6511
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : ""
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pD_c2_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  18,   2985) =       5.53
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9351
+                                                  Adj R-squared   =     0.9303
+                                                  Within R-sq.    =     0.0222
+Number of clusters (fips_num) =      2,986        Root MSE        =    95.3014
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+ animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_severity~x |  -.0945788   .0375176    -2.52   0.012    -.1681418   -.0210158
+    pop_share_5_9 |  -4222.706   2025.897    -2.08   0.037    -8195.002   -250.4093
+  pop_share_10_14 |  -6337.153    1195.61    -5.30   0.000    -8681.457   -3992.849
+  pop_share_15_19 |  -1179.915   951.5049    -1.24   0.215    -3045.587    685.7564
+  pop_share_20_24 |  -1063.468   1020.188    -1.04   0.297     -3063.81    936.8744
+  pop_share_25_29 |  -2802.802   1185.088    -2.37   0.018    -5126.474    -479.131
+  pop_share_30_34 |  -2317.741   1364.714    -1.70   0.090    -4993.616    358.1335
+  pop_share_35_39 |  -2753.083    1029.56    -2.67   0.008    -4771.802   -734.3634
+  pop_share_40_44 |   1089.643   922.5915     1.18   0.238     -719.337    2898.622
+  pop_share_45_49 |   -1761.21   1061.308    -1.66   0.097     -3842.18    319.7591
+  pop_share_50_54 |  -1226.751   1163.633    -1.05   0.292    -3508.355    1054.852
+  pop_share_55_59 |  -2935.331   1001.617    -2.93   0.003    -4899.261   -971.4021
+  pop_share_60_64 |  -350.8006   1026.389    -0.34   0.733    -2363.303    1661.702
+  pop_share_65_69 |   -953.467   1110.229    -0.86   0.391    -3130.358    1223.424
+  pop_share_70_74 |  -2716.669   1152.172    -2.36   0.018      -4975.8   -457.5381
+  pop_share_75_79 |   -3448.89   1372.059    -2.51   0.012    -6139.167   -758.6129
+  pop_share_80_84 |  -2015.177   1505.357    -1.34   0.181     -4966.82    936.4652
+ pop_share_85plus |  -529.5199    1394.64    -0.38   0.704    -3264.073    2205.033
+            _cons |   2118.518   957.9723     2.21   0.027     240.1657    3996.871
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : ""
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pD_c3_Wpop.ster saved
+(MWFE estimator converged in 5 iterations)
+
+HDFE Linear regression                            Number of obs   =     56,778
+Absorbing 2 HDFE groups                           F(  34,   2985) =       4.73
+Statistics robust to heteroskedasticity           Prob > F        =     0.0000
+                                                  R-squared       =     0.9352
+                                                  Adj R-squared   =     0.9304
+                                                  Within R-sq.    =     0.0247
+Number of clusters (fips_num) =      2,986        Root MSE        =    95.1951
+
+                                (Std. Err. adjusted for 2,986 clusters in fips_num)
+-----------------------------------------------------------------------------------
+                  |               Robust
+ animal_rate_100k |      Coef.   Std. Err.      t    P>|t|     [95% Conf. Interval]
+------------------+----------------------------------------------------------------
+winter_severity~x |   -.119875   .0415693    -2.88   0.004    -.2013824   -.0383676
+   mean_temp_c_m1 |  -.9930464   .8975535    -1.11   0.269    -2.752932    .7668396
+   mean_temp_c_m2 |  -4.017542   1.057836    -3.80   0.000    -6.091703   -1.943381
+   mean_temp_c_m3 |   3.861676   1.294122     2.98   0.003     1.324214    6.399138
+   mean_temp_c_m4 |   .6947777   1.978606     0.35   0.726    -3.184792    4.574348
+   mean_temp_c_m5 |   3.431376   1.397574     2.46   0.014      .691071    6.171681
+   mean_temp_c_m6 |  -3.388966   1.575071    -2.15   0.032    -6.477302   -.3006306
+   mean_temp_c_m7 |  -4.024967    1.67372    -2.40   0.016    -7.306729   -.7432056
+   mean_temp_c_m8 |   9.503817   1.490249     6.38   0.000     6.581798    12.42584
+   mean_temp_c_m9 |  -5.056664   1.283739    -3.94   0.000    -7.573767    -2.53956
+  mean_temp_c_m10 |   .9637188   1.158054     0.83   0.405    -1.306947    3.234384
+  mean_temp_c_m11 |  -.2872457   1.722016    -0.17   0.868    -3.663705    3.089213
+  mean_temp_c_m12 |   2.584562   1.038632     2.49   0.013     .5480556    4.621069
+                  |
+            ppt_q |
+               2  |   1.210849   2.633953     0.46   0.646    -3.953698    6.375395
+               3  |   11.86584   3.614092     3.28   0.001     4.779475     18.9522
+               4  |    11.7833   3.788701     3.11   0.002      4.35457    19.21203
+               5  |   11.25324   4.194835     2.68   0.007      3.02818     19.4783
+                  |
+    pop_share_5_9 |  -4240.167    2027.81    -2.09   0.037    -8216.214   -264.1193
+  pop_share_10_14 |  -6357.972    1187.65    -5.35   0.000    -8686.667   -4029.277
+  pop_share_15_19 |  -1208.504   946.9983    -1.28   0.202     -3065.34     648.331
+  pop_share_20_24 |  -1087.725   1025.589    -1.06   0.289    -3098.658    923.2086
+  pop_share_25_29 |  -2842.802   1189.874    -2.39   0.017    -5175.858    -509.746
+  pop_share_30_34 |   -2344.61   1358.479    -1.73   0.084     -5008.26    319.0403
+  pop_share_35_39 |  -2817.022   1023.609    -2.75   0.006    -4824.072   -809.9712
+  pop_share_40_44 |   1101.587   917.3103     1.20   0.230    -697.0374    2900.212
+  pop_share_45_49 |  -1777.882   1065.331    -1.67   0.095     -3866.74    310.9766
+  pop_share_50_54 |  -1223.432    1156.44    -1.06   0.290    -3490.933    1044.069
+  pop_share_55_59 |  -2984.623    1004.76    -2.97   0.003    -4954.716   -1014.531
+  pop_share_60_64 |  -347.0933   1025.307    -0.34   0.735    -2357.474    1663.287
+  pop_share_65_69 |  -1022.688   1108.978    -0.92   0.357    -3197.126     1151.75
+  pop_share_70_74 |  -2723.884   1146.253    -2.38   0.018    -4971.409   -476.3588
+  pop_share_75_79 |   -3436.33   1369.311    -2.51   0.012    -6121.218   -751.4419
+  pop_share_80_84 |    -2089.4    1499.05    -1.39   0.163    -5028.676    849.8757
+ pop_share_85plus |  -592.5717   1377.058    -0.43   0.667     -3292.65    2107.507
+            _cons |   2078.518   952.5895     2.18   0.029     210.7194    3946.316
+-----------------------------------------------------------------------------------
+
+Absorbed degrees of freedom:
+---------------------------------------------------------------+
+           Absorbed FE | Categories  - Redundant  = Num. Coefs |
+-----------------------+---------------------------------------|
+              fips_num |      2986        2986           0    *|
+   state_fips_num#year |       898           1         897     |
+---------------------------------------------------------------+
+* = FE nested within cluster; treated as redundant for DoF computation
+
+added scalar:
+       e(dep_var_mean) =  118.99028
+
+added macro:
+       e(ctrl_weather) : "X"
+
+added macro:
+           e(ctrl_age) : "X"
+file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/estimates/collis
+> ions_weather/animal_rate_100k_pD_c4_Wpop.ster saved
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 7: PANEL B -- 1SD VS 2SD, SIDE BY SIDE
+. *---------------------------------------------------------------
+. * Eyal, 9/8/26: "you can run both and decide which one you want to
+. * keep... They'll have different magnitudes. Maybe one would be precise,
+. * one won't be. If they're both precise... then I probably just keep the
+. * one sigma, just because it has more support."
+. *
+. * Both are saved. This prints them next to each other so that decision is
+. * made by looking at the numbers, then recorded once in the table file's
+. * `panelB_sd' switch. Coefficients are pulled out of e(b)/e(V) by column
+. * name rather than with _b[]/_se[], so the Q1 lag prefix cannot silently
+. * mismatch.
+. 
+. foreach y in animal_share animal_rate_100k {
+  2. 
+.     if "`y'" == "animal_share" & "`weight_share'" == "" {
+  3.         local wsuffix "none"
+  4.     }
+  5.     else {
+  6.         local wsuffix "pop"
+  7.     }
+  8. 
+.     di as result _newline "{hline 78}"
+  9.     di as result "Panel B inspection -- outcome: `y' (weights: `wsuffix')"
+ 10.     di as text   "{hline 78}"
+ 11.     di as text %-4s "Col" %5s "SD" %14s "Coef" %14s "Std err" ///
+>                %9s "t" %12s "N" %10s "Clusters"
+ 12. 
+.     forvalues c = 1/4 {
+ 13.         foreach s in 1 2 {
+ 14. 
+.             local ster = "$estimates/collisions_weather/`y'_pB`s'_c`c'_W`wsuffix'.
+> ster"
+ 15.             capture confirm file "`ster'"
+ 16.             if _rc {
+ 17.                 di as error "  MISSING: `ster'"
+ 18.                 continue
+ 19.             }
+ 20. 
+.             estimates use "`ster'"
+ 21. 
+.             * Note $coef_prefix, not `L': the regressor is written
+.             * L1.warm_winter_1sd but Stata stores the coefficient under
+.             * the canonical name L.warm_winter_1sd.
+.             local nm = "${coef_prefix}warm_winter_`s'sd"
+ 22.             matrix temp_b = e(b)
+ 23.             matrix temp_v = e(V)
+ 24.             local j = colnumb(temp_b, "`nm'")
+ 25. 
+.             if missing(`j') {
+ 26.                 di as error "  `nm' not found in `ster'"
+ 27.             }
+ 28.             else {
+ 29.                 local coef = temp_b[1, `j']
+ 30.                 local se   = sqrt(temp_v[`j', `j'])
+ 31.                 local tst  = `coef' / `se'
+ 32.                 di as text %-4.0f `c' %5.0f `s' %14.6f `coef' ///
+>                            %14.6f `se' %9.2f `tst' ///
+>                            %12.0fc e(N) %10.0fc e(N_clust)
+ 33.             }
+ 34. 
+.             matrix drop temp_b temp_v
+ 35.         }
+ 36.     }
+ 37.     di as text "{hline 78}"
+ 38. }
+
+------------------------------------------------------------------------------
+Panel B inspection -- outcome: animal_share (weights: none)
+------------------------------------------------------------------------------
+Col    SD          Coef       Std err        t           N  Clusters
+1       1     -0.127104      0.116080    -1.09      56,778     2,986
+1       2     -1.091620      0.452319    -2.41      56,778     2,986
+2       1     -0.273015      0.123413    -2.21      56,778     2,986
+2       2     -1.225348      0.456709    -2.68      56,778     2,986
+3       1     -0.209936      0.115188    -1.82      56,778     2,986
+3       2     -1.274166      0.442219    -2.88      56,778     2,986
+4       1     -0.333368      0.122602    -2.72      56,778     2,986
+4       2     -1.370023      0.447368    -3.06      56,778     2,986
+------------------------------------------------------------------------------
+
+------------------------------------------------------------------------------
+Panel B inspection -- outcome: animal_rate_100k (weights: pop)
+------------------------------------------------------------------------------
+Col    SD          Coef       Std err        t           N  Clusters
+1       1     -2.158861      1.570586    -1.37      56,778     2,986
+1       2     -2.848413      2.617606    -1.09      56,778     2,986
+2       1     -1.360214      1.656962    -0.82      56,778     2,986
+2       2      2.696459      2.886625     0.93      56,778     2,986
+3       1     -4.184903      1.656283    -2.53      56,778     2,986
+3       2     -4.733634      3.441017    -1.38      56,778     2,986
+4       1     -3.233020      1.712635    -1.89      56,778     2,986
+4       2      1.453146      3.897903     0.37      56,778     2,986
+------------------------------------------------------------------------------
+
+. 
+. di as text _newline "Decide 1SD vs 2SD from the block above, then record it"
+
+Decide 1SD vs 2SD from the block above, then record it
+
+. di as text "in the panelB_sd switch in estimates_tables_collisions_weather.do."
+in the panelB_sd switch in estimates_tables_collisions_weather.do.
+
+. di as text "Eyal's tie-break: both precise and same-signed -> keep 1SD."
+Eyal's tie-break: both precise and same-signed -> keep 1SD.
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 8: RECORD THE SETTINGS THIS RUN USED
+. *---------------------------------------------------------------
+. * The table script needs the coefficient-name prefix (Q1) and the
+. * precipitation-control wording. Writing them to a small text file keeps
+. * the two .do files consistent without either one guessing.
+. 
+. local file_name = "$estimates/collisions_weather/_run_settings.txt"
+
+. file open  fh using "`file_name'", write replace
+
+. file write fh "winter_lag = `winter_lag'"                   _n
+
+. file write fh "coef_prefix = $coef_prefix"                  _n
+
+. file write fh "share_numerator = `share_numerator'"         _n
+
+. file write fh "weight_share = `weight_share'"               _n
+
+. file write fh "ppt_control_note = $ppt_control_note"        _n
+
+. file write fh "share_scale = `share_scale'"                  _n
+
+. file write fh "n_numerator_native = `n_src1'"                _n
+
+. file write fh "n_numerator_component_fill = `n_src2'"       _n
+
+. file write fh "n_numerator_deer_fill = `n_src3'"            _n
+
+. file write fh "n_numerator_deer_floor = `n_src4'"           _n
+
+. file write fh "estimation_sample_rows = `n_est'"            _n
+
+. file write fh "run_date = `c(current_date)'"                _n
+
+. file close fh
+
+. 
+. di as result _newline "Estimates written to $estimates/collisions_weather/"
+
+Estimates written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/
+> estimates/collisions_weather/
+
+. di as result "Run settings written to `file_name'"
+Run settings written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTA
+> TA/estimates/collisions_weather/_run_settings.txt
+
+. 
+. * Wrap Up
+. log close
+      name:  <unnamed>
+       log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/estimate
+> s_generate_collisions_weather.log
+  log type:  text
+ closed on:  10 Sep 2026, 19:04:41
+------------------------------------------------------------------------------------

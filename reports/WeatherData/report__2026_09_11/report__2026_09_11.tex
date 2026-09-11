@@ -74,7 +74,6 @@ cross-season anomaly and trend comparisons.
 \path{warm_winter_1sd} and \path{warm_winter_2sd} in the merged county-year panel:
 the raw winter mean above the county's own full-sample mean by one or two standard
 deviations. The figures and the regression table therefore describe the same object.
-Section~\ref{sec:decisions} lists this and the remaining choices requiring a decision.
 \end{minipage}\end{center}
 \newpage
 \tableofcontents
@@ -322,37 +321,6 @@ line.
 \end{figure}
 \vspace{-6pt}
 {\footnotesize\textit{Notes.} The same PRISM–ERA5 comparison with counties weighted by land area: mean offset +0.01°C, correlation 0.985. Estimand: the average square kilometre of the contiguous United States (counties weighted by land area). Eyal ruled out population weighting (8/28); counties in the west are much larger than counties in the east, so the unweighted and area-weighted series answer different questions.\par}
-\clearpage
-\section{Decisions requested}
-\label{sec:decisions}
-\subsection*{Mean winter temperature: two constructions}
-\textbf{Current choice.} This notebook takes a DAY-COUNT-WEIGHTED mean of the three monthly means and keeps only winters complete on both month and day counts. build\_main\_data\_county\_year.do line 512 takes a simple average of the three monthly means.\par
-\textbf{Issue.} The gap is hundredths of a degree, but it is enough to move a county-winter across a sigma threshold, so the anomaly counts here and in the merged panel will not match exactly. Harmonise the merge script to the day-weighted mean, or accept the difference and document it? Table 1 has already been run off the current merge script.\par
-\textbf{Status.} DECIDE
-\subsection*{Anomaly definition}
-\textbf{Current choice.} Raw winter mean above the county's own full-sample mean by 1 or 2 SD — identical to warm\_winter\_1sd / warm\_winter\_2sd in SECTION 7 of the merge script.\par
-\textbf{Issue.} Changed in this pass. The v1 exhibits used a DETRENDED residual above 1.5 SD with a 30-winter filter, which described a different object from the regressor. The detrended version is retained as a Tier 1 diagnostic. Flagging in case the detrended construction should be the headline instead.\par
-\textbf{Status.} CHANGED — confirm
-\subsection*{Geographic weighting}
-\textbf{Current choice.} Unweighted is primary; an area-weighted companion ships for each exhibit that pools counties into a national number.\par
-\textbf{Issue.} Population weighting was ruled out on 8/28. For the collisions stage the relevant exposure weight may be vehicle-miles travelled or road miles rather than land area.\par
-\textbf{Status.} CONFIRM
-\subsection*{Comparison periods}
-\textbf{Current choice.} 1982–1991 versus 2016–2025\par
-\textbf{Issue.} Symmetric ten-winter period means, not 1982-versus-2025 endpoints.\par
-\textbf{Status.} CONFIRM
-\subsection*{Region scheme for the pooled state figure}
-\textbf{Current choice.} EPA climate-impact regions, assigned whole states (both variants ship).\par
-\textbf{Issue.} EPA Level I ecoregions cut across state lines and would need a county-level spatial join. Pick the plain or the region-coloured version for the paper.\par
-\textbf{Status.} PICK ONE
-\subsection*{Winter Severity Index exhibit}
-\textbf{Current choice.} Read from the merged county-year panel; Kohn 1975 / WI DNR definition.\par
-\textbf{Issue.} County-level averaging of ERA5-Land snow depth under-detects the 18-inch threshold, so across most of the eastern deer range the index is effectively its cold-day component. The 12-inch sensitivity panel shows this.\par
-\textbf{Status.} DOCUMENTED
-\subsection*{Extreme-cold change colour scale}
-\textbf{Current choice.} Reversed relative to the temperature-change map: red marks FEWER cold days.\par
-\textbf{Issue.} Deliberate — for a count of cold days, a decrease is the warming signal.\par
-\textbf{Status.} DOCUMENTED
 \clearpage
 \appendix
 \section{State-level winter-temperature trends}
