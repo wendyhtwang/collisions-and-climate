@@ -26,3 +26,5 @@ references/earthengine-api/
 # raw + code, not source-controlled here.
 dataRAW/
 dataCSV/
+# Built Stata data and estimates -- regenerated, not source-controlled.
+dataSTATA/
