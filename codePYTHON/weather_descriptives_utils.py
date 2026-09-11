@@ -241,9 +241,17 @@ def load_weather_panel(dataset_config):
         )
 
     redundant_ids = [c for c in ID_COLS if c != "geoid"]
+    # Any non-key column present in both files is redundant by construction --
+    # 05 and 06 sometimes independently compute the same quantity so it can be
+    # cross-checked (e.g. 06's ppt_total / precip_mm_total against 05's, see
+    # 06b_validate_ppt_total.py). Detecting this by overlap rather than a
+    # fixed whitelist means a newly-added redundant column is compared and
+    # dropped here automatically, instead of silently surviving into the
+    # merge below where pandas suffixes it _x/_y and every downstream lookup
+    # by its real name (VARIABLE_UNITS, WINTER_SUM_VARIABLES, ...) goes stale.
     qa_cols = [
-        c for c in ("n_days", "expected_days", "is_incomplete", "dataset_types")
-        if c in monthly.columns and c in derived.columns
+        c for c in monthly.columns
+        if c in derived.columns and c not in keys and c not in redundant_ids
     ]
     qa_mismatches = {}
     if qa_cols:
@@ -253,7 +261,14 @@ def load_weather_panel(dataset_config):
         )
         for col in qa_cols:
             left, right = check[f"{col}_monthly"], check[f"{col}_derived"]
-            qa_mismatches[col] = int((left.fillna("<NA>") != right.fillna("<NA>")).sum())
+            if pd.api.types.is_numeric_dtype(left) and pd.api.types.is_numeric_dtype(right):
+                # Tolerance, not exact equality: these are floats independently
+                # summed in two different scripts, so trivial float noise is
+                # not a real mismatch (mirrors 06b_validate_ppt_total.py).
+                mismatch = ~np.isclose(left, right, atol=1e-6, equal_nan=True)
+            else:
+                mismatch = left.fillna("<NA>") != right.fillna("<NA>")
+            qa_mismatches[col] = int(mismatch.sum())
 
     slim = derived.drop(columns=redundant_ids + qa_cols, errors="ignore")
     merged = monthly.merge(
