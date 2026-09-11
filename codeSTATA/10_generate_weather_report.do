@@ -3,9 +3,9 @@ Project:  Animal collisions, weather, and wildlife populations
 Purpose:  Knit the Tier 2 exhibits from 09_descriptive_weather_full.ipynb into a
           single dated PDF report for the PI.
 
-Inputs:   $path/figures/weather/tier2/*.pdf   (exhibits)
-          $path/tables/weather/tier2/*.csv    (exhibit index, notes, decisions)
-          $path/tables/weather/tier1/*.csv    (coverage and QA tables)
+Inputs:   $path/figures/weather/tier2, files *.pdf   (exhibits)
+          $path/tables/weather/tier2, files *.csv    (exhibit index, notes, decisions)
+          $path/tables/weather/tier1, files *.csv    (coverage and QA tables)
 Output:   $path/reports/WeatherData/report_YYYY_MM_DD/
 
 Notes:    Tier 1 QA exhibits are indexed in Appendix B, not reproduced.
