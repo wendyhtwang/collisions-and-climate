@@ -90,10 +90,16 @@ OUTLIER_Z_THRESHOLD = 5.0
 FIGURE_WIDTH_IN = 8.0
 STATES_PER_PAGE = 9
 STATE_GRID_COLS = 3
+# The study universe is the contiguous US plus DC: 48 states + DC = 49 units.
+# Alaska (02), Hawaii (15) and the territories (60, 66, 69, 72, 78) are out of
+# scope -- PRISM's AN81m grid does not cover them, and the extraction already
+# filters on gee_extract_utils.CONUS_STATE_FIPS. This dictionary is the same
+# universe, spelled out here because importing gee_extract_utils would pull in
+# the Earth Engine client just to read a constant.
 STATE_FIPS_TO_NAME = {
-    "01":"Alabama","02":"Alaska","04":"Arizona","05":"Arkansas","06":"California",
+    "01":"Alabama","04":"Arizona","05":"Arkansas","06":"California",
     "08":"Colorado","09":"Connecticut","10":"Delaware","11":"District of Columbia",
-    "12":"Florida","13":"Georgia","15":"Hawaii","16":"Idaho","17":"Illinois",
+    "12":"Florida","13":"Georgia","16":"Idaho","17":"Illinois",
     "18":"Indiana","19":"Iowa","20":"Kansas","21":"Kentucky","22":"Louisiana",
     "23":"Maine","24":"Maryland","25":"Massachusetts","26":"Michigan",
     "27":"Minnesota","28":"Mississippi","29":"Missouri","30":"Montana",
@@ -104,6 +110,7 @@ STATE_FIPS_TO_NAME = {
     "47":"Tennessee","48":"Texas","49":"Utah","50":"Vermont","51":"Virginia",
     "53":"Washington","54":"West Virginia","55":"Wisconsin","56":"Wyoming",
 }
+CONUS_STATE_FIPS = frozenset(STATE_FIPS_TO_NAME)
 VARIABLE_LABELS = {
     "mean_temp_c": "Mean winter temperature (°C)",
     "days_extremely_cold": "Extreme-cold days per winter (TMIN < 0°F)",
@@ -241,17 +248,9 @@ def load_weather_panel(dataset_config):
         )
 
     redundant_ids = [c for c in ID_COLS if c != "geoid"]
-    # Any non-key column present in both files is redundant by construction --
-    # 05 and 06 sometimes independently compute the same quantity so it can be
-    # cross-checked (e.g. 06's ppt_total / precip_mm_total against 05's, see
-    # 06b_validate_ppt_total.py). Detecting this by overlap rather than a
-    # fixed whitelist means a newly-added redundant column is compared and
-    # dropped here automatically, instead of silently surviving into the
-    # merge below where pandas suffixes it _x/_y and every downstream lookup
-    # by its real name (VARIABLE_UNITS, WINTER_SUM_VARIABLES, ...) goes stale.
     qa_cols = [
-        c for c in monthly.columns
-        if c in derived.columns and c not in keys and c not in redundant_ids
+        c for c in ("n_days", "expected_days", "is_incomplete", "dataset_types")
+        if c in monthly.columns and c in derived.columns
     ]
     qa_mismatches = {}
     if qa_cols:
@@ -261,14 +260,7 @@ def load_weather_panel(dataset_config):
         )
         for col in qa_cols:
             left, right = check[f"{col}_monthly"], check[f"{col}_derived"]
-            if pd.api.types.is_numeric_dtype(left) and pd.api.types.is_numeric_dtype(right):
-                # Tolerance, not exact equality: these are floats independently
-                # summed in two different scripts, so trivial float noise is
-                # not a real mismatch (mirrors 06b_validate_ppt_total.py).
-                mismatch = ~np.isclose(left, right, atol=1e-6, equal_nan=True)
-            else:
-                mismatch = left.fillna("<NA>") != right.fillna("<NA>")
-            qa_mismatches[col] = int(mismatch.sum())
+            qa_mismatches[col] = int((left.fillna("<NA>") != right.fillna("<NA>")).sum())
 
     slim = derived.drop(columns=redundant_ids + qa_cols, errors="ignore")
     merged = monthly.merge(
@@ -276,6 +268,15 @@ def load_weather_panel(dataset_config):
     )
     merge_counts = merged["_merge"].value_counts().to_dict()
     merged = merged.drop(columns="_merge")
+
+    # Belt and braces. The PRISM extraction filters to CONUS upstream, but ERA5-Land
+    # is a global product, so a future re-extraction could quietly widen the panel.
+    outside = sorted(set(merged["state_fips"].dropna()) - CONUS_STATE_FIPS)
+    if outside:
+        dropped = int(merged["state_fips"].isin(outside).sum())
+        print(f"NOTE: dropping {dropped:,} rows from non-CONUS state FIPS {outside} "
+              f"-- the study universe is the contiguous US plus DC.")
+        merged = merged[merged["state_fips"].isin(CONUS_STATE_FIPS)].copy()
 
     diagnostics = {
         "dataset": dataset_config.name,
@@ -441,6 +442,17 @@ def load_county_geometry():
     # mean is not the same estimand as an area-weighted one. Land area, not
     # ALAND + AWATER: open water should not carry temperature weight.
     geometry["land_area_km2"] = geometry["ALAND"] / 1e6
+
+    # The Census cartographic file covers Alaska, Hawaii, Puerto Rico and the
+    # territories. They never carry weather data -- every choropleth merge is an
+    # inner join against the panel -- but state_geometry below is dissolved from
+    # THIS frame, and in an Albers CONUS projection Alaska sits far to the
+    # north-west. Left in, drawing state borders expands each map's axes to
+    # enclose it and shrinks the lower 48 to roughly half size in the frame.
+    outside = sorted(set(geometry["geoid"].str[:2]) - CONUS_STATE_FIPS)
+    if outside:
+        geometry = geometry[geometry["geoid"].str[:2].isin(CONUS_STATE_FIPS)].copy()
+        print(f"Dropped non-CONUS geometry: {', '.join(outside)}")
     return geometry[["geoid", "land_area_km2", "geometry"]]
 def draw_state_borders(ax, linewidth=0.45, color="black"):
     """Overlay state outlines on a county choropleth."""
@@ -549,6 +561,7 @@ def build_panel():
     matplotlib.use("Agg")
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    assert len(CONUS_STATE_FIPS) == 49, f"Expected 48 states + DC, got {len(CONUS_STATE_FIPS)}"
     config = PRISM_CONFIG
     print(f"Dataset: {config.name}")
     print(f"Repository root: {REPO_ROOT}")
@@ -570,6 +583,10 @@ def build_panel():
         county_geometry.assign(state_fips=county_geometry["geoid"].str[:2])
         .dissolve(by="state_fips")[["geometry"]]
         .to_crs("EPSG:5070")
+    )
+    assert len(state_geometry) == 49, (
+        f"state_geometry has {len(state_geometry)} units, expected 48 states + DC. "
+        f"A non-CONUS polygon would push every map's extent out to enclose it."
     )
     # Land area travels with the winter panel so every weighted exhibit downstream
     # uses one definition of the weight rather than re-merging it per figure.

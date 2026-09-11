@@ -296,6 +296,8 @@ print(f"Saved {state_warming_path}")
 # and what the figure is for is the spread of intercepts and slopes. He also
 # asked to flag the outliers -- "maybe it's worth annotating them with, like, a
 # small line and a two-letter code for that state next to it."
+# Same 49 units as STATE_FIPS_TO_NAME, keyed to the two-letter codes the
+# annotations use. Asserted against it below so the two cannot drift.
 STATE_FIPS_TO_USPS = {
     "01":"AL","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","11":"DC",
     "12":"FL","13":"GA","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY",
@@ -309,6 +311,10 @@ STATE_FIPS_TO_USPS = {
 # would need a county-level spatial join. Wendy's suggestion on the call -- EPA's
 # own climate-impact regions -- assigns whole states, so it drops straight onto a
 # state-level figure. Great Plains split north/south, as EPA does.
+assert set(STATE_FIPS_TO_USPS) == CONUS_STATE_FIPS, (
+    "STATE_FIPS_TO_USPS and STATE_FIPS_TO_NAME cover different states."
+)
+
 NCA_REGION_BY_USPS = {}
 for _region, _states in {
     "Northeast": "CT DE DC ME MD MA NH NJ NY PA RI VT WV",
