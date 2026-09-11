@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025/Debian) (preloaded format=pdflatex 2026.8.31)  11 SEP 2026 09:46
+This is pdfTeX, Version 3.141592653-2.6-1.40.28 (TeX Live 2025/Debian) (preloaded format=pdflatex 2026.8.31)  11 SEP 2026 09:51
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -572,49 +572,52 @@ Package hyperref Info: Link coloring ON on input line 49.
 \openout3 = `report__2026_09_11.out'.
 
 LaTeX Font Info:    Trying to load font information for OT1+lmr on input line 5
-6.
+5.
 
 (/usr/share/texmf/tex/latex/lm/ot1lmr.fd
 File: ot1lmr.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    Trying to load font information for OML+lmm on input line 5
-6.
+5.
 
 (/usr/share/texmf/tex/latex/lm/omllmm.fd
 File: omllmm.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    Trying to load font information for OMS+lmsy on input line 
-56.
+55.
 
 (/usr/share/texmf/tex/latex/lm/omslmsy.fd
 File: omslmsy.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    Trying to load font information for OMX+lmex on input line 
-56.
+55.
 
 (/usr/share/texmf/tex/latex/lm/omxlmex.fd
 File: omxlmex.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <12> on input line 56.
+(Font)              <12> on input line 55.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <8> on input line 56.
+(Font)              <8> on input line 55.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <6> on input line 56.
-LaTeX Font Info:    Trying to load font information for T1+lmtt on input line 6
-0.
+(Font)              <6> on input line 55.
 
+
+LaTeX Warning: No \author given.
+
+LaTeX Font Info:    Trying to load font information for T1+lmtt on input line 5
+9.
 (/usr/share/texmf/tex/latex/lm/t1lmtt.fd
 File: t1lmtt.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
 )
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <10> on input line 60.
+(Font)              <10> on input line 59.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <7> on input line 60.
+(Font)              <7> on input line 59.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <5> on input line 60.
+(Font)              <5> on input line 59.
 LaTeX Font Info:    External font `lmex10' loaded for size
-(Font)              <10.95> on input line 79.
+(Font)              <10.95> on input line 78.
  [1
 
 {/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}{/usr/share/texmf/fonts/enc/
@@ -629,7 +632,7 @@ dvips/lm/lm-ec.enc}]
 File: exhibits/prism_national_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_national_long_run_warming.pdf>
 Package pdftex.def Info: exhibits/prism_national_long_run_warming.pdf  used on 
-input line 135.
+input line 134.
 (pdftex.def)             Requested size: 484.20988pt x 257.35997pt.
  [5
 
@@ -640,7 +643,7 @@ File: exhibits/prism_national_long_run_warming_area_weighted.pdf Graphic file (
 type pdf)
 <use exhibits/prism_national_long_run_warming_area_weighted.pdf>
 Package pdftex.def Info: exhibits/prism_national_long_run_warming_area_weighted
-.pdf  used on input line 143.
+.pdf  used on input line 142.
 (pdftex.def)             Requested size: 484.20988pt x 257.40161pt.
  [6
 
@@ -649,10 +652,10 @@ Package pdftex.def Info: exhibits/prism_national_long_run_warming_area_weighted
 File: exhibits/prism_state_trends_pooled.pdf Graphic file (type pdf)
 <use exhibits/prism_state_trends_pooled.pdf>
 Package pdftex.def Info: exhibits/prism_state_trends_pooled.pdf  used on input 
-line 151.
+line 150.
 (pdftex.def)             Requested size: 484.20988pt x 288.60033pt.
 LaTeX Font Info:    Trying to load font information for TS1+lmr on input line 1
-55.
+54.
 
 (/usr/share/texmf/tex/latex/lm/ts1lmr.fd
 File: ts1lmr.fd 2015/05/01 v1.6.1 Font defs for Latin Modern
@@ -665,7 +668,7 @@ _pooled.pdf>]
 File: exhibits/prism_state_trends_pooled_by_region.pdf Graphic file (type pdf)
 <use exhibits/prism_state_trends_pooled_by_region.pdf>
 Package pdftex.def Info: exhibits/prism_state_trends_pooled_by_region.pdf  used
- on input line 159.
+ on input line 158.
 (pdftex.def)             Requested size: 484.20988pt x 288.60033pt.
  [8
 
@@ -677,7 +680,7 @@ pt>
 File: exhibits/prism_winter_warming_data_section.pdf Graphic file (type pdf)
 <use exhibits/prism_winter_warming_data_section.pdf>
 Package pdftex.def Info: exhibits/prism_winter_warming_data_section.pdf  used o
-n input line 170.
+n input line 169.
 (pdftex.def)             Requested size: 484.20988pt x 406.11281pt.
  [10
 
@@ -687,7 +690,7 @@ n input line 170.
 File: exhibits/prism_mean_winter_temperature.pdf Graphic file (type pdf)
 <use exhibits/prism_mean_winter_temperature.pdf>
 Package pdftex.def Info: exhibits/prism_mean_winter_temperature.pdf  used on in
-put line 178.
+put line 177.
 (pdftex.def)             Requested size: 484.20988pt x 320.93706pt.
  [11
 
@@ -698,7 +701,7 @@ File: exhibits/prism_winter_temperature_early_vs_recent.pdf Graphic file (type
 pdf)
 <use exhibits/prism_winter_temperature_early_vs_recent.pdf>
 Package pdftex.def Info: exhibits/prism_winter_temperature_early_vs_recent.pdf 
- used on input line 186.
+ used on input line 185.
 (pdftex.def)             Requested size: 484.20988pt x 183.44711pt.
  [12
 
@@ -708,7 +711,7 @@ t>
 File: exhibits/prism_winter_temperature_change.pdf Graphic file (type pdf)
 <use exhibits/prism_winter_temperature_change.pdf>
 Package pdftex.def Info: exhibits/prism_winter_temperature_change.pdf  used on 
-input line 194.
+input line 193.
 (pdftex.def)             Requested size: 484.20988pt x 320.74483pt.
  [13
 
@@ -717,7 +720,7 @@ input line 194.
 File: exhibits/prism_extreme_cold_day_count.pdf Graphic file (type pdf)
 <use exhibits/prism_extreme_cold_day_count.pdf>
 Package pdftex.def Info: exhibits/prism_extreme_cold_day_count.pdf  used on inp
-ut line 203.
+ut line 202.
 (pdftex.def)             Requested size: 484.20988pt x 320.74483pt.
  [14
 
@@ -728,7 +731,7 @@ File: exhibits/prism_extreme_cold_early_recent_change.pdf Graphic file (type pd
 f)
 <use exhibits/prism_extreme_cold_early_recent_change.pdf>
 Package pdftex.def Info: exhibits/prism_extreme_cold_early_recent_change.pdf  u
-sed on input line 211.
+sed on input line 210.
 (pdftex.def)             Requested size: 484.20988pt x 400.87318pt.
 
 [15
@@ -738,7 +741,7 @@ sed on input line 211.
 File: exhibits/prism_winter_severity_index.pdf Graphic file (type pdf)
 <use exhibits/prism_winter_severity_index.pdf>
 Package pdftex.def Info: exhibits/prism_winter_severity_index.pdf  used on inpu
-t line 220.
+t line 219.
 (pdftex.def)             Requested size: 484.20988pt x 320.93706pt.
  [16
 
@@ -749,7 +752,7 @@ File: exhibits/prism_winter_severity_index_sensitivity.pdf Graphic file (type p
 df)
 <use exhibits/prism_winter_severity_index_sensitivity.pdf>
 Package pdftex.def Info: exhibits/prism_winter_severity_index_sensitivity.pdf  
-used on input line 228.
+used on input line 227.
 (pdftex.def)             Requested size: 484.20988pt x 179.44261pt.
  [17
 
@@ -760,7 +763,7 @@ File: exhibits/prism_anomalous_warm_winter_frequency_1sd.pdf Graphic file (type
  pdf)
 <use exhibits/prism_anomalous_warm_winter_frequency_1sd.pdf>
 Package pdftex.def Info: exhibits/prism_anomalous_warm_winter_frequency_1sd.pdf
-  used on input line 242.
+  used on input line 241.
 (pdftex.def)             Requested size: 484.20988pt x 320.71938pt.
  [18
 
@@ -771,7 +774,7 @@ File: exhibits/prism_anomalous_warm_winter_time_series_1sd.pdf Graphic file (ty
 pe pdf)
 <use exhibits/prism_anomalous_warm_winter_time_series_1sd.pdf>
 Package pdftex.def Info: exhibits/prism_anomalous_warm_winter_time_series_1sd.p
-df  used on input line 250.
+df  used on input line 249.
 (pdftex.def)             Requested size: 484.20988pt x 257.4155pt.
 
 [19
@@ -783,7 +786,7 @@ File: exhibits/prism_anomalous_warm_winter_frequency_2sd.pdf Graphic file (type
  pdf)
 <use exhibits/prism_anomalous_warm_winter_frequency_2sd.pdf>
 Package pdftex.def Info: exhibits/prism_anomalous_warm_winter_frequency_2sd.pdf
-  used on input line 258.
+  used on input line 257.
 (pdftex.def)             Requested size: 484.20988pt x 320.71938pt.
  [20
 
@@ -794,7 +797,7 @@ File: exhibits/prism_anomalous_warm_winter_time_series_2sd.pdf Graphic file (ty
 pe pdf)
 <use exhibits/prism_anomalous_warm_winter_time_series_2sd.pdf>
 Package pdftex.def Info: exhibits/prism_anomalous_warm_winter_time_series_2sd.p
-df  used on input line 266.
+df  used on input line 265.
 (pdftex.def)             Requested size: 484.20988pt x 257.33221pt.
  [21
 
@@ -805,7 +808,7 @@ File: exhibits/prism_national_winter_temperature_deviations_by_decade.pdf Graph
 ic file (type pdf)
 <use exhibits/prism_national_winter_temperature_deviations_by_decade.pdf>
 Package pdftex.def Info: exhibits/prism_national_winter_temperature_deviations_
-by_decade.pdf  used on input line 275.
+by_decade.pdf  used on input line 274.
 (pdftex.def)             Requested size: 484.20988pt x 275.81953pt.
  [22
 
@@ -817,7 +820,7 @@ hted.pdf Graphic file (type pdf)
 <use exhibits/prism_national_winter_temperature_deviations_by_decade_area_weigh
 ted.pdf>
 Package pdftex.def Info: exhibits/prism_national_winter_temperature_deviations_
-by_decade_area_weighted.pdf  used on input line 283.
+by_decade_area_weighted.pdf  used on input line 282.
 (pdftex.def)             Requested size: 484.20988pt x 275.81953pt.
  [23
 
@@ -829,7 +832,7 @@ File: exhibits/prism_cross_season_anomaly_correlation.pdf Graphic file (type pd
 f)
 <use exhibits/prism_cross_season_anomaly_correlation.pdf>
 Package pdftex.def Info: exhibits/prism_cross_season_anomaly_correlation.pdf  u
-sed on input line 296.
+sed on input line 295.
 (pdftex.def)             Requested size: 484.20988pt x 195.73082pt.
  [24
 
@@ -840,7 +843,7 @@ File: exhibits/prism_cross_season_trend_correlation.pdf Graphic file (type pdf)
 
 <use exhibits/prism_cross_season_trend_correlation.pdf>
 Package pdftex.def Info: exhibits/prism_cross_season_trend_correlation.pdf  use
-d on input line 304.
+d on input line 303.
 (pdftex.def)             Requested size: 484.20988pt x 195.65576pt.
  [25
 
@@ -851,7 +854,7 @@ File: exhibits/prism_era5_national_winter_temperature_comparison.pdf Graphic fi
 le (type pdf)
 <use exhibits/prism_era5_national_winter_temperature_comparison.pdf>
 Package pdftex.def Info: exhibits/prism_era5_national_winter_temperature_compar
-ison.pdf  used on input line 313.
+ison.pdf  used on input line 312.
 (pdftex.def)             Requested size: 484.20988pt x 275.8814pt.
  [26
 
@@ -863,13 +866,13 @@ pdf Graphic file (type pdf)
 <use exhibits/prism_era5_national_winter_temperature_comparison_area_weighted.p
 df>
 Package pdftex.def Info: exhibits/prism_era5_national_winter_temperature_compar
-ison_area_weighted.pdf  used on input line 321.
+ison_area_weighted.pdf  used on input line 320.
 (pdftex.def)             Requested size: 484.20988pt x 257.40161pt.
  [27
 
  <./exhibits/prism_era5_national_winter_temperature_comparison_area_weighted.pd
 f>]
-Overfull \hbox (19.38724pt too wide) in paragraph at lines 330--330
+Overfull \hbox (19.38724pt too wide) in paragraph at lines 329--329
 \T1/lmr/m/n/10.95 means and keeps only win-ters com-plete on both month and day
  counts. build_main_data_county_year.do
  []
@@ -881,19 +884,19 @@ Overfull \hbox (19.38724pt too wide) in paragraph at lines 330--330
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf  used on inp
-ut line 365.
+ut line 364.
 (pdftex.def)             Requested size: 570.20892pt x 470.24794pt.
 <exhibits/prism_state_long_run_warming.pdf, id=1260, page=1, 570.21031pt x 470.
 2491pt>
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 1>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page1 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 570.20892pt x 470.24794pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 1>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page1 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
  [30
 
@@ -901,17 +904,17 @@ Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page1 used
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 1>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page1 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 1>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page1 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 1>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page1 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
  [31
 
@@ -921,17 +924,17 @@ Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page1 used
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 2>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page2 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 2>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page2 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 2>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page2 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
  [32
 
@@ -941,17 +944,17 @@ Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page2 used
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 3>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page3 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 3>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page3 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 3>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page3 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
  [33
 
@@ -961,17 +964,17 @@ Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page3 used
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 4>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page4 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 4>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page4 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 4>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page4 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
  [34
 
@@ -981,17 +984,17 @@ Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page4 used
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 5>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page5 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 5>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page5 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 5>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page5 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 506.78514pt.
  [35
 
@@ -1001,17 +1004,17 @@ Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page5 used
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 6>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page6 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 399.92688pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 6>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page6 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 399.92688pt.
 File: exhibits/prism_state_long_run_warming.pdf Graphic file (type pdf)
 <use exhibits/prism_state_long_run_warming.pdf, page 6>
 Package pdftex.def Info: exhibits/prism_state_long_run_warming.pdf , page6 used
- on input line 365.
+ on input line 364.
 (pdftex.def)             Requested size: 614.51286pt x 399.92688pt.
  [36
 
@@ -1038,7 +1041,7 @@ lic/lm/lmr17.pfb></usr/share/texmf/fonts/type1/public/lm/lmr9.pfb></usr/share/t
 exmf/fonts/type1/public/lm/lmri10.pfb></usr/share/texmf/fonts/type1/public/lm/l
 mri9.pfb></usr/share/texmf/fonts/type1/public/lm/lmsy10.pfb></usr/share/texmf/f
 onts/type1/public/lm/lmtt10.pfb>
-Output written on report__2026_09_11.pdf (37 pages, 9832160 bytes).
+Output written on report__2026_09_11.pdf (37 pages, 9831383 bytes).
 PDF statistics:
  1448 PDF objects out of 1728 (max. 8388607)
  478 compressed objects within 5 object streams
