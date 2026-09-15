@@ -4,6 +4,14 @@ aggregated to county-year-month.
 
 - Missing daily temp/precip readings are excluded from the relevant
   count/sum/mean (default pandas .agg(sum/mean) logic).
+  PRISM has zero missing daily readings. ERA5 has exactly 16,436 missing 
+  (all six raw variables, every day 1981-2025) but it is a known/resolved gap & 
+  not a processing bug; no need to re-extract/investigate.
+  
+  All of the missing values are geoid 25019 (Nantucket County, MA), which is
+  a small island; ERA5-Land's grid has no valid land pixel whose center falls 
+  inside its county polygon, so reduceRegions() in 04a_extract_era5_county.py 
+  returns null for every band/day there.  
 - Same QA checks as the aggregation script (05), via aggregation_utils.py:
     - flags county-months whose day count doesn't match the calendar), &
     - handles duplicates (drop-if-identical / error-if-any-non-key-column-disagrees).
@@ -197,6 +205,10 @@ def compute_month_derived_vars(daily: pd.DataFrame, config: DatasetConfig) -> pd
         # missing. Same convention as every other aggregation here (n_days /
         # is_incomplete surface it), but understatement bites harder on a total
         # than on a mean, so treat totals for flagged months with care.
+        # Concretely: geoid 25019 (Nantucket, ERA5-only -- see module
+        # docstring) has zero present days every month, so its
+        # precip_mm_total reads as 0.0, not NaN, for all 45 years. Expected,
+        # not a bug.
         f"{config.precip_col}_total": (config.precip_col, "sum"),
         "days_extremely_cold": ("_extremely_cold", "sum"),
         "days_below_freezing_32f": ("_below_freezing_32f", "sum"),
