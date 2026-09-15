@@ -1,9 +1,9 @@
 --------------------------------------------------------------------------------
       name:  <unnamed>
        log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/logs
-> /regression_harvest_per1000.log
+> /regression_harvest_zscore.log
   log type:  text
- opened on:  14 Sep 2026, 13:56:51
+ opened on:  14 Sep 2026, 19:07:44
 
 . 
 . cap mkdir "$tables"
@@ -49,8 +49,10 @@ end of do-file
   require / ftools / reghdfe / estout all present
 
 . 
-. * ---- fail early if the input panel is not where we expect ------------------
-> -
+end of do-file
+
+. do "/tmp/SD1954717.000000"
+
 . capture confirm file "$dataSTATA/main_data_county_year.dta"
 
 . if _rc {
@@ -172,27 +174,177 @@ end of do-file
 
 . do "/tmp/SD1954717.000000"
 
-. capture drop harvest_per1000
+. capture drop _hbase
 
-. generate double harvest_per1000 = harvest_total / population * 1000
-(120,263 missing values generated)
-
-. label variable harvest_per1000 "Deer harvest per 1,000 residents"
+. generate double _hbase = harvest_total if $SFULL & !missing(harvest_total)
+(120,221 missing values generated)
 
 . 
-. * The denominator never divides by zero on this vintage. Asserted rather
-. * than trusted: a rebuilt population block carrying a zero would turn the
-. * rate silently missing instead of erroring.
-. quietly count if $SFULL & population == 0
+. capture drop h_mean_c h_sd_c h_nyr_c
 
-. assert r(N) == 0
+. bysort county_id: egen double h_mean_c = mean(_hbase)
+(68,850 missing values generated)
+
+. bysort county_id: egen double h_sd_c   = sd(_hbase)
+(68,850 missing values generated)
+
+. bysort county_id: egen long   h_nyr_c  = count(_hbase)
+
+. drop _hbase
 
 . 
-. * The rate exists wherever both of its inputs do, and is never negative.
-. assert !missing(harvest_per1000) if $SFULL & !missing(harvest_total, populatio
-> n)
+. label variable h_mean_c "County's own mean harvest, 1981+ reported years"
 
-. assert harvest_per1000 >= 0 if !missing(harvest_per1000)
+. label variable h_sd_c   "County's own SD of harvest, 1981+ reported years"
+
+. label variable h_nyr_c  "Years of reported harvest the moments rest on"
+
+. 
+end of do-file
+
+. do "/tmp/SD1954717.000000"
+
+. capture drop harvest_z
+
+. generate double harvest_z = (harvest_total - h_mean_c) / h_sd_c ///
+>     if $SFULL & !missing(harvest_total) & h_sd_c > 0 & !missing(h_sd_c)
+(120,250 missing values generated)
+
+. label variable harvest_z "Deer harvest, z-scored within county on its own 1981
+> + years"
+
+. 
+end of do-file
+
+. do "/tmp/SD1954717.000000"
+
+. * The z-score exists wherever the harvest and a usable SD do, and nowhere else
+> .
+. assert !missing(harvest_z) if $SFULL & !missing(harvest_total) & ///
+>     h_sd_c > 0 & !missing(h_sd_c)
+
+. assert missing(harvest_z) if !($SFULL)
+
+. assert missing(harvest_z) if missing(harvest_total)
+
+. 
+end of do-file
+
+. do "/tmp/SD1954717.000000"
+
+. capture drop _zm _zs
+
+. bysort county_id: egen double _zm = mean(harvest_z)
+(68,949 missing values generated)
+
+. bysort county_id: egen double _zs = sd(harvest_z)
+(68,949 missing values generated)
+
+. assert abs(_zm)     < 1e-6 if !missing(_zm)
+
+. assert abs(_zs - 1) < 1e-6 if !missing(_zs)
+
+. drop _zm _zs
+
+. 
+end of do-file
+
+. do "/tmp/SD1954717.000000"
+
+. capture drop _tg
+
+. quietly egen byte _tg = tag(county_id) if $SFULL & !missing(harvest_total)
+
+. quietly count if _tg == 1 & h_sd_c == 0
+
+. local _nflat = r(N)
+
+. display as text _newline "  counties with zero harvest variation (no z-score):
+>  `_nflat'"
+
+  counties with zero harvest variation (no z-score): 1
+
+. if `_nflat' > 0 {
+.     list state geoid county_name h_nyr_c h_mean_c if _tg == 1 & h_sd_c == 0, /
+> //
+>         sep(0) noobs
+
+  +----------------------------------------------------+
+  | state   geoid     county_name   h_nyr_c   h_mean_c |
+  |----------------------------------------------------|
+  |    CA   06075   San Francisco        29          0 |
+  +----------------------------------------------------+
+. }
+
+. quietly count if _tg == 1 & h_nyr_c == 1
+
+. local _n1yr = r(N)
+
+. display as text "  counties with a single reported year (no SD): `_n1yr'"
+  counties with a single reported year (no SD): 0
+
+. drop _tg
+
+. 
+end of do-file
+
+. do "/tmp/SD1954717.000000"
+
+. if `_nflat' != 1 | `_n1yr' != 0 {
+=1 invalid name
+r(198);
+
+end of do-file
+
+r(198);
+
+. do "/tmp/SD1954717.000000"
+
+. capture drop _tg
+
+. quietly egen byte _tg = tag(county_id) if $SFULL & !missing(harvest_total)
+
+. quietly count if _tg == 1 & h_sd_c == 0
+
+. local _nflat = r(N)
+
+. display as text _newline "  counties with zero harvest variation (no z-score):
+>  `_nflat'"
+
+  counties with zero harvest variation (no z-score): 1
+
+. if `_nflat' > 0 {
+.     list state geoid county_name h_nyr_c h_mean_c if _tg == 1 & h_sd_c == 0, /
+> //
+>         sep(0) noobs
+
+  +----------------------------------------------------+
+  | state   geoid     county_name   h_nyr_c   h_mean_c |
+  |----------------------------------------------------|
+  |    CA   06075   San Francisco        29          0 |
+  +----------------------------------------------------+
+. }
+
+. quietly count if _tg == 1 & h_nyr_c == 1
+
+. local _n1yr = r(N)
+
+. display as text "  counties with a single reported year (no SD): `_n1yr'"
+  counties with a single reported year (no SD): 0
+
+. drop _tg
+
+. 
+. * On the current vintage the only flat county is San Francisco (06075),
+. * zero harvest in all 29 years it reports, and there are no
+. * single-year counties.
+. if `_nflat' != 1 | `_n1yr' != 0 {
+.     display as error "  NOTE: expected exactly 1 zero-variance county and 0" /
+> //
+>         " single-year counties; got `_nflat' and `_n1yr'. The sample identity"
+>  ///
+>         " asserted in Section 6b will move with this."
+. }
 
 . 
 end of do-file
@@ -205,10 +357,10 @@ end of do-file
 
 . display as text _newline "  county-years with harvest_total == 0, RETAINED her
 > e" ///
->     " (rate == 0), dropped by log() in Table 1: `_nzero'"
+>     " (z-scored, not dropped), dropped by log() in Table 1: `_nzero'"
 
-  county-years with harvest_total == 0, RETAINED here (rate == 0), dropped by lo
-> g() in Table 1: 103
+  county-years with harvest_total == 0, RETAINED here (z-scored, not dropped), d
+> ropped by log() in Table 1: 103
 
 . if `_nzero' > 0 {
 .     preserve
@@ -236,11 +388,11 @@ end of do-file
 . }
 
 . 
-. * Of those, the ones that survive into the estimation sample -- the rest
-. * are missing a winter measure or a control and would have dropped anyway.
+. * Of those, the ones that survive into the estimation sample. Fewer than
+. * Table 2 keeps, because San Francisco's zeros leave with San Francisco.
 . quietly count if $SFULL & harvest_total == 0 & ///
->     !missing(harvest_per1000, mean_winter_temp, population, pop_share_5_9, mea
-> n_temp_c_m3)
+>     !missing(harvest_z, mean_winter_temp, population, pop_share_5_9, mean_temp
+> _c_m3)
 
 . * A GLOBAL, not a local: Section 6b checks the sample against it, and a
 . * local would not survive running the sections separately in the do-editor
@@ -249,45 +401,13 @@ end of do-file
 
 . display as text "  of those, in the estimation sample: $NZEROEST" ///
 >     "  (this table's obs = Table 1's obs + $NZEROEST)"
-  of those, in the estimation sample: 98  (this table's obs = Table 1's obs + 98
+  of those, in the estimation sample: 70  (this table's obs = Table 1's obs + 70
 > )
 
 . 
-. * Counties whose harvest is zero in EVERY year they appear contribute no
-. * within-county variation; county FE absorb them outright. Named, not dropped.
-. preserve
+. global Y    "harvest_z"
 
-.     keep if $SFULL & !missing(harvest_per1000, mean_winter_temp)
-(120,758 observations deleted)
-
-.     quietly bysort geoid: egen double _maxh = max(harvest_total)
-
-.     quietly egen byte _tg = tag(geoid)
-
-.     quietly count if _tg == 1 & _maxh == 0
-
-.     local _nallzero = r(N)
-
-.     if `_nallzero' > 0 {
-.         display as text _newline "  counties with zero harvest in every year (
-> absorbed by county FE):"
-
-  counties with zero harvest in every year (absorbed by county FE):
-.         list state geoid county_name if _tg == 1 & _maxh == 0, sep(0) noobs
-
-  +-------------------------------+
-  | state   geoid     county_name |
-  |-------------------------------|
-  |    CA   06075   San Francisco |
-  +-------------------------------+
-.     }
-
-. restore
-
-. 
-. global Y    "harvest_per1000"
-
-. global YLAB "harvest per 1,000 residents"
+. global YLAB "within-county harvest z-score"
 
 . 
 end of do-file
@@ -353,8 +473,10 @@ end of do-file
 . assert `_nw' == `_nwexp'
 
 . 
-. *--------------------------------- 3b. ---------------------------------------
-. 
+end of do-file
+
+. do "/tmp/SD1954717.000000"
+
 . global agectrl ""
 
 . foreach a in 5_9 10_14 15_19 20_24 25_29 30_34 35_39 40_44 45_49 50_54 ///
@@ -412,10 +534,9 @@ end of do-file
   7. }
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. * ---- the column-number row, built rather than hand-typed -------------------
+. * Panel A's prehead writes it once, above all four panels. Built by loop so
+. * the count follows NCOL and cannot drift out of step with the table.
 . global NCOL = 5
 
 . global numrow "            "
@@ -465,10 +586,10 @@ end of do-file
 .     * exactly once and cannot be duplicated by esttab's own numbering.
 .     if "`P'" == "A" {
   5.         local mode "replace"
-  6.         local head `""% Table 2. Outcome = $YLAB." "% Generated by regressi
-> on_harvest_per1000.do. SEs clustered on county." "% Stars: * p<0.10, ** p<0.05
-> , *** p<0.01." "$numrow" "\midrule" "\multicolumn{$NSPAN}{l}{\textit{Panel `P'
-> : `xl'}} \\""'
+  6.         local head `""% Table 3. Outcome = $YLAB." "% Generated by regressi
+> on_harvest_zscore.do. SEs clustered on county." "% Stars: * p<0.10, ** p<0.05,
+>  *** p<0.01." "$numrow" "\midrule" "\multicolumn{$NSPAN}{l}{\textit{Panel `P':
+>  `xl'}} \\""'
   7.     }
   8.     else {
   9.         local mode "append"
@@ -540,8 +661,8 @@ end of do-file
 .     *--- this panel's coefficient rows ---------------------------------------
 .     * No counts here -- observations, counties and clusters print once in the
 .     * specification block at the bottom (decision 7).
-.     esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_p
-> er1000.tex", ///
+.     esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_z
+> score.tex", ///
 >         `mode' fragment booktabs nomtitles nonumbers noobs collabels(none) ///
 >         keep(`x') coeflabel(`x' "`xl'") ///
 >         cells(b(star fmt(%9.4f)) se(par fmt(%9.4f))) ///
@@ -551,8 +672,8 @@ end of do-file
 >         prehead(`head') ///
 >         postfoot("\addlinespace")
  57. 
-.     esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_p
-> er1000.csv", ///
+.     esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_z
+> score.csv", ///
 >         `mode' plain nomtitles noobs collabels(none) ///
 >         keep(`x') coeflabel(`x' "`x'") ///
 >         cells(b(star fmt(%9.4f)) se(par fmt(%9.4f))) ///
@@ -581,10 +702,10 @@ PANEL A: mean_winter_temp
 ------------------------------------------------------------------------------
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -602,10 +723,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -623,10 +744,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -644,10 +765,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -665,10 +786,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1083
+           e(n_county) =  1082
 
 added scalar:
-            e(n_clust) =  1083
+            e(n_clust) =  1082
 
 added macro:
           e(fe_county) : "X"
@@ -684,10 +805,14 @@ added macro:
 
 added macro:
                e(samp) : "Agency-direct"
+(note: file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/wildlife
+> _weather/regression_harvest_zscore.tex not found)
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
-> ildlife_weather/regression_harvest_per1000.tex)
+> ildlife_weather/regression_harvest_zscore.tex)
+(note: file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/wildlife
+> _weather/regression_harvest_zscore.csv not found)
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
-> ildlife_weather/regression_harvest_per1000.csv)
+> ildlife_weather/regression_harvest_zscore.csv)
 
 --------------------------------------------------------------------------------
 > ------------
@@ -695,22 +820,22 @@ added macro:
 >       (5)   
 --------------------------------------------------------------------------------
 > ------------
-Mean winte~p      -1.3479         -0.2538         -1.5428*        -0.5034       
->   -1.2776   
-                 (0.8631)        (0.9621)        (0.8600)        (0.9496)       
->  (1.0827)   
+Mean winte~p       0.0346**        0.0289*         0.0321*         0.0271       
+>   -0.0048   
+                 (0.0169)        (0.0170)        (0.0167)        (0.0169)       
+>  (0.0186)   
 --------------------------------------------------------------------------------
 > ------------
-Within R-s~d        0.000           0.006           0.017           0.023       
->     0.025   
-R-squ.. FE)         0.916           0.916           0.917           0.917       
->     0.914   
-# of clust~s        1,578           1,578           1,578           1,578       
->     1,083   
-# of count~s        1,578           1,578           1,578           1,578       
->     1,083   
-# of obs           30,370          30,370          30,370          30,370       
->    26,895   
+Within R-s~d        0.000           0.004           0.007           0.010       
+>     0.013   
+R-squ.. FE)         0.501           0.503           0.505           0.507       
+>     0.509   
+# of clust~s        1,577           1,577           1,577           1,577       
+>     1,082   
+# of count~s        1,577           1,577           1,577           1,577       
+>     1,082   
+# of obs           30,342          30,342          30,342          30,342       
+>    26,867   
 --------------------------------------------------------------------------------
 > ------------
 
@@ -721,10 +846,10 @@ PANEL B: warm_winter_1sd
 ------------------------------------------------------------------------------
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -742,10 +867,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -763,10 +888,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -784,10 +909,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -805,10 +930,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1083
+           e(n_county) =  1082
 
 added scalar:
-            e(n_clust) =  1083
+            e(n_clust) =  1082
 
 added macro:
           e(fe_county) : "X"
@@ -825,9 +950,9 @@ added macro:
 added macro:
                e(samp) : "Agency-direct"
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
-> ildlife_weather/regression_harvest_per1000.tex)
+> ildlife_weather/regression_harvest_zscore.tex)
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
-> ildlife_weather/regression_harvest_per1000.csv)
+> ildlife_weather/regression_harvest_zscore.csv)
 
 --------------------------------------------------------------------------------
 > ------------
@@ -835,22 +960,22 @@ added macro:
 >       (5)   
 --------------------------------------------------------------------------------
 > ------------
-Winter tem~y      -0.4556         -0.4705         -0.5409         -0.5325       
->    0.0256   
-                 (1.3229)        (1.3287)        (1.2783)        (1.2853)       
->  (1.5578)   
+Winter tem~y      -0.0258         -0.0403         -0.0281         -0.0411       
+>   -0.0301   
+                 (0.0285)        (0.0286)        (0.0285)        (0.0285)       
+>  (0.0308)   
 --------------------------------------------------------------------------------
 > ------------
-Within R-s~d        0.000           0.006           0.016           0.023       
->     0.025   
-R-squ.. FE)         0.916           0.916           0.917           0.917       
->     0.914   
-# of clust~s        1,578           1,578           1,578           1,578       
->     1,083   
-# of count~s        1,578           1,578           1,578           1,578       
->     1,083   
-# of obs           30,370          30,370          30,370          30,370       
->    26,895   
+Within R-s~d        0.000           0.004           0.007           0.010       
+>     0.013   
+R-squ.. FE)         0.501           0.503           0.505           0.507       
+>     0.509   
+# of clust~s        1,577           1,577           1,577           1,577       
+>     1,082   
+# of count~s        1,577           1,577           1,577           1,577       
+>     1,082   
+# of obs           30,342          30,342          30,342          30,342       
+>    26,867   
 --------------------------------------------------------------------------------
 > ------------
 
@@ -861,10 +986,10 @@ PANEL C: wsi_cold_days
 ------------------------------------------------------------------------------
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -882,10 +1007,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -903,10 +1028,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -924,10 +1049,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -945,10 +1070,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1083
+           e(n_county) =  1082
 
 added scalar:
-            e(n_clust) =  1083
+            e(n_clust) =  1082
 
 added macro:
           e(fe_county) : "X"
@@ -965,9 +1090,9 @@ added macro:
 added macro:
                e(samp) : "Agency-direct"
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
-> ildlife_weather/regression_harvest_per1000.tex)
+> ildlife_weather/regression_harvest_zscore.tex)
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
-> ildlife_weather/regression_harvest_per1000.csv)
+> ildlife_weather/regression_harvest_zscore.csv)
 
 --------------------------------------------------------------------------------
 > ------------
@@ -975,22 +1100,22 @@ added macro:
 >       (5)   
 --------------------------------------------------------------------------------
 > ------------
-Extreme co~s      -0.0542         -0.0854         -0.0555         -0.0785       
->   -0.0670   
-                 (0.2012)        (0.2102)        (0.1974)        (0.2066)       
->  (0.2430)   
+Extreme co~s      -0.0042**       -0.0036*        -0.0046**       -0.0041**     
+>   -0.0046** 
+                 (0.0021)        (0.0021)        (0.0020)        (0.0021)       
+>  (0.0023)   
 --------------------------------------------------------------------------------
 > ------------
-Within R-s~d        0.000           0.006           0.016           0.023       
->     0.025   
-R-squ.. FE)         0.916           0.916           0.917           0.918       
->     0.914   
-# of clust~s        1,578           1,578           1,578           1,578       
->     1,083   
-# of count~s        1,578           1,578           1,578           1,578       
->     1,083   
-# of obs           30,370          30,370          30,370          30,370       
->    26,895   
+Within R-s~d        0.000           0.004           0.007           0.010       
+>     0.013   
+R-squ.. FE)         0.501           0.503           0.505           0.507       
+>     0.509   
+# of clust~s        1,577           1,577           1,577           1,577       
+>     1,082   
+# of count~s        1,577           1,577           1,577           1,577       
+>     1,082   
+# of obs           30,342          30,342          30,342          30,342       
+>    26,867   
 --------------------------------------------------------------------------------
 > ------------
 
@@ -1001,10 +1126,10 @@ PANEL D: winter_severity_index
 ------------------------------------------------------------------------------
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -1022,10 +1147,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -1043,10 +1168,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -1064,10 +1189,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1578
+           e(n_county) =  1577
 
 added scalar:
-            e(n_clust) =  1578
+            e(n_clust) =  1577
 
 added macro:
           e(fe_county) : "X"
@@ -1085,10 +1210,10 @@ added macro:
                e(samp) : "Full panel"
 
 added scalar:
-           e(n_county) =  1083
+           e(n_county) =  1082
 
 added scalar:
-            e(n_clust) =  1083
+            e(n_clust) =  1082
 
 added macro:
           e(fe_county) : "X"
@@ -1105,9 +1230,9 @@ added macro:
 added macro:
                e(samp) : "Agency-direct"
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
-> ildlife_weather/regression_harvest_per1000.tex)
+> ildlife_weather/regression_harvest_zscore.tex)
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
-> ildlife_weather/regression_harvest_per1000.csv)
+> ildlife_weather/regression_harvest_zscore.csv)
 
 --------------------------------------------------------------------------------
 > ------------
@@ -1115,22 +1240,22 @@ added macro:
 >       (5)   
 --------------------------------------------------------------------------------
 > ------------
-Winter sev~x      -0.3431***      -0.3607***      -0.3415***      -0.3550***    
->   -0.3624***
-                 (0.0702)        (0.0721)        (0.0693)        (0.0707)       
->  (0.0733)   
+Winter sev~x      -0.0031***      -0.0025***      -0.0032***      -0.0025***    
+>   -0.0024***
+                 (0.0006)        (0.0006)        (0.0006)        (0.0006)       
+>  (0.0006)   
 --------------------------------------------------------------------------------
 > ------------
-Within R-s~d        0.004           0.011           0.021           0.027       
->     0.030   
-R-squ.. FE)         0.916           0.916           0.917           0.918       
->     0.915   
-# of clust~s        1,578           1,578           1,578           1,578       
->     1,083   
-# of count~s        1,578           1,578           1,578           1,578       
->     1,083   
-# of obs           30,370          30,370          30,370          30,370       
->    26,895   
+Within R-s~d        0.001           0.004           0.008           0.011       
+>     0.013   
+R-squ.. FE)         0.502           0.503           0.505           0.507       
+>     0.510   
+# of clust~s        1,577           1,577           1,577           1,577       
+>     1,082   
+# of count~s        1,577           1,577           1,577           1,577       
+>     1,082   
+# of obs           30,342          30,342          30,342          30,342       
+>    26,867   
 --------------------------------------------------------------------------------
 > ------------
 
@@ -1139,8 +1264,9 @@ end of do-file
 
 . do "/tmp/SD1954717.000000"
 
-. esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_per10
-> 00.tex", ///
+. 
+. esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_zscor
+> e.tex", ///
 >     append fragment booktabs cells(none) nomtitles nonumbers ///
 >     stats(samp n_county N n_clust fe_county fe_styr ctrl_w ctrl_age, ///
 >           fmt(%s %9.0gc %9.0gc %9.0gc %s %s %s %s) ///
@@ -1150,11 +1276,11 @@ end of do-file
 >     prehead("\midrule") ///
 >     postfoot("% end of fragment")
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
-> ildlife_weather/regression_harvest_per1000.tex)
+> ildlife_weather/regression_harvest_zscore.tex)
 
 . 
-. esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_per10
-> 00.csv", ///
+. esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_zscor
+> e.csv", ///
 >     append plain cells(none) nomtitles nonumbers ///
 >     stats(samp n_county N n_clust fe_county fe_styr ctrl_w ctrl_age, ///
 >           fmt(%s %9.0gc %9.0gc %9.0gc %s %s %s %s) ///
@@ -1163,7 +1289,7 @@ end of do-file
 >                  "Weather controls" "Age shares")) ///
 >     title("Specification")
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
-> ildlife_weather/regression_harvest_per1000.csv)
+> ildlife_weather/regression_harvest_zscore.csv)
 
 . 
 end of do-file
@@ -1188,10 +1314,10 @@ end of do-file
   7.     }
   8.     local _prev = `_thisn'
   9. }
-    mean_winter_temp           30,370
-    warm_winter_1sd            30,370
-    wsi_cold_days              30,370
-    winter_severity_index      30,370
+    mean_winter_temp           30,342
+    warm_winter_1sd            30,342
+    wsi_cold_days              30,342
+    winter_severity_index      30,342
 
 . display as text "  all four panels rest on the same estimation sample"
   all four panels rest on the same estimation sample
@@ -1209,44 +1335,73 @@ end of do-file
 . display as text _newline "  cols 1-4: `_nf' obs | `_cf' counties | `_nsf' stat
 > es | `_y0'-`_y1'"
 
-  cols 1-4: 30370 obs | 1578 counties | 19 states | 1982-2025
+  cols 1-4: 30342 obs | 1577 counties | 19 states | 1982-2025
 
 . display as text "    states: `_sf'"
     states: AR CA DE FL GA IA IN KY MD MI MN MO NC NY OH TN VA WI WV
 
 . display as text "  col 5:    `_na2' obs | `_ca' counties | `_nsa' states"
-  col 5:    26895 obs | 1083 counties | 14 states
+  col 5:    26867 obs | 1082 counties | 14 states
 
 . display as text "    states: `_sa'"
     states: AR CA DE IN KY MD MO NC NY OH TN VA WI WV
 
 . 
-. * Expected on the current vintage: 30,370 / 1,578 / 19 and 26,895 / 1,083 / 14
+. * Expected on the current vintage: 30,342 / 1,577 / 19 and 26,867 / 1,082 / 14
 > .
-. if `_nf' != 30370 | `_cf' != 1578 {
-.     display as error "  NOTE: expected 30,370 obs / 1,578 counties in cols 1-4
+. if `_nf' != 30342 | `_cf' != 1577 {
+.     display as error "  NOTE: expected 30,342 obs / 1,577 counties in cols 1-4
 > ;" ///
 >         " got `_nf' / `_cf'. Check the merged-panel vintage before using this 
 > table."
 . }
 
-. if `_na2' != 26895 | `_ca' != 1083 {
-.     display as error "  NOTE: expected 26,895 obs / 1,083 counties in col 5;" 
+. if `_na2' != 26867 | `_ca' != 1082 {
+.     display as error "  NOTE: expected 26,867 obs / 1,082 counties in col 5;" 
 > ///
 >         " got `_na2' / `_ca'. Check the merged-panel vintage before using this
 >  table."
 . }
 
 . 
-. * Decision 1: this sample must be Table 1's plus the retained zeros, exactly.
+. * --- tie to Table 2: this sample is Table 2's less the counties with no SD.
+. quietly count if $SFULL & !missing(mean_winter_temp, population, pop_share_5_9
+> , mean_temp_c_m3) ///
+>     & !missing(harvest_total, population)
+
+. local _nrate = r(N)
+
+. quietly count if $SFULL & !missing(mean_winter_temp, population, pop_share_5_9
+> , mean_temp_c_m3) ///
+>     & !missing(harvest_total, population) & missing($Y)
+
+. local _nnosd = r(N)
+
+. display as text _newline "  Table 2's sample: `_nrate' obs; of those, `_nnosd'
+>  have no z-score" ///
+>     " (zero-variance counties)"
+
+  Table 2's sample: 30370 obs; of those, 28 have no z-score (zero-variance count
+> ies)
+
+. assert `_nf' == `_nrate' - `_nnosd'
+
+. if `_nrate' != 30370 {
+.     display as error "  NOTE: expected 30,370 obs in Table 2's sample; got `_n
+> rate'." ///
+>         " The two tables have diverged for some reason other than the missing 
+> SDs."
+. }
+
+. 
+. * --- tie to Table 1: this sample is Table 1's plus the retained zeros.
 . quietly count if $SFULL & harvest_total > 0 & ///
 >     !missing($Y, mean_winter_temp, population, pop_share_5_9, mean_temp_c_m3)
 
 . local _nnozero = r(N)
 
-. display as text _newline "  excluding the retained zeros: `_nnozero' obs" ///
+. display as text "  excluding the retained zeros: `_nnozero' obs" ///
 >     "  (Table 1's sample -- log(harvest) drops exactly these zeros)"
-
   excluding the retained zeros: 30272 obs  (Table 1's sample -- log(harvest) dro
 > ps exactly these zeros)
 
@@ -1255,10 +1410,9 @@ end of do-file
 . if `_nnozero' != 30272 {
 .     display as error "  NOTE: expected 30,272 obs once the zeros come out, to 
 > match" ///
->         " regression_log_harvest.do; got `_nnozero'. The two tables have diver
-> ged" ///
->         " for some reason other than the zeros -- find it before comparing the
-> m."
+>         " regression_log_harvest.do; got `_nnozero'. The tables have diverged"
+>  ///
+>         " for some reason other than the zeros and the missing SDs."
 . }
 
 . 
@@ -1289,11 +1443,11 @@ end of do-file
 . *--------------------------------- 6d. ---------------------------------------
 . 
 . * How unbalanced is the panel? Reported -- imbalance is accepted
-. * at this stage, but the shape of it should be on the record.
+. * at this stage. 
 . preserve
 
 .     keep if $SFULL & !missing($Y, mean_winter_temp)
-(120,758 observations deleted)
+(120,786 observations deleted)
 
 .     quietly bysort geoid: generate int _nyr = _N
 
@@ -1311,15 +1465,15 @@ end of do-file
       Percentiles      Smallest
  1%            2              2
  5%            2              2
-10%            2              2       Obs               1,578
-25%            6              2       Sum of Wgt.       1,578
+10%            2              2       Obs               1,577
+25%            6              2       Sum of Wgt.       1,577
 
-50%           20                      Mean           19.24588
-                        Largest       Std. Dev.      12.13281
+50%           20                      Mean           19.24033
+                        Largest       Std. Dev.      12.13466
 75%           33             42
-90%           33             42       Variance       147.2052
-95%           34             42       Skewness       .0489842
-99%           42             42       Kurtosis       1.639483
+90%           33             42       Variance       147.2499
+95%           34             42       Skewness       .0501274
+99%           42             42       Kurtosis       1.639446
 
 . restore
 
@@ -1327,7 +1481,7 @@ end of do-file
 . preserve
 
 .     keep if $SFULL & !missing($Y, mean_winter_temp)
-(120,758 observations deleted)
+(120,786 observations deleted)
 
 .     contract year
 
@@ -1340,34 +1494,34 @@ end of do-file
   +--------------+
   | year   _freq |
   |--------------|
-  | 1982     495 |
-  | 1983     495 |
-  | 1984     495 |
-  | 1985     495 |
-  | 1986     495 |
-  | 1987     570 |
-  | 1988     570 |
-  | 1989     570 |
-  | 1990     615 |
-  | 1991     690 |
-  | 1992     690 |
-  | 1993     690 |
-  | 1994     690 |
-  | 1995     690 |
-  | 1996     690 |
-  | 1997     690 |
-  | 1998     690 |
-  | 1999     690 |
-  | 2000     690 |
-  | 2001     844 |
-  | 2002     958 |
-  | 2003     958 |
-  | 2004     993 |
-  | 2005    1179 |
-  | 2006    1179 |
-  | 2007    1179 |
-  | 2008    1179 |
-  | 2009    1179 |
+  | 1982     494 |
+  | 1983     494 |
+  | 1984     494 |
+  | 1985     494 |
+  | 1986     494 |
+  | 1987     569 |
+  | 1988     569 |
+  | 1989     569 |
+  | 1990     614 |
+  | 1991     689 |
+  | 1992     689 |
+  | 1993     689 |
+  | 1994     689 |
+  | 1995     689 |
+  | 1996     689 |
+  | 1997     689 |
+  | 1998     689 |
+  | 1999     689 |
+  | 2000     689 |
+  | 2001     843 |
+  | 2002     957 |
+  | 2003     957 |
+  | 2004     992 |
+  | 2005    1178 |
+  | 2006    1178 |
+  | 2007    1178 |
+  | 2008    1178 |
+  | 2009    1178 |
   | 2010    1124 |
   | 2011    1123 |
   | 2012    1122 |
@@ -1393,9 +1547,9 @@ end of do-file
 . 
 . codebook $Y if $SFULL, compact
 
-Variable        Obs Unique      Mean  Min       Max  Label
+Variable     Obs Unique       Mean        Min       Max  Label
 --------------------------------------------------------------------------------
-harvest~1000  30865  30745  83.05818    0  1802.071  Deer harvest per 1,000 r...
+harvest_z  30878  29939  -1.05e-17  -3.303825  4.223393  Deer harvest, z-scor...
 --------------------------------------------------------------------------------
 
 . summarize $Y mean_winter_temp warm_winter_1sd wsi_cold_days ///
@@ -1403,7 +1557,7 @@ harvest~1000  30865  30745  83.05818    0  1802.071  Deer harvest per 1,000 r...
 
     Variable |        Obs        Mean    Std. Dev.       Min        Max
 -------------+---------------------------------------------------------
-harvest~1000 |     30,865    83.05818    119.7037          0   1802.071
+   harvest_z |     30,878   -1.05e-17    .9740787  -3.303825   4.223393
 mean_winte~p |    136,752    1.487616    6.411019  -19.29825   22.46676
 warm_win~1sd |    136,752    .1800778    .3842537          0          1
 wsi_cold_d~s |    136,752    6.486348    11.79717          0         95
@@ -1412,138 +1566,231 @@ winter_sev~x |    136,752    11.36244    26.27663          0        208
 . 
 . *--------------------------------- 6f. ---------------------------------------
 . 
-. /* The rate's tails, listed rather than summarized (decision 14). A
->    per-capita outcome in levels is the one place in this table where a
->    handful of county-years can move a coefficient, and the log outcome in
->    Table 1 compresses that by construction. The counties at the top should
->    be rural, high-harvest and small; the counties at the bottom should be
->    independent cities and urban counties. Anything else in either list is a
->    data problem, not a tail.                                             */
+. /* Decision 14, asserted rather than asserted in a comment. Under county
+>    fixed effects h_mean_c/h_sd_c is a county constant and is absorbed, so
+>    regressing the z-score is the same regression as regressing
+>    harvest/SD. Both are run on the col-4 spec and the coefficients have to
+>    agree to numerical precision. If this ever fails, the moments are NOT
+>    county-constant -- which would mean something has gone wrong in Section
+>    2a -- and the interpretation of the whole table changes.             */
 . 
-. display as text _newline "  rate distribution in the estimation sample:"
+. capture drop harvest_over_sd
 
-  rate distribution in the estimation sample:
+. generate double harvest_over_sd = harvest_total / h_sd_c if !missing($Y)
+(120,250 missing values generated)
 
-. summarize $Y if $SFULL & !missing(mean_winter_temp, population, pop_share_5_9,
->  mean_temp_c_m3), detail
+. label variable harvest_over_sd "Harvest divided by the county's own SD -- QC t
+> win of harvest_z"
 
-              Deer harvest per 1,000 residents
--------------------------------------------------------------
-      Percentiles      Smallest
- 1%     .0473452              0
- 5%     .8366134              0
-10%     2.924516              0       Obs              30,370
-25%     12.44029              0       Sum of Wgt.      30,370
+. 
+. quietly reghdfe $Y $pvarD $wctrl $agectrl if $SFULL, ///
+>     absorb(county_id state_id#year) vce(cluster county_id)
 
-50%      41.5607                      Mean           83.69129
-                        Largest       Std. Dev.      120.1493
-75%     105.0471       1612.237
-90%     215.6701       1616.512       Variance       14435.87
-95%     312.2018           1660       Skewness       3.531281
-99%     588.4024       1802.071       Kurtosis       23.71347
+. local _bz = _b[$pvarD]
 
+. local _sez = _se[$pvarD]
+
+. 
+. quietly reghdfe harvest_over_sd $pvarD $wctrl $agectrl if $SFULL, ///
+>     absorb(county_id state_id#year) vce(cluster county_id)
+
+. local _bs = _b[$pvarD]
+
+. local _ses = _se[$pvarD]
+
+. 
+. display as text _newline "  rescaling identity (Panel D, col 4 spec):"
+
+  rescaling identity (Panel D, col 4 spec):
+
+. display as text "    z-score        b = " %12.8f `_bz' "   se = " %12.8f `_sez
+> '
+    z-score        b =  -0.00254873   se =   0.00059559
+
+. display as text "    harvest / SD   b = " %12.8f `_bs' "   se = " %12.8f `_ses
+> '
+    harvest / SD   b =  -0.00254873   se =   0.00059559
+
+. assert reldif(`_bz', `_bs')   < 1e-7
+
+. assert reldif(`_sez', `_ses') < 1e-7
+
+. display as text "    identical -- this table is Table 2 reweighted by 1/SD, no
+> t new evidence"
+    identical -- this table is Table 2 reweighted by 1/SD, not new evidence
+
+. 
+. drop harvest_over_sd
+
+. 
+. *--------------------------------- 6g. ---------------------------------------
+. 
+. /* What the 1/SD weights actually look like, and whether the estimates
+>    survive restricting them. Decision 14: reported every run, nothing
+>    imposed. The weights are the reason this table is not simply a units
+>    change.                                                               */
 . 
 . preserve
 
 .     keep if $SFULL & !missing($Y, mean_winter_temp, population, pop_share_5_9,
 >  mean_temp_c_m3)
-(120,758 observations deleted)
+(120,786 observations deleted)
 
-.     gsort -$Y
-
-.     display as text _newline "  highest 10 county-year rates:"
-
-  highest 10 county-year rates:
-
-.     list state county_name year harvest_total population $Y in 1/10, sep(0) no
-> obs
-
-  +-----------------------------------------------------------+
-  | state   county~e   year   harves~l   popula~n   harv~1000 |
-  |-----------------------------------------------------------|
-  |    VA   Highland   1992       4698       2607   1802.0713 |
-  |    VA   Highland   2002       4067       2450        1660 |
-  |    VA   Highland   1991       4190       2592   1616.5123 |
-  |    VA   Highland   1995       4137       2566   1612.2369 |
-  |    WI   Florence   1991       7695       4795   1604.7967 |
-  |    WI   Florence   1995       8327       5197   1602.2705 |
-  |    VA   Highland   1996       4002       2560   1563.2813 |
-  |    VA   Highland   1990       3881       2635   1472.8653 |
-  |    VA   Highland   2003       3532       2490   1418.4739 |
-  |    VA   Highland   2001       3535       2530   1397.2332 |
-  +-----------------------------------------------------------+
-
-.     gsort $Y
-
-.     display as text _newline "  lowest 10 county-year rates:"
-
-  lowest 10 county-year rates:
-
-.     list state county_name year harvest_total population $Y in 1/10, sep(0) no
-> obs
-
-  +---------------------------------------------------------------+
-  | state     county_name   year   harves~l   popula~n   har~1000 |
-  |---------------------------------------------------------------|
-  |    VA   Manassas Park   2007          0      12677          0 |
-  |    CA   San Francisco   1991          0     729708          0 |
-  |    WI       Menominee   2010          0       4263          0 |
-  |    CA   San Francisco   2005          0     763016          0 |
-  |    WI       Menominee   1987          0       3520          0 |
-  |    KY          Leslie   1997          0      12643          0 |
-  |    KY          Estill   1990          0      14674          0 |
-  |    CA   San Francisco   1999          0     774716          0 |
-  |    VA       Dickenson   1984          0      19850          0 |
-  |    CA   San Francisco   1984          0     713200          0 |
-  +---------------------------------------------------------------+
+.     quietly egen byte _tg = tag(geoid)
 
 . 
-.     * The denominator itself: a rate is only as stable as the population
-.     * underneath it, so the smallest denominators are named too.
-.     gsort population
+.     display as text _newline "  county SD of harvest, h_sd_c (estimation sampl
+> e):"
 
-.     display as text _newline "  smallest 10 denominators (population):"
+  county SD of harvest, h_sd_c (estimation sample):
 
-  smallest 10 denominators (population):
+.     summarize h_sd_c if _tg == 1, detail
 
-.     list state county_name year harvest_total population $Y in 1/10, sep(0) no
-> obs
+      County's own SD of harvest, 1981+ reported years
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%       4.0609       .7071068
+ 5%     21.92031       1.166667
+10%     51.71623       1.414214       Obs               1,577
+25%     133.3303       1.640399       Sum of Wgt.       1,577
 
-  +-----------------------------------------------------------+
-  | state   county~e   year   harves~l   popula~n   harv~1000 |
-  |-----------------------------------------------------------|
-  |    CA     Alpine   1984        428       1093    391.5828 |
-  |    CA     Alpine   1990        373       1106   337.25136 |
-  |    CA     Alpine   1983        380       1120   339.28571 |
-  |    CA     Alpine   1987        509       1143   445.31934 |
-  |    CA     Alpine   1982        410       1148   357.14286 |
-  |    CA     Alpine   1992        392       1154   339.68804 |
-  |    CA     Alpine   1985        259       1157    223.8548 |
-  |    CA     Alpine   1989        388       1162   333.90706 |
-  |    CA     Alpine   1991        364       1162   313.25301 |
-  |    CA     Alpine   1988        462       1163    397.2485 |
-  +-----------------------------------------------------------+
+50%     292.7439                      Mean           479.9199
+                        Largest       Std. Dev.      560.2683
+75%     612.7319       3662.813
+90%     1125.411       3812.027       Variance       313900.6
+95%     1635.383       4178.915       Skewness       2.631456
+99%     2886.735        4507.87       Kurtosis       12.23601
+
+. 
+.     capture drop _w
+
+.     generate double _w = 1 / h_sd_c
+
+.     quietly summarize _w if _tg == 1, detail
+
+.     local _p1  = r(p1)
+
+.     local _p99 = r(p99)
+
+.     display as text "  implied county weight 1/h_sd_c: p1 = " %9.5f `_p1' ///
+>         "  p99 = " %9.5f `_p99' "  ratio = " %6.0f (`_p99'/`_p1')
+  implied county weight 1/h_sd_c: p1 =   0.00035  p99 =   0.24625  ratio =    71
+> 1
+
+. 
+.     foreach k in 3 5 10 {
+  2.         quietly count if _tg == 1 & h_nyr_c < `k'
+  3.         local _ck = r(N)
+  4.         quietly count if h_nyr_c < `k'
+  5.         local _rk = r(N)
+  6.         display as text "  counties whose moments rest on < `k' years: `_ck
+> '" ///
+>             "  (`_rk' rows)"
+  7.     }
+  counties whose moments rest on < 3 years: 170  (340 rows)
+  counties whose moments rest on < 5 years: 237  (541 rows)
+  counties whose moments rest on < 10 years: 397  (1504 rows)
+
+. 
+.     * one row per county from here on, so -in 1/10- means ten counties
+.     quietly keep if _tg == 1
+
+.     display as text _newline "  the ten heaviest-weighted counties (smallest S
+> D):"
+
+  the ten heaviest-weighted counties (smallest SD):
+
+.     gsort h_sd_c
+
+.     list state county_name h_nyr_c h_mean_c h_sd_c in 1/10, sep(0) noobs
+
+  +---------------------------------------------------------+
+  | state     county_name   h_nyr_c    h_mean_c      h_sd_c |
+  |---------------------------------------------------------|
+  |    MN            Rock         2       252.5   .70710678 |
+  |    VA   Manassas Park         9   .88888889   1.1666667 |
+  |    MN          Nobles         2         416   1.4142136 |
+  |    VA      Alexandria        11   3.9090909   1.6403991 |
+  |    VA          Norton        11           5   1.8973666 |
+  |    VA         Norfolk        11   1.6363636   2.0135902 |
+  |    VA    Falls Church        11   3.1818182    2.040499 |
+  |    MN       Pipestone         2       377.5   2.1213203 |
+  |    VA      Waynesboro        11   3.5454545   2.5045413 |
+  |    VA         Bristol        11   5.4545455     2.65946 |
+  +---------------------------------------------------------+
 
 . restore
+
+. 
+. * Sensitivity, Panel D and Panel A, col 4 spec. Displayed, never asserted:
+. * these are the numbers the [DECIDE] in 14 needs, not a pass/fail.
+. display as text _newline "  sensitivity of the col-4 estimate to the weighting
+> :"
+
+  sensitivity of the col-4 estimate to the weighting:
+
+. foreach P in A D {
+  2.     display as text "    Panel `P' (${pvar`P'}):"
+  3.     quietly reghdfe $Y ${pvar`P'} $wctrl $agectrl if $SFULL, ///
+>         absorb(county_id state_id#year) vce(cluster county_id)
+  4.     display as text "      as built           b = " %9.4f _b[${pvar`P'}] //
+> /
+>         "  se = " %9.4f _se[${pvar`P'}] "  N = " %9.0fc e(N)
+  5.     foreach k in 5 10 {
+  6.         quietly reghdfe $Y ${pvar`P'} $wctrl $agectrl if $SFULL & h_nyr_c >
+> = `k', ///
+>             absorb(county_id state_id#year) vce(cluster county_id)
+  7.         display as text "      moments from `k'+ yrs  b = " %9.4f _b[${pvar
+> `P'}] ///
+>             "  se = " %9.4f _se[${pvar`P'}] "  N = " %9.0fc e(N)
+  8.     }
+  9. }
+    Panel A (mean_winter_temp):
+      as built           b =    0.0271  se =    0.0169  N =    30,342
+      moments from 5+ yrs  b =    0.0287  se =    0.0170  N =    29,801
+      moments from 10+ yrs  b =    0.0140  se =    0.0171  N =    28,838
+    Panel D (winter_severity_index):
+      as built           b =   -0.0025  se =    0.0006  N =    30,342
+      moments from 5+ yrs  b =   -0.0025  se =    0.0006  N =    29,801
+      moments from 10+ yrs  b =   -0.0024  se =    0.0006  N =    28,838
+
+. 
+. * And the nesting check decision 10 refers to: the two WSI components entered
+. * jointly, which neither Panel C nor Panel D does.
+. display as text _newline "  Panels C and D components entered jointly (col 4 s
+> pec):"
+
+  Panels C and D components entered jointly (col 4 spec):
+
+. quietly reghdfe $Y wsi_cold_days wsi_snow_days $wctrl $agectrl if $SFULL, ///
+>     absorb(county_id state_id#year) vce(cluster county_id)
+
+. display as text "    wsi_cold_days  b = " %9.4f _b[wsi_cold_days] ///
+>     "  se = " %9.4f _se[wsi_cold_days]
+    wsi_cold_days  b =   -0.0033  se =    0.0021
+
+. display as text "    wsi_snow_days  b = " %9.4f _b[wsi_snow_days] ///
+>     "  se = " %9.4f _se[wsi_snow_days]
+    wsi_snow_days  b =   -0.0024  se =    0.0007
 
 . 
 . display as text _newline "  Table written to:"
 
   Table written to:
 
-. display as text "    $tables/wildlife_weather/regression_harvest_per1000.tex"
+. display as text "    $tables/wildlife_weather/regression_harvest_zscore.tex"
     /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/wildlife_weather
-> /regression_harvest_per1000.tex
+> /regression_harvest_zscore.tex
 
-. display as text "    $tables/wildlife_weather/regression_harvest_per1000.csv"
+. display as text "    $tables/wildlife_weather/regression_harvest_zscore.csv"
     /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/wildlife_weather
-> /regression_harvest_per1000.csv
+> /regression_harvest_zscore.csv
 
 . 
 . log close
       name:  <unnamed>
        log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/logs
-> /regression_harvest_per1000.log
+> /regression_harvest_zscore.log
   log type:  text
- closed on:  14 Sep 2026, 14:02:32
+ closed on:  14 Sep 2026, 19:18:51
 --------------------------------------------------------------------------------

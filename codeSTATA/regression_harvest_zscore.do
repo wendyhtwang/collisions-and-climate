@@ -1,6 +1,6 @@
 /*==============================================================================
 
-FILE NAME:   regression_harvest_per1000.do
+FILE NAME:   regression_harvest_zscore.do
 
 PROJECT: Weather Changes, Ungulate Populations, & Vehicle Collisions —
 	 Ungulate Population & DVC Panel —
@@ -9,14 +9,16 @@ PROJECT: Weather Changes, Ungulate Populations, & Vehicle Collisions —
 CURRENT LEAD: Nicole Martinez
 
 PURPOSE:  Regression table: the effect of winter conditions on county deer
-          harvest, outcome = harvest per 1,000 residents, estimated on the
-          FULL unbalanced panel rather than the 2005-2014 balanced window.
+          harvest, outcome = the WITHIN-COUNTY z-score of harvest,
+          estimated on the FULL unbalanced panel rather than the 2005-2014
+          balanced window.
 
-          Companion to regression_log_harvest.do, which runs the same
-          4 x 5 grid on log(harvest_total). The two files differ in
-          Section 2 (the outcome) and in the QC that references it;
-          everything else is deliberately identical so the two tables can
-          be read side by side.
+          Third companion to regression_log_harvest.do (Table 1) and
+          regression_harvest_per1000.do (Table 2), which run the same
+          4 x 5 grid on log(harvest_total) and on harvest per 1,000
+          residents. The three files differ in Section 2 (the outcome) and
+          in the QC that references it; everything else is deliberately
+          identical so the three tables can be read side by side.
 
           The table is 4 PANELS x 5 COLUMNS. Panels vary the winter
           measure; columns vary the specification.
@@ -43,40 +45,40 @@ SOURCE FILES USED:
            touched here; the collision block is untouched.
 
 OUTPUT:
-  $tables/wildlife_weather/regression_harvest_per1000.tex   LaTeX fragment
-  $tables/wildlife_weather/regression_harvest_per1000.csv   plain mirror
+  $tables/wildlife_weather/regression_harvest_zscore.tex   LaTeX fragment
+  $tables/wildlife_weather/regression_harvest_zscore.csv   plain mirror
 
 CHANGELOG:
 
-09/10/2026 — Nicole: First pass. Mirror of regression_log_harvest.do with
-                     the outcome as harvest per 1,000 residents, on the
-                     balanced 2005-2014 sample, 4 panels x 6 columns.
-
-09/14/2026 — Nicole: Rewritten to follow regression_log_harvest.do after
-                     the meeting with Eyal. Full unbalanced panel from
-                     1981 (2); column 5 keyed on source_harvest rather
-                     than main_sample_agency (3); old county+year column
+09/14/2026 — Nicole: Written to follow regression_log_harvest.do and
+                     regression_harvest_per1000.do after the meeting with
+                     Eyal. Full unbalanced panel from 1981 (2); column 5
+                     keyed on source_harvest rather than
+                     main_sample_agency (3); old county+year column
                      removed (4); weather control row renamed and variable
                      definitions moved out of the stub labels into the
                      table notes (5); specification block moved to the
-                     bottom and counts reported once (7).
+                     bottom and counts reported once (7). The moments move
+                     with the sample: they are now the county's own 1981+
+                     mean and SD, not the 2005-2014 window's (13).
 
 ==============================================================================
 DECISIONS TAKEN IN THIS SCRIPT
 ==============================================================================
 
-1. [DECIDE] THE REPORTED ZEROS ARE KEPT.
+1. [DECIDE] THE REPORTED ZEROS ARE KEPT, BUT ONE COUNTY STILL DROPS.
 
-   103 county-years in 1981+ report a harvest of exactly 0; 98 of them have 
-   the full set of right-hand-side variables and enter here -- CA (30), 
-   VA (27), WI (19), KY (14), FL (4), NC (4), spanning 1982-2020 -- against 
-   30,272 rows in Table 1. This table therefore runs on 30,370 county-years / 
-   1,578 counties, while Table 1 on 30,272 / 1,577. Section 2 counts them and 
-   Section 6 asserts the difference is exactly the zeros and nothing else.
+   The z-score is defined at a harvest of 0, so the 103 reported zeros in
+   1981+ are retained here as they are in Table 2, not dropped as log()
+   drops them in Table 1. Only 70 of them survive into the estimation
+   sample, against 98 in Table 2, and the 28-row difference is entirely
+   San Francisco (06075) -- see decision 13. This table therefore runs on
+   30,342 county-years / 1,577 counties: Table 2's 30,370 / 1,578 less
+   San Francisco, and Table 1's 30,272 / 1,577 plus 70 retained zeros.
+   Section 6b asserts both identities.
 
    [DEFERRED] Eyal's count-model suggestion (Poisson / ppmlhdfe) for
-   Table 1's zeros is not attempted here either; the rate sidesteps the
-   problem rather than solving it.
+   Table 1's zeros is not attempted here either.
 
 2. THE SAMPLE IS THE FULL UNBALANCED PANEL FROM 1981, NOT A BALANCED
    WINDOW.
@@ -90,7 +92,11 @@ DECISIONS TAKEN IN THIS SCRIPT
    year t is built from December of t-1, and the PRISM extraction begins
    in 1981, so every 1981 row is missing all four winter measures. 1981
    contributes zero observations to every column. Reported in Section 6
-   so the gap is visible.
+   so the gap is visible rather than mysterious.
+
+   Imbalance costs this table more than it costs the other two, because
+   the outcome's own moments are estimated county by county on whatever
+   years that county contributes. See decision 14.
 
 3. [DECIDE] COLUMN 5 USES source_harvest, NOT main_sample_agency.
 
@@ -104,6 +110,11 @@ DECISIONS TAKEN IN THIS SCRIPT
    That gives 14 agency-direct states against 19 in the full panel. The
    five dropped are the CWD gap-fill states (FL, GA, IA, MI, MN) --
    see deer_harvest_national_append.do [DECIDE] 8.
+
+   NOTE that the moments in decision 13 are computed ONCE, on the full
+   panel, and are NOT recomputed on the agency-direct subsample. Column 5
+   is a restriction of the same outcome variable, not a different one, so
+   its coefficient stays comparable with columns 1-4 down the column.
 
 4. COLUMN 1 OF THE OLD TABLE (county FE + year FE) IS REMOVED.
 
@@ -141,15 +152,22 @@ DECISIONS TAKEN IN THIS SCRIPT
    The cluster count prints once, in the specification block at the
    bottom, not inside each panel.
 
-8. THE TWO R-SQUARED ROWS MEASURE DIFFERENT THINGS, AND BOTH STAY.
+8. THE TWO R-SQUARED ROWS MEASURE DIFFERENT THINGS, AND BOTH STAY --
+   BUT THE SECOND ONE DOES NOT MEAN HERE WHAT IT MEANS IN TABLES 1 AND 2.
 
-   Same treatment as Table 1, and the same behavior on this outcome:
-   e(r2_within) is specific to the panel's own regressor and does vary
-   across panels. In column 1 it reads 0.000 / 0.000 / 0.000 / 0.004
-   for panels A/B/C/D, with D the largest, the same ordering the log
-   table shows. e(r2) sits near 0.92 everywhere because county and
-   state x year fixed effects absorb most of the rate. Both are reported
-   so the contrast is visible.
+   e(r2_within) behaves as it does in the other two tables: it is
+   specific to the panel's own regressor and does vary across panels. In
+   column 1 it reads 0.000 / 0.000 / 0.000 / 0.001 for panels A/B/C/D,
+   with D the largest, the same ordering both other tables show.
+
+   e(r2) does NOT. It sits near 0.50 here against 0.92 in Table 2 and
+   0.94 in Table 1, and that is arithmetic rather than a finding: the
+   outcome is already centred within county by construction, so the
+   county fixed effects have almost no level left to absorb and e(r2) is
+   picking up state x year variation and nothing else. It is NOT
+   evidence that this specification explains less. Reported for
+   consistency with the other two tables; it should not be read across
+   the three.
 
 9. THE WINTER ANOMALY IS "1 SD OR MORE", AS INTENDED.
 
@@ -158,14 +176,25 @@ DECISIONS TAKEN IN THIS SCRIPT
    1 SD, but there are zero exact ties, so ">" and ">=" select the same
    county-years.
 
+   Note that warm_winter_1sd standardizes the REGRESSOR against county
+   norms and this table standardizes the OUTCOME against them. In Panel B
+   both sides are county-standardized; the coefficient is then "SDs of
+   own harvest per mild-winter year", which is the most directly
+   interpretable cell in the table and also the one most exposed to
+   decision 14.
+
 10. PANELS C AND D ARE NESTED, DELIBERATELY.
 
     winter_severity_index = wsi_cold_days + wsi_snow_days, so Panel C's
     regressor is a component of Panel D's. They are reported as separate
-    panels, never entered jointly. Panel D moving relative to Panel C is 
-    the snow component doing work -- and on this outcome it is doing ALL of 
-    it: Panel C is a precise zero in every column while Panel D is significant 
-    at 1% in every column.
+    panels, never entered jointly. Panel D moving relative to Panel C is
+    the snow component doing work.
+
+    On this outcome Panel C is significant at 5% on its own in four of
+    five columns -- stronger than in either other table. Section 6g
+    enters the two components jointly and finds that significance does
+    not survive holding snow days fixed, the same result Table 1 gives.
+    Panel C should not be read as a cold-stress effect here either.
 
 11. [DECIDE] WINTER DATING
 
@@ -176,7 +205,7 @@ DECISIONS TAKEN IN THIS SCRIPT
     condition. If that is the intended timing every panel needs an L1.
     and the whole table shifts. Can be a one-line change in Section 4.
 
-    Whatever is decided applies to Table 1 and Table 2 together.
+    Whatever is decided applies to Tables 1, 2 and 3 together.
 
 12. THE FRAGMENT MUST END ON A COMMENT LINE.
 
@@ -186,22 +215,65 @@ DECISIONS TAKEN IN THIS SCRIPT
     ending in a blank line emits a \par inside the tabular. Both produce
     "Misplaced \noalign". A comment line ends cleanly.
 
-13. [DECIDE] THE DENOMINATOR IS CONTEMPORANEOUS COUNTY RESIDENT
-    POPULATION -- WHICH IS ALSO WHAT THE AGE SHARES ARE SHARES OF.
+13. [DECIDE] THE MOMENTS ARE THE COUNTY'S OWN 1981+ MEAN AND SD,
+    COMPUTED ONCE ON EVERY YEAR THE COUNTY REPORTS HARVEST.
 
-    harvest_per1000 = harvest_total / population * 1,000, where
-    population is the Census total-resident count for the SAME year t as
-    the harvest. Both numerator and denominator move within a county over
-    a 40-year panel, so the county FE absorb the level of the rate but
-    not its trend: a county that suburbanizes shows a falling rate on a
-    flat harvest. Harvest per square mile is the obvious alternative and is a
-    one-line change here if we want it as a robustness table.
+    harvest_z = (harvest_total - h_mean_c) / h_sd_c, where h_mean_c and
+    h_sd_c are taken over that county's non-missing harvest_total in
+    1981+ -- every such row, NOT only the rows that survive into an
+    estimation sample, and NOT recomputed per column or per subsample.
+    The outcome is therefore one variable with one definition, identical
+    in all five columns, which is what the old 2005-2014-window version
+    of this decision was for; only the window it is anchored to has
+    changed, because decision 2 removed the old one.
 
-    In columns 3-5 the age shares are shares of that same denominator,
-    so the winter coefficient there is identified holding the age
-    COMPOSITION fixed; population SIZE is not controlled for. If the
-    object is a level adjusted for size, ln(population) belongs in
-    $agectrl and the table gets re-run. Flagged, not done.
+    Two consequences, both deliberate:
+
+      -- A county whose harvest never varies has h_sd_c == 0 and no
+         z-score. Exactly one county is in that position: SAN FRANCISCO
+         (06075), zero harvest in all 29 years it reports. It was
+         already contributing no identifying variation in Table 2 (county
+         FE absorb it outright), so its 28 estimation rows leaving costs
+         the table nothing but the count. Named in Section 2's log.
+
+      -- Counties enter the estimation sample only where the winter
+         measures and the controls are also present, but their MOMENTS
+         come from the wider set of rows. That is the right way round:
+         moments that moved with the control set would make the columns
+         non-comparable.
+
+14. [DECIDE] THIS TABLE IS A REWEIGHTING OF TABLE 2, NOT INDEPENDENT
+    EVIDENCE -- AND ON AN UNBALANCED PANEL THE WEIGHTS GET EXTREME.
+
+    Under county fixed effects, h_mean_c/h_sd_c is a county constant and
+    is absorbed, so regressing harvest_z is ARITHMETICALLY IDENTICAL to
+    regressing harvest_total/h_sd_c. Section 6f runs both and asserts the
+    coefficients agree. The estimator is therefore the levels regression
+    with each county weighted by 1/h_sd_c, and the coefficients read in
+    SDs of a county's own harvest.
+
+    The weights span three orders of magnitude on this panel: h_sd_c runs
+    from 0.71 to 4,508 deer, so 1/h_sd_c has a p99/p1 ratio of about 690.
+    The heaviest-weighted counties are the ones a within-county SD
+    describes worst:
+
+      -- Virginia independent cities with a mean harvest of one to five
+         deer, where a single animal is most of an SD; and
+      -- counties observed for only TWO years, whose "SD" is the gap
+         between two numbers. 170 of the 1,577 estimation counties are
+         observed fewer than three years, 237 fewer than five.
+
+    This is new with decision 2: the old balanced window gave every
+    county ten years and could not produce a two-observation SD. Section
+    6g reports the coefficient under three restrictions (moments from 5+
+    years, from 10+ years, and dropping the top 1% of counties by
+    weight). On the current vintage Panel D is unmoved by all three;
+    Panels A, B and C move around and their marginal stars come and go.
+
+    [DECIDE] Whether this table should carry a minimum-years rule for the 
+    moments, or a trimmed/winsorized weight, or neither with the caveat in the 
+    notes. Nothing is imposed here -- the table as written uses every county. 
+    One line in Section 2 sets a threshold if we want one.
 
 ==============================================================================*/
 
@@ -226,7 +298,7 @@ di "$root"
 di "$dataSTATA"
 
 cap mkdir "$codeSTATA/logs"
-log using "$codeSTATA/logs/regression_harvest_per1000.log", replace text
+log using "$codeSTATA/logs/regression_harvest_zscore.log", replace text
 
 cap mkdir "$tables"
 cap mkdir "$tables/wildlife_weather"
@@ -374,40 +446,109 @@ assert r(N) == 0
 
 /*------------------------------------------------------------------------
 
-Decision 1: harvest per 1,000 residents, zeros KEPT. Decision 13: the
-denominator is contemporaneous Census resident population.
+Decision 13: the within-county z-score of harvest, with the county's own
+1981+ mean and SD as the moments, computed on every year the county
+reports a harvest and broadcast to all of its rows.
 
-The numerator is harvest_total -- the source-reported total from the
-national append -- NOT harvest_total_cwd_imputed, which is parked
+The moments are built from harvest_total -- the source-reported total from
+the national append -- NOT from harvest_total_cwd_imputed, which is parked
 upstream and must stay out of any estimate.
+
+Decision 1: the reported zeros are kept. A harvest of 0 has a perfectly
+good z-score; it is only the counties with NO variation that drop.
 
 ------------------------------------------------------------------------*/
 
-capture drop harvest_per1000
-generate double harvest_per1000 = harvest_total / population * 1000
-label variable harvest_per1000 "Deer harvest per 1,000 residents"
+*--------------------------------- 2a. MOMENTS --------------------------------
 
-* The denominator never divides by zero on this vintage. Asserted rather
-* than trusted: a rebuilt population block carrying a zero would turn the
-* rate silently missing instead of erroring.
-quietly count if $SFULL & population == 0
-assert r(N) == 0
+* _hbase carries harvest_total only on the rows the moments are allowed to
+* see. egen ignores missing, so the three statistics below are taken over
+* exactly those rows and broadcast to every row of the county -- which is
+* what makes the outcome one variable with one definition (decision 13).
+capture drop _hbase
+generate double _hbase = harvest_total if $SFULL & !missing(harvest_total)
 
-* The rate exists wherever both of its inputs do, and is never negative.
-assert !missing(harvest_per1000) if $SFULL & !missing(harvest_total, population)
-assert harvest_per1000 >= 0 if !missing(harvest_per1000)
+capture drop h_mean_c h_sd_c h_nyr_c
+bysort county_id: egen double h_mean_c = mean(_hbase)
+bysort county_id: egen double h_sd_c   = sd(_hbase)
+bysort county_id: egen long   h_nyr_c  = count(_hbase)
+drop _hbase
 
-*--------------------------------- 2a. THE ZEROS ------------------------------
+label variable h_mean_c "County's own mean harvest, 1981+ reported years"
+label variable h_sd_c   "County's own SD of harvest, 1981+ reported years"
+label variable h_nyr_c  "Years of reported harvest the moments rest on"
 
-* Decision 1. These are the rows Table 1 loses to log() and this table keeps.
-* Counted and named by state, both because they are the only difference
-* between the two estimation samples and because they are reported zeros,
-* not missing data.
+* A minimum-years rule for the moments would go here -- one line, see
+* decision 14. Nothing is imposed on the table as written:
+*     replace h_sd_c = . if h_nyr_c < 5
+
+*--------------------------------- 2b. THE OUTCOME ----------------------------
+
+capture drop harvest_z
+generate double harvest_z = (harvest_total - h_mean_c) / h_sd_c ///
+    if $SFULL & !missing(harvest_total) & h_sd_c > 0 & !missing(h_sd_c)
+label variable harvest_z "Deer harvest, z-scored within county on its own 1981+ years"
+
+* In Stata a missing h_sd_c satisfies "h_sd_c > 0", so without it every 
+* single-observation county would produce a missing z-score through a path that 
+* reads like success.
+
+* The z-score exists wherever the harvest and a usable SD do, and nowhere else.
+assert !missing(harvest_z) if $SFULL & !missing(harvest_total) & ///
+    h_sd_c > 0 & !missing(h_sd_c)
+assert missing(harvest_z) if !($SFULL)
+assert missing(harvest_z) if missing(harvest_total)
+
+* Structural: by construction the outcome is mean 0, SD 1 WITHIN each county
+* over the rows the moments were taken on. If that ever fails, the moments
+* and the outcome have stopped describing the same set of rows.
+capture drop _zm _zs
+bysort county_id: egen double _zm = mean(harvest_z)
+bysort county_id: egen double _zs = sd(harvest_z)
+assert abs(_zm)     < 1e-6 if !missing(_zm)
+assert abs(_zs - 1) < 1e-6 if !missing(_zs)
+drop _zm _zs
+
+*--------------------------------- 2c. WHO HAS NO SD --------------------------
+
+* Decision 13. Counties with zero within-county variation have no z-score and
+* leave the table. Named rather than counted: this is the one place this
+* table's sample differs from Table 2's, and the reader should be able to see
+* whose rows went.
+
+capture drop _tg
+quietly egen byte _tg = tag(county_id) if $SFULL & !missing(harvest_total)
+quietly count if _tg == 1 & h_sd_c == 0
+local _nflat = r(N)
+display as text _newline "  counties with zero harvest variation (no z-score): `_nflat'"
+if `_nflat' > 0 {
+    list state geoid county_name h_nyr_c h_mean_c if _tg == 1 & h_sd_c == 0, ///
+        sep(0) noobs
+}
+quietly count if _tg == 1 & h_nyr_c == 1
+local _n1yr = r(N)
+display as text "  counties with a single reported year (no SD): `_n1yr'"
+drop _tg
+
+* On the current vintage the only flat county is San Francisco (06075),
+* zero harvest in all 29 years it reports, and there are no
+* single-year counties.
+if `_nflat' != 1 | `_n1yr' != 0 {
+    display as error "  NOTE: expected exactly 1 zero-variance county and 0" ///
+        " single-year counties; got `_nflat' and `_n1yr'. The sample identity" ///
+        " asserted in Section 6b will move with this."
+}
+
+*--------------------------------- 2d. THE ZEROS ------------------------------
+
+* Decision 1. Reported zeros are retained, as in Table 2. Counted and named by
+* state because they are the only thing separating this table's sample from
+* Table 1's, exactly as they are for Table 2.
 
 quietly count if $SFULL & harvest_total == 0
 local _nzero = r(N)
 display as text _newline "  county-years with harvest_total == 0, RETAINED here" ///
-    " (rate == 0), dropped by log() in Table 1: `_nzero'"
+    " (z-scored, not dropped), dropped by log() in Table 1: `_nzero'"
 if `_nzero' > 0 {
     preserve
         keep if $SFULL & harvest_total == 0
@@ -419,10 +560,10 @@ if `_nzero' != 103 {
     display as error "  NOTE: expected 103 reported zeros in 1981+; got `_nzero'."
 }
 
-* Of those, the ones that survive into the estimation sample -- the rest
-* are missing a winter measure or a control and would have dropped anyway.
+* Of those, the ones that survive into the estimation sample. Fewer than
+* Table 2 keeps, because San Francisco's zeros leave with San Francisco.
 quietly count if $SFULL & harvest_total == 0 & ///
-    !missing(harvest_per1000, mean_winter_temp, population, pop_share_5_9, mean_temp_c_m3)
+    !missing(harvest_z, mean_winter_temp, population, pop_share_5_9, mean_temp_c_m3)
 * A GLOBAL, not a local: Section 6b checks the sample against it, and a
 * local would not survive running the sections separately in the do-editor
 * (same reasoning as the panel globals in Section 4).
@@ -430,22 +571,8 @@ global NZEROEST = r(N)
 display as text "  of those, in the estimation sample: $NZEROEST" ///
     "  (this table's obs = Table 1's obs + $NZEROEST)"
 
-* Counties whose harvest is zero in EVERY year they appear contribute no
-* within-county variation; county FE absorb them outright. Named, not dropped.
-preserve
-    keep if $SFULL & !missing(harvest_per1000, mean_winter_temp)
-    quietly bysort geoid: egen double _maxh = max(harvest_total)
-    quietly egen byte _tg = tag(geoid)
-    quietly count if _tg == 1 & _maxh == 0
-    local _nallzero = r(N)
-    if `_nallzero' > 0 {
-        display as text _newline "  counties with zero harvest in every year (absorbed by county FE):"
-        list state geoid county_name if _tg == 1 & _maxh == 0, sep(0) noobs
-    }
-restore
-
-global Y    "harvest_per1000"
-global YLAB "harvest per 1,000 residents"
+global Y    "harvest_z"
+global YLAB "within-county harvest z-score"
 
 *==============================================================================
 * SECTION 3: CONTROL SETS
@@ -617,7 +744,7 @@ program define run_panel
     * exactly once and cannot be duplicated by esttab's own numbering.
     if "`P'" == "A" {
         local mode "replace"
-        local head `""% Table 2. Outcome = $YLAB." "% Generated by regression_harvest_per1000.do. SEs clustered on county." "% Stars: * p<0.10, ** p<0.05, *** p<0.01." "$numrow" "\midrule" "\multicolumn{$NSPAN}{l}{\textit{Panel `P': `xl'}} \\""'
+        local head `""% Table 3. Outcome = $YLAB." "% Generated by regression_harvest_zscore.do. SEs clustered on county." "% Stars: * p<0.10, ** p<0.05, *** p<0.01." "$numrow" "\midrule" "\multicolumn{$NSPAN}{l}{\textit{Panel `P': `xl'}} \\""'
     }
     else {
         local mode "append"
@@ -687,7 +814,7 @@ program define run_panel
     *--- this panel's coefficient rows ---------------------------------------
     * No counts here -- observations, counties and clusters print once in the
     * specification block at the bottom (decision 7).
-    esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_per1000.tex", ///
+    esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_zscore.tex", ///
         `mode' fragment booktabs nomtitles nonumbers noobs collabels(none) ///
         keep(`x') coeflabel(`x' "`xl'") ///
         cells(b(star fmt(%9.4f)) se(par fmt(%9.4f))) ///
@@ -697,7 +824,7 @@ program define run_panel
         prehead(`head') ///
         postfoot("\addlinespace")
 
-    esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_per1000.csv", ///
+    esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_zscore.csv", ///
         `mode' plain nomtitles noobs collabels(none) ///
         keep(`x') coeflabel(`x' "`x'") ///
         cells(b(star fmt(%9.4f)) se(par fmt(%9.4f))) ///
@@ -733,7 +860,7 @@ run_panel D
 * This is also the last thing written to the fragment, so it has the
 * "% end of fragment" line -- see decision 12.
 
-esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_per1000.tex", ///
+esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_zscore.tex", ///
     append fragment booktabs cells(none) nomtitles nonumbers ///
     stats(samp n_county N n_clust fe_county fe_styr ctrl_w ctrl_age, ///
           fmt(%s %9.0gc %9.0gc %9.0gc %s %s %s %s) ///
@@ -743,7 +870,7 @@ esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_per1000
     prehead("\midrule") ///
     postfoot("% end of fragment")
 
-esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_per1000.csv", ///
+esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_zscore.csv", ///
     append plain cells(none) nomtitles nonumbers ///
     stats(samp n_county N n_clust fe_county fe_styr ctrl_w ctrl_age, ///
           fmt(%s %9.0gc %9.0gc %9.0gc %s %s %s %s) ///
@@ -758,7 +885,7 @@ esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_per1000
 
 /*------------------------------------------------------------------------
 
-Four things to check:
+Four things this table shares with the other two:
 
   (a) the four panels rest on identical samples -- asserted, because if
       they ever diverge the panels stop being comparable down a column;
@@ -768,10 +895,15 @@ Four things to check:
   (d) how unbalanced the panel actually is, since that is now a feature
       of the design rather than something ruled out;
 
-And one check Table 1 does not need: (b) also confirms that this table's
-sample is Table 1's sample PLUS the retained zeros and nothing else. If
-that ever stops holding, the two tables have diverged for a second reason
-and the comparison between them is no longer clean.
+and three it does not:
+
+  (b) also ties the sample to BOTH other tables -- Table 2's less the
+      zero-variance counties, Table 1's plus the retained zeros;
+  (f) the rescaling identity behind decision 14, asserted rather than
+      asserted-in-a-comment: the z-score regression and the harvest/SD 
+      regression are the same regression;
+  (g) what the county weights look like, and whether the estimates
+      survive restricting them.
 
 ------------------------------------------------------------------------*/
 
@@ -821,27 +953,42 @@ display as text "    states: `_sf'"
 display as text "  col 5:    `_na2' obs | `_ca' counties | `_nsa' states"
 display as text "    states: `_sa'"
 
-* Expected on the current vintage: 30,370 / 1,578 / 19 and 26,895 / 1,083 / 14.
-if `_nf' != 30370 | `_cf' != 1578 {
-    display as error "  NOTE: expected 30,370 obs / 1,578 counties in cols 1-4;" ///
+* Expected on the current vintage: 30,342 / 1,577 / 19 and 26,867 / 1,082 / 14.
+if `_nf' != 30342 | `_cf' != 1577 {
+    display as error "  NOTE: expected 30,342 obs / 1,577 counties in cols 1-4;" ///
         " got `_nf' / `_cf'. Check the merged-panel vintage before using this table."
 }
-if `_na2' != 26895 | `_ca' != 1083 {
-    display as error "  NOTE: expected 26,895 obs / 1,083 counties in col 5;" ///
+if `_na2' != 26867 | `_ca' != 1082 {
+    display as error "  NOTE: expected 26,867 obs / 1,082 counties in col 5;" ///
         " got `_na2' / `_ca'. Check the merged-panel vintage before using this table."
 }
 
-* Decision 1: this sample must be Table 1's plus the retained zeros, exactly.
+* --- tie to Table 2: this sample is Table 2's less the counties with no SD.
+quietly count if $SFULL & !missing(mean_winter_temp, population, pop_share_5_9, mean_temp_c_m3) ///
+    & !missing(harvest_total, population)
+local _nrate = r(N)
+quietly count if $SFULL & !missing(mean_winter_temp, population, pop_share_5_9, mean_temp_c_m3) ///
+    & !missing(harvest_total, population) & missing($Y)
+local _nnosd = r(N)
+display as text _newline "  Table 2's sample: `_nrate' obs; of those, `_nnosd' have no z-score" ///
+    " (zero-variance counties)"
+assert `_nf' == `_nrate' - `_nnosd'
+if `_nrate' != 30370 {
+    display as error "  NOTE: expected 30,370 obs in Table 2's sample; got `_nrate'." ///
+        " The two tables have diverged for some reason other than the missing SDs."
+}
+
+* --- tie to Table 1: this sample is Table 1's plus the retained zeros.
 quietly count if $SFULL & harvest_total > 0 & ///
     !missing($Y, mean_winter_temp, population, pop_share_5_9, mean_temp_c_m3)
 local _nnozero = r(N)
-display as text _newline "  excluding the retained zeros: `_nnozero' obs" ///
+display as text "  excluding the retained zeros: `_nnozero' obs" ///
     "  (Table 1's sample -- log(harvest) drops exactly these zeros)"
 assert `_nf' == `_nnozero' + $NZEROEST
 if `_nnozero' != 30272 {
     display as error "  NOTE: expected 30,272 obs once the zeros come out, to match" ///
-        " regression_log_harvest.do; got `_nnozero'. The two tables have diverged" ///
-        " for some reason other than the zeros -- find it before comparing them."
+        " regression_log_harvest.do; got `_nnozero'. The tables have diverged" ///
+        " for some reason other than the zeros and the missing SDs."
 }
 
 *--------------------------------- 6c. ---------------------------------------
@@ -860,7 +1007,7 @@ if `_w81' == 0 {
 *--------------------------------- 6d. ---------------------------------------
 
 * How unbalanced is the panel? Reported -- imbalance is accepted
-* at this stage.
+* at this stage. 
 preserve
     keep if $SFULL & !missing($Y, mean_winter_temp)
     quietly bysort geoid: generate int _nyr = _N
@@ -884,40 +1031,105 @@ summarize $Y mean_winter_temp warm_winter_1sd wsi_cold_days ///
 
 *--------------------------------- 6f. ---------------------------------------
 
-/* NO TRIMMING. The tail was tested, not assumed: Panel D col 4 goes -0.3550 
-   (0.0707) full, -0.2244 (0.0539) dropping the top 1% of county-years, -0.1511 
-   (0.0422) dropping the top 5% of counties by mean rate. Magnitude halves, 
-   sign and 1% significance hold. 6f lists the tails each run.
-   
-   The rate's tails, listed rather than summarized. A per-capita outcome in 
-   levels is the one place in this table where a handful of county-years can 
-   move a coefficient, and the log outcome in Table 1 compresses that by 
-   construction. The counties at the top should be rural, high-harvest and 
-   small; the counties at the bottom should be independent cities and urban 
-   counties                                                                */
+/* Decision 14, asserted rather than asserted in a comment. Under county
+   fixed effects h_mean_c/h_sd_c is a county constant and is absorbed, so
+   regressing the z-score is the same regression as regressing
+   harvest/SD. Both are run on the col-4 spec and the coefficients have to
+   agree to numerical precision. If this ever fails, the moments are NOT
+   county-constant -- which would mean something has gone wrong in Section
+   2a -- and the interpretation of the whole table changes.             */
 
-display as text _newline "  rate distribution in the estimation sample:"
-summarize $Y if $SFULL & !missing(mean_winter_temp, population, pop_share_5_9, mean_temp_c_m3), detail
+capture drop harvest_over_sd
+generate double harvest_over_sd = harvest_total / h_sd_c if !missing($Y)
+label variable harvest_over_sd "Harvest divided by the county's own SD -- QC twin of harvest_z"
+
+quietly reghdfe $Y $pvarD $wctrl $agectrl if $SFULL, ///
+    absorb(county_id state_id#year) vce(cluster county_id)
+local _bz = _b[$pvarD]
+local _sez = _se[$pvarD]
+
+quietly reghdfe harvest_over_sd $pvarD $wctrl $agectrl if $SFULL, ///
+    absorb(county_id state_id#year) vce(cluster county_id)
+local _bs = _b[$pvarD]
+local _ses = _se[$pvarD]
+
+display as text _newline "  rescaling identity (Panel D, col 4 spec):"
+display as text "    z-score        b = " %12.8f `_bz' "   se = " %12.8f `_sez'
+display as text "    harvest / SD   b = " %12.8f `_bs' "   se = " %12.8f `_ses'
+assert reldif(`_bz', `_bs')   < 1e-7
+assert reldif(`_sez', `_ses') < 1e-7
+display as text "    identical -- this table is Table 2 reweighted by 1/SD, not new evidence"
+
+drop harvest_over_sd
+
+*--------------------------------- 6g. ---------------------------------------
+
+/* What the 1/SD weights actually look like, and whether the estimates
+   survive restricting them. Decision 14: reported every run, nothing
+   imposed. The weights are the reason this table is not simply a units
+   change.                                                               */
 
 preserve
     keep if $SFULL & !missing($Y, mean_winter_temp, population, pop_share_5_9, mean_temp_c_m3)
-    gsort -$Y
-    display as text _newline "  highest 10 county-year rates:"
-    list state county_name year harvest_total population $Y in 1/10, sep(0) noobs
-    gsort $Y
-    display as text _newline "  lowest 10 county-year rates:"
-    list state county_name year harvest_total population $Y in 1/10, sep(0) noobs
+    quietly egen byte _tg = tag(geoid)
 
-    * The denominator itself: a rate is only as stable as the population
-    * underneath it, so the smallest denominators are named too.
-    gsort population
-    display as text _newline "  smallest 10 denominators (population):"
-    list state county_name year harvest_total population $Y in 1/10, sep(0) noobs
+    display as text _newline "  county SD of harvest, h_sd_c (estimation sample):"
+    summarize h_sd_c if _tg == 1, detail
+
+    capture drop _w
+    generate double _w = 1 / h_sd_c
+    quietly summarize _w if _tg == 1, detail
+    local _p1  = r(p1)
+    local _p99 = r(p99)
+    display as text "  implied county weight 1/h_sd_c: p1 = " %9.5f `_p1' ///
+        "  p99 = " %9.5f `_p99' "  ratio = " %6.0f (`_p99'/`_p1')
+
+    foreach k in 3 5 10 {
+        quietly count if _tg == 1 & h_nyr_c < `k'
+        local _ck = r(N)
+        quietly count if h_nyr_c < `k'
+        local _rk = r(N)
+        display as text "  counties whose moments rest on < `k' years: `_ck'" ///
+            "  (`_rk' rows)"
+    }
+
+    * one row per county from here on, so -in 1/10- means ten counties
+    quietly keep if _tg == 1
+    display as text _newline "  the ten heaviest-weighted counties (smallest SD):"
+    gsort h_sd_c
+    list state county_name h_nyr_c h_mean_c h_sd_c in 1/10, sep(0) noobs
 restore
 
+* Sensitivity, Panel D and Panel A, col 4 spec. Displayed, never asserted:
+* these are the numbers the [DECIDE] in 14 needs, not a pass/fail.
+display as text _newline "  sensitivity of the col-4 estimate to the weighting:"
+foreach P in A D {
+    display as text "    Panel `P' (${pvar`P'}):"
+    quietly reghdfe $Y ${pvar`P'} $wctrl $agectrl if $SFULL, ///
+        absorb(county_id state_id#year) vce(cluster county_id)
+    display as text "      as built           b = " %9.4f _b[${pvar`P'}] ///
+        "  se = " %9.4f _se[${pvar`P'}] "  N = " %9.0fc e(N)
+    foreach k in 5 10 {
+        quietly reghdfe $Y ${pvar`P'} $wctrl $agectrl if $SFULL & h_nyr_c >= `k', ///
+            absorb(county_id state_id#year) vce(cluster county_id)
+        display as text "      moments from `k'+ yrs  b = " %9.4f _b[${pvar`P'}] ///
+            "  se = " %9.4f _se[${pvar`P'}] "  N = " %9.0fc e(N)
+    }
+}
+
+* And the nesting check decision 10 refers to: the two WSI components entered
+* jointly, which neither Panel C nor Panel D does.
+display as text _newline "  Panels C and D components entered jointly (col 4 spec):"
+quietly reghdfe $Y wsi_cold_days wsi_snow_days $wctrl $agectrl if $SFULL, ///
+    absorb(county_id state_id#year) vce(cluster county_id)
+display as text "    wsi_cold_days  b = " %9.4f _b[wsi_cold_days] ///
+    "  se = " %9.4f _se[wsi_cold_days]
+display as text "    wsi_snow_days  b = " %9.4f _b[wsi_snow_days] ///
+    "  se = " %9.4f _se[wsi_snow_days]
+
 display as text _newline "  Table written to:"
-display as text "    $tables/wildlife_weather/regression_harvest_per1000.tex"
-display as text "    $tables/wildlife_weather/regression_harvest_per1000.csv"
+display as text "    $tables/wildlife_weather/regression_harvest_zscore.tex"
+display as text "    $tables/wildlife_weather/regression_harvest_zscore.csv"
 
 log close
 
