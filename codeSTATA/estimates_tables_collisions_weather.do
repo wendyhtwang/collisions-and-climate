@@ -121,6 +121,24 @@ CHANGELOG:
         both tables now fit on one page with room to spare. The
         \scriptsize is a deliberate departure from style guide Section
         13.3, which specifies \footnotesize in the tablenotes boilerplate.
+  09/15/2026 Wendy Wang: column (4) was detached from columns (1)-(3) in
+    both tables. \extracolsep{\fill} was not the whole fix. TeX sizes a
+    \multicolumn entry that is wider than the columns it spans by adding
+    the excess to the LAST column of the span, before any \fill glue is
+    distributed. The spanned outcome header
+    ("Animal share of all collisions, percent ...") is wider than the four
+    narrow estimate columns at their natural width, so roughly 0.6in of
+    excess landed in column (4)'s box and the \fill then split what was
+    left evenly across the four gaps -- an even table with one fat column
+    at the right end. The header is now set in \makebox[0pt]{}, so it
+    contributes zero width to the span, no excess exists, and \fill
+    distributes the whole slack evenly. The header still prints centred
+    over columns (2)-(5); it is ~3.8in against a ~4.7in span, so it does
+    not overhang. If the header text ever grows past the span it will
+    overhang silently rather than pushing a column -- the header is the
+    thing to check if the spacing goes odd again. Verified with a local
+    pdflatex run against the Overleaf preamble (geometry, setspace,
+    booktabs, threeparttable, ragged2e) and the Sept 10 panel files.
 
 * Inputs:
 *   $path/dataSTATA/estimates/collisions_weather/<outcome>_p<A|B1|B2|C|D>_c<1-4>_W<wt>.ster
@@ -579,7 +597,7 @@ tex \def\arraystretch{1}
 tex \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}cccc}
 tex \toprule \toprule
 tex \noalign{\smallskip}
-tex & \multicolumn{4}{c}{`yhead' (\(\bar{Y}\) = `ybar')} \\
+tex & \multicolumn{4}{c}{\makebox[0pt]{`yhead' (\(\bar{Y}\) = `ybar')}} \\
 tex \cmidrule(l{5pt}r{5pt}){2-5}
 tex & (1) & (2) & (3) & (4) \\
 tex \multicolumn{5}{l}{Panel A. Mean winter temperature, Dec--Feb} \\
@@ -838,7 +856,7 @@ tex \def\arraystretch{1}
 tex \begin{tabular*}{\textwidth}{l@{\extracolsep{\fill}}cccc}
 tex \toprule \toprule
 tex \noalign{\smallskip}
-tex & \multicolumn{4}{c}{Animal collisions per 100,000 residents (\(\bar{Y}\) = `ybar')} \\
+tex & \multicolumn{4}{c}{\makebox[0pt]{Animal collisions per 100,000 residents (\(\bar{Y}\) = `ybar')}} \\
 tex \cmidrule(l{5pt}r{5pt}){2-5}
 tex & (1) & (2) & (3) & (4) \\
 tex \multicolumn{5}{l}{Panel A. Mean winter temperature, Dec--Feb} \\
