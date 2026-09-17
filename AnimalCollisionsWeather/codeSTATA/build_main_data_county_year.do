@@ -72,12 +72,27 @@ CHANGELOG:
     also means min_year_population (SECTION 3/8) should now read 1981
     instead of 1990 the next time this runs -- if it doesn't, the Kodama
     file isn't the one actually being picked up.
+  09/17/2026 Wendy Wang: SECTION 7 no longer BUILDS the winter severity
+    index -- it merges codePYTHON/06c_build_winter_severity.py's
+    dataCSV/Weather/winter_severity_county_year.csv instead. The index is
+    pure weather, so constructing it here and having 09b read it back out of
+    this script's output made a Phase 4 exhibit depend on a Phase 6 input.
+    The definition was ported unchanged (Kohn 1975 / WI DNR, Dec 1-Apr 30,
+    day counts not monthly means, the 12in/8in sensitivity variants, and
+    missing-propagation) and verified county-by-county against this script's
+    prior output before the switch. mean_winter_temp and warm_winter_1sd/2sd
+    stay here: 09b recomputes those rather than reading them, so they are not
+    part of the backwards dependency. merge_winter_severity is deliberately
+    NOT added to SECTION 8's loop -- the merge is expected to match
+    everywhere, and the panel's first year (no prior December) would export
+    an unmatched-by-county file listing every county.
 ==============================================================*/
 
 * Inputs:
 *   $path/dataCSV/PRISM/prism_derived_weather_vars.csv
 *       (county-year-month; reshaped wide by month in SECTION 1)
 *   $path/dataCSV/ERA5/era5_derived_weather_vars.csv
+*   $path/dataCSV/Weather/winter_severity_county_year.csv
 *       (county-year-month; only its snow columns are used, SECTION 2)
 *   $path/dataCSV/Population/population_county_year_1981_2025.dta
 *       (full 1981-2025 panel, replacing the earlier 1990-2025-only file --
@@ -528,46 +543,62 @@ label variable warm_winter_2sd "1 if mean_winter_temp > county's own full-sample
 
 drop temp_v temp_b
 
-* --- (4) Winter Severity Index (Kohn 1975 / WI DNR definition, per the ---
-* --- literature review): sum of (a) # days Dec 1-Apr 30 with min temp
-* --- <=0F, and (b) # days Dec 1-Apr 30 with >=18in snow depth on the
-* --- ground. A day meeting both conditions counts in both tallies, which
-* --- is exactly the "adds 2 points" rule in the literature quote -- no
-* --- special-case code needed, it falls out of summing the two counts.
-* --- Window is Dec(t-1) through Apr(t) -- wider than the 3-month DJF
-* --- window used for mean_winter_temp above.
-gen wsi_cold_days = L1.days_extremely_cold_m12 ///
-                   + days_extremely_cold_m1 ///
-                   + days_extremely_cold_m2 ///
-                   + days_extremely_cold_m3 ///
-                   + days_extremely_cold_m4
-label variable wsi_cold_days "WSI cold-stress component: # days Dec 1-Apr 30 with PRISM min temp <=0F"
-
-* The snow-hazard component is a county-month COUNT of days with snow
-* depth >=18in (days_snow_depth_18in, built by
-* codePYTHON/06_build_derived_weather_vars.py as of 9/8/26 and carried
-* through SECTION 2 above). It is deliberately NOT approximated from
-* mean_snow_depth: a month can average under 18in while still containing
-* qualifying days, and vice versa.
+* --- (4) Winter Severity Index: merged in, not built here ---------
+* Moved to codePYTHON/06c_build_winter_severity.py on 09/17/2026. The index
+* is pure weather (PRISM cold days + ERA5 snow days), so building it in the
+* merge and then having 09b_descriptive_weather_tier2.py read it back out of
+* main_data_county_year.dta pointed the dependency the wrong way: a Phase 4
+* exhibit ended up needing a Phase 6 output. 06c now owns the definition,
+* both this file and 09b read its CSV, and a clean end-to-end run no longer
+* has to run the merge before the descriptives.
 *
-* Still guarded rather than assumed, so an older ERA5 derived-vars CSV
-* degrades to the previous missing-component behaviour instead of
-* erroring.
-capture confirm variable days_snow_depth_18in_m1
+* The construction was ported unchanged -- Kohn (1975) / WI DNR, the
+* Dec 1-Apr 30 window (wider than the DJF window mean_winter_temp uses
+* above), the day COUNT rather than an approximation from mean_snow_depth,
+* the 12in/8in sensitivity variants, and missing-propagation so a season
+* with any month absent is missing rather than a partial sum. Verified
+* county-by-county against this script's own prior output before the
+* switch; see 06c's docstring.
+
+local file_name = "$dataCSV/Weather/winter_severity_county_year.csv"
+
+capture confirm file "`file_name'"
 if _rc {
-    di as text "NOTE: days_snow_depth_18in_m1 not found -- wsi_snow_days and winter_severity_index's snow component are set to missing. Rerun codePYTHON/06_build_derived_weather_vars.py (which builds days_snow_depth_18in), and check SECTION 2 above carried it through the ERA5 reshape."
+    di as error "Winter severity file not found at `file_name' -- run codePYTHON/06c_build_winter_severity.py. wsi_cold_days, wsi_snow_days and every winter_severity_index* variable will be missing."
+    gen wsi_cold_days = .
     gen wsi_snow_days = .
+    gen wsi_snow_days_12in = .
+    gen wsi_snow_days_8in = .
+    gen winter_severity_index = .
+    gen winter_severity_index_snow12 = .
+    gen winter_severity_index_snow8 = .
+    gen byte merge_winter_severity = .
 }
 else {
-    gen wsi_snow_days = L1.days_snow_depth_18in_m12 ///
-                       + days_snow_depth_18in_m1 ///
-                       + days_snow_depth_18in_m2 ///
-                       + days_snow_depth_18in_m3 ///
-                       + days_snow_depth_18in_m4
-}
-label variable wsi_snow_days "WSI snow-hazard component: # days Dec 1-Apr 30 with ERA5 county-mean snow depth >=18in (Kohn 1975)"
+    preserve
+        import delimited using "`file_name'", clear varnames(1) stringcols(1)
+        isid geoid year
 
-gen winter_severity_index = wsi_cold_days + wsi_snow_days
+        tempfile winter_severity_panel
+        save `winter_severity_panel'
+    restore
+
+    * 06c derives this from the same two derived-vars CSVs that build the
+    * weather spine in SECTIONS 1-2, so every row here should match. Unlike
+    * the collisions/wildlife merges, an unmatched USING row would mean the
+    * two disagree about the county-year universe -- worth surfacing rather
+    * than tracking, so keep master rows only and report the count.
+    merge 1:1 geoid year using `winter_severity_panel', keep(master match)
+    rename _merge merge_winter_severity
+
+    quietly count if merge_winter_severity == 1
+    if r(N) > 0 {
+        di as text "NOTE: `r(N)' county-years have no winter-severity row. Expected for the panel's first year (December of the prior year is out of sample); investigate anything else."
+    }
+}
+
+label variable wsi_cold_days "WSI cold-stress component: # days Dec 1-Apr 30 with PRISM min temp <=0F"
+label variable wsi_snow_days "WSI snow-hazard component: # days Dec 1-Apr 30 with ERA5 county-mean snow depth >=18in (Kohn 1975)"
 label variable winter_severity_index "Winter Severity Index (Kohn 1975 / WI DNR): wsi_cold_days + wsi_snow_days. Categories: <50 mild, 50-80 moderate, 80-100 moderately severe, >100 very severe"
 
 * --- (4b) Sensitivity variants of the snow-hazard component ---
@@ -582,21 +613,7 @@ label variable winter_severity_index "Winter Severity Index (Kohn 1975 / WI DNR)
 * lower-threshold indices let that be shown in a robustness table rather
 * than asserted. Report winter_severity_index as the headline measure.
 foreach thr in 12 8 {
-    capture confirm variable days_snow_depth_`thr'in_m1
-    if _rc {
-        di as text "NOTE: days_snow_depth_`thr'in_m1 not found -- wsi_snow_days_`thr'in and winter_severity_index_snow`thr' set to missing."
-        gen wsi_snow_days_`thr'in = .
-    }
-    else {
-        gen wsi_snow_days_`thr'in = L1.days_snow_depth_`thr'in_m12 ///
-                                   + days_snow_depth_`thr'in_m1 ///
-                                   + days_snow_depth_`thr'in_m2 ///
-                                   + days_snow_depth_`thr'in_m3 ///
-                                   + days_snow_depth_`thr'in_m4
-    }
     label variable wsi_snow_days_`thr'in "SENSITIVITY (not Kohn): # days Dec 1-Apr 30 with ERA5 county-mean snow depth >=`thr'in"
-
-    gen winter_severity_index_snow`thr' = wsi_cold_days + wsi_snow_days_`thr'in
     label variable winter_severity_index_snow`thr' "SENSITIVITY WSI: wsi_cold_days + wsi_snow_days_`thr'in (>=`thr'in snow instead of Kohn's >=18in)"
 }
 
