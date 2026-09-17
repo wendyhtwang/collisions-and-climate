@@ -13,7 +13,7 @@ differs.
 ```text
 AnimalCollisionsWeather/     the weather and population component (this work)
   codePYTHON/                Earth Engine extraction, aggregation, derived vars,
-                             population, descriptive exhibits
+                             winter severity, population, descriptive exhibits
   codeSTATA/                 merge, estimation, tables, report generation
     logs/                    Stata logs
   dataCSV/   dataRAW/        gitignored; lives on Kodama
@@ -70,3 +70,17 @@ while Stata reads Dropbox is how a run silently consumes stale inputs.
 
 `AnimalCollisionsWeather/codeSTATA/_project_main.do` lists every stage in run
 order. Run it from `codeSTATA/`.
+
+Two things it needs from the environment:
+
+- `CENSUS_API_KEY` must be exported before Stata starts. `08b` reads it from
+  the environment (not a flag) and raises without it whenever a run touches
+  1990-1999 on a cold cache, which the default full-range build does.
+- `run_upstream` at the top of SECTION 0 is `0` by default. Setting it to `1`
+  rebuilds the two sibling-repo panels in SECTION 2.4; it is off because those
+  scripts belong to the other RAs and the collisions append's output path is
+  still unconfirmed.
+
+`09a`, `09b` and `weather_descriptives_utils.py` are GENERATED from
+`09_descriptive_weather_full.ipynb` by `make_scripts.py`. Edit the notebook and
+regenerate; a hand-edit to any of the three is reverted by the next run.

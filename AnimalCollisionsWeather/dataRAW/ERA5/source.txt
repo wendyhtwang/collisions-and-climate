@@ -1,0 +1,49 @@
+ERA5-Land daily county extracts
+===============================
+
+Source:      Google Earth Engine image collection ECMWF/ERA5_LAND/DAILY_AGGR
+             (ERA5-Land daily aggregates, Copernicus / ECMWF).
+             https://developers.google.com/earth-engine/datasets/catalog/ECMWF_ERA5_LAND_DAILY_AGGR
+
+             Chosen over plain ERA5/DAILY because it is the only collection
+             carrying all the bands this project needs.
+
+Geography:   GEE TIGER/2018/Counties, CONUS + DC (49 state FIPS), reduced to
+             county means -- the same county universe as the PRISM extract.
+
+Bands:       temperature_2m, temperature_2m_min, temperature_2m_max,
+             dewpoint_temperature_2m, skin_temperature,
+             u_component_of_wind_10m, v_component_of_wind_10m, snow_depth,
+             snowfall_sum, surface_pressure, total_precipitation_sum.
+             Kelvin->Celsius and metres->mm are applied inline during
+             extraction; surface_pressure is left in native Pa. Wind speed is
+             derived from the u/v components. See
+             codePYTHON/era5_extract_utils.py.
+
+Extracted by: codePYTHON/04a_extract_era5_county.py
+              (codePYTHON/03a_test_era5_extract.py is the IL/IN 2020-21 test
+              slice)
+
+Obtained:    2026-08-05 for 1981-2009 (20260805_100350) and 2026-08-06 for
+             2010-2025 (20260806_161249). The run timestamp is embedded in
+             every filename, so a file's provenance is recoverable from the
+             file itself. The two batches are one logical extraction split
+             across two days, not two vintages.
+
+Location:    The full extract lives on Kodama at
+             /mnt/data_f/AnimalCollisionsWeatherData/ERA5/extracted/county_daily_year/,
+             NOT in Dropbox: large and regenerable.
+
+Role:        ERA5-Land is the ROBUSTNESS CHECK against PRISM, not a co-equal
+             source. PRISM is the main weather dataset. The exception is snow
+             depth, which PRISM does not carry at all -- the winter severity
+             index's snow component (codePYTHON/06c_build_winter_severity.py)
+             is ERA5-only for that reason.
+
+Known gap:   16,436 missing daily readings, all of them geoid 25019
+             (Nantucket County, MA), across all six raw variables for every
+             day 1981-2025. ERA5-Land's grid has no valid land pixel whose
+             centre falls inside that county's polygon, so reduceRegions()
+             returns null there. Known and resolved -- not a processing bug,
+             and not worth re-extracting. See
+             codePYTHON/06_build_derived_weather_vars.py's docstring.

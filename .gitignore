@@ -34,7 +34,12 @@ dataPYTHON/
 # Built Stata data and estimates -- regenerated, not source-controlled.
 dataSTATA/
 
-# Two deliberate exceptions, tracked despite living under ignored trees:
+# Deliberate exceptions, tracked despite living under ignored trees. Provenance
+# and crosswalk files are documentation, not data, and are small.
 #   AnimalCollisionsWeather/dataCSV/Population/fips_crosswalk_1980_2025.csv
 #   AnimalCollisionsWeather/dataRAW/Population/source.txt
+#   AnimalCollisionsWeather/dataRAW/Population/CT_towns/source.txt
+#   AnimalCollisionsWeather/dataRAW/PRISM/source.txt
+#   AnimalCollisionsWeather/dataRAW/PRISM/test/source.txt
+#   AnimalCollisionsWeather/dataRAW/ERA5/source.txt
 # They are already in the index; re-add with `git add -f` if ever dropped.

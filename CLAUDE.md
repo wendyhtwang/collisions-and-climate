@@ -5,9 +5,13 @@ warming winters to wildlife population dynamics and animal-related vehicle
 collisions across the contiguous United States. Three RAs contribute
 interdependent datasets — vehicle collisions, wildlife/CWD populations, and
 weather — that are merged at the county-year (or wildlife-management-area-year)
-level. This workspace supports the weather-data component: extracting
-climate data from Google Earth Engine for all contiguous U.S. counties and,
-where applicable, wildlife management areas (WMAs), 1981–2025.
+level. This workspace owns two of those pipelines end to end — weather
+(Earth Engine extraction for all contiguous U.S. counties and, where
+applicable, wildlife management areas (WMAs), 1981–2025, plus aggregation and
+derived variables) and county population (Census, 1981–2025) — and it is also
+where the four pipelines are merged into the county-year analysis panel and
+where the estimation, tables and PI-facing reports are produced. Not all of it
+is Earth Engine work: the population stage touches no GEE at all.
 
 Because datasets from different RAs are merged downstream, changes to
 geographic units, keys, or variable naming here can break merges elsewhere.

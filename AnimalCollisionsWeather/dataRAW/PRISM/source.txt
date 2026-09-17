@@ -1,0 +1,41 @@
+PRISM daily county extracts
+===========================
+
+Source:      Google Earth Engine image collection OREGONSTATE/PRISM/ANd
+             (PRISM AN81d / AN91d daily, Oregon State PRISM Climate Group).
+             https://developers.google.com/earth-engine/datasets/catalog/OREGONSTATE_PRISM_ANd
+
+Geography:   GEE TIGER/2018/Counties, CONUS + DC (49 state FIPS), reduced to
+             county means. TIGER/2018 is the project's county universe; see
+             _repo/notes and the FIPS crosswalk in
+             dataCSV/Population/fips_crosswalk_1980_2025.csv.
+
+Bands:       ppt, tmean, tmin, tmax, tdmean, vpdmin, vpdmax
+
+Extracted by: codePYTHON/02a_extract_prism_county.py
+              (codePYTHON/01a_test_prism_extract.py is the IL/IN 2020-21 test
+              slice; its output is in the test/ subfolder here)
+
+Obtained:    2026-07-30 for the full 1981-2025 CONUS run. The extraction
+             timestamp is embedded in every filename --
+             prism_county_daily_<year>_20260730_011010.csv -- so the run that
+             produced a file is always recoverable from the file itself.
+             The test/ slice is 2026-07-28 (20260728_212404).
+
+Location:    The full extract lives on Kodama at
+             /mnt/data_f/AnimalCollisionsWeatherData/PRISM/extracted/county_daily_year/,
+             NOT in Dropbox: it is large and regenerable. What sits in this
+             folder on a dev machine is a small slice for testing.
+
+Vintage note: PRISM is a rolling collection -- AN81d becomes AN91d at the
+             2020/2021 boundary, and Oregon State revises recent years.
+             codePYTHON/05_aggregate_daily_to_monthly.py FLAGS county-months
+             that mix the two vintages rather than silently averaging across
+             them. If numbers stop replicating, check whether the collection
+             has been revised since the obtained date above.
+
+Known issue: extraction is done DAILY and aggregated here, not pulled as GEE
+             monthly composites. The two differ by 1-2% because PRISM's own
+             monthly grids use more stations than its dailies. See
+             "PRISM daily-vs-composited aggregation discrepancy" in
+             codePYTHON/SCRIPT_OVERVIEW.md.

@@ -6,19 +6,37 @@ Each script's opening docstring now carries a condensed version of this same
 1-sentence-purpose + key-decisions format; this doc includes more detailed
 explanations regarding decisions that were not included in the code itself.
 
-Scripts are numbered in pipeline order, with an `a`/`b`/... letter suffix
-whenever a number has more than one script (the first script gets `a`,
-never a bare number): `01a` = small-scale PRISM test, `02a` = full-scale
-PRISM extraction, `02b` = its WMA-polygon variant (same pattern for
-`03a`/`04a`/`04b`, the ERA5 counterparts). `05` = aggregation, `06` =
-derived vars, `07a`-`07h` = spot-checks, `08a`/`08b` = population data
-(`08a` = CT-specific town-level reaggregation, `08b` = general
-county-level pull -- see "Other data" below for why CT needed its own
-script rather than just another `08b` source config).
-`gee_extract_utils.py` / `population_utils.py` = shared libraries
-(unnumbered).
-`01b`/`03b` (`0X_verify_*_gee_console.js`) = manual Earth Engine Console
-checks to verify the matching small-scale test extraction.
+Scripts are numbered in pipeline order. A **bare number** is the sole or the
+primary script at that step (`05` = aggregation, `06` = derived vars, `09` =
+the descriptives notebook). A **letter suffix** marks a sibling at the same
+step.
+
+An earlier version of this key claimed "the first script gets `a`, never a
+bare number". That has not been true since `06b` landed on 2026-09-09, and
+`05` and `09` are bare too. The rule above is what the tree actually follows.
+
+The more useful thing to know is that the `b` suffix encodes **four different
+relationships**, so it does not by itself tell you what a `b` script does:
+
+| Relationship | Examples | What the `b` script is |
+|---|---|---|
+| Manual verification | `01b`, `03b` | A `.js` Earth Engine Console check of the matching `a` script's output |
+| Geographic variant | `02b`, `04b` | The same extraction against WMA polygons instead of counties (both unimplemented) |
+| Output validation | `06b` | A check ON `06`'s output, run after it |
+| Genuine second stage | `08b`, `09b` | A later step that consumes the `a` script's output |
+
+The rest of the numbering: `01a` = small-scale PRISM test, `02a` = full-scale
+PRISM extraction. `03a`/`04a` are the ERA5 counterparts. `05` = aggregation,
+`06` = derived vars, `06c` = the winter severity index, `07a`-`07h` =
+spot-checks, `08a`/`08b` = population data (`08a` = CT-specific town-level
+reaggregation, `08b` = general county-level pull -- see "Other data" below for
+why CT needed its own script rather than another `08b` source config),
+`09`/`09a`/`09b` = the descriptive exhibits. Unnumbered `*_utils.py` files are
+shared libraries.
+
+**Seven scripts are what `codeSTATA/_project_main.do` actually runs:** `05`,
+`06`, `06c`, `08a`, `08b`, `09a`, `09b`. Everything else is a test, a
+spot-check, or a one-off, run by hand.
 
 ## Setup
 
@@ -208,6 +226,49 @@ as `wsi_snow_days`. 18in is the literature threshold (Kohn 1975 / WI DNR).
   see "Duplicate-conflict detection fix" below) as `05`.
 
 
+### `06b_validate_ppt_total.py`
+Cross-checks `06`'s monthly precipitation total against `05`'s, county-month
+for county-month, and exits non-zero on any mismatch.
+- Exists because `06` and `05` compute the same quantity from the same daily
+  extracts by different routes; if they ever disagree, one of the two
+  aggregations has drifted.
+- `--dataset` defaults to `PRISM`, so a bare run checks **half** of what the
+  script exists to check. Pass `--dataset PRISM --dataset ERA5` for both.
+- NOT wired into `_project_main.do`, and should not be without changing its
+  failure mode first: `sys.exit(1)` inside Stata's embedded interpreter raises
+  `SystemExit`, which surfaces as a Stata error and halts the master script.
+  The same applies to `07b`.
+
+### `06c_build_winter_severity.py` -- added 2026-09-17
+Builds the Winter Severity Index at county-**winter-year** grain from the two
+`*_derived_weather_vars.csv` files `06` writes. Output:
+`dataCSV/Weather/winter_severity_county_year.csv`.
+- **Why it exists.** Until 2026-09-17 the index was built in SECTION 7 of
+  `codeSTATA/build_main_data_county_year.do` and then READ BACK by `09b`. That
+  made a Phase 4 exhibit depend on a Phase 6 output: on a clean end-to-end run
+  the merged `.dta` did not exist yet, so `09b` skipped the two WSI exhibits
+  and `10_generate_weather_report.do` silently produced a report one section
+  short. The index is pure weather, so it belongs upstream of both consumers.
+- Definition ported unchanged from SECTION 7 -- Kohn (1975) / WI DNR:
+  `wsi_cold_days + wsi_snow_days`, each a count of qualifying days over
+  Dec 1 - Apr 30. A day meeting both conditions counts in both tallies, which
+  is the literature's "adds 2 points" rule.
+- Winter year `t` spans Dec(`t-1`) through Apr(`t`). This is WIDER than the
+  3-month DJF window `mean_winter_temp` uses; that variable, and
+  `warm_winter_1sd`/`_2sd`, stay in the merge because `09b` recomputes them
+  rather than reading them.
+- Missing propagates, matching Stata's `gen`: any of the five months absent
+  makes the season NaN, not a partial sum. So year `t` is NaN wherever
+  December of `t-1` is out of panel -- including the panel's first year,
+  exactly as `L1.` produced.
+- Separate script rather than part of `06` because the grain differs:
+  `06` is county-month, this is county-winter-year.
+- Not tested against the local `dataCSV`: the Mac's
+  `prism_derived_weather_vars.csv` is the 2020-2021 test slice and predates
+  `days_extremely_cold`, and there is no local ERA5 derived file. It was
+  verified on synthetic fixtures covering the four behaviours above, then
+  against Kodama's panel.
+
 ## Spot-checks
 
 ### `07a_export_prism_monthly_spotcheck.py`
@@ -387,15 +448,19 @@ town->county mapping.
   it's a genuinely different fetch method (different source, different
   crosswalk, different aggregation step) from anything else in 08b --
   same reasoning as the PRISM/ERA5 `_county`/`_wma` split.
-- SCOPE NARROWED 2026-09-03 from the original 45-year design: production
-  is 2022-2025 (the only years Census reports CT on the wrong geography,
-  32 rows), plus 2015/2018/2021 as validation years where Census still
-  published legacy counties so the two methods can be compared
-  (`cross_check_against_direct_county_pull`). Three validation years
-  test a static mapping as well as forty-one would.
+- SCOPE NARROWED 2026-09-03 from the original 45-year design, then WIDENED
+  2026-09-04: production is **2021-2025, 40 rows**. The original 2022-2025
+  scoping was right about the geography and wrong about the file -- Vintage
+  2025 (`cc-est2025`) reports planning regions for EVERY year it covers,
+  2020-2025, not just from the 2022 effective date, so 2021 fell through as
+  8 missing county-years in the first full build.
+- Validation years are **2015 and 2018** (2021 moved to production), where
+  Census still published legacy counties so the two methods can be compared
+  (`cross_check_against_direct_county_pull`). Two years validate a static
+  mapping as well as forty would.
 - TOTALS ONLY, no age. Census publishes sub-county population as totals
   in every vintage and CT DPH's town-level age data is not annual, so CT
-  age shares are unavailable for 2022-2025. Those 32 county-years are
+  age shares are unavailable for 2021-2025. Those 40 county-years are
   flagged missing by 08b deliberately and should not be modelled down.
 - The town->county mapping comes from a 2018 Gazetteer county-subdivision
   file, joined on COUSUB FIPS rather than town name -- name matching
@@ -453,14 +518,115 @@ keyed to `TIGER/2018/Counties` FIPS. Not an Earth Engine extraction.
   uniqueness and key coverage all passed on an early build whose 2000s
   decade was 70x wrong, so the panel is also asserted to sit in a
   plausible national range with annualized change under 3%/yr.
-- `fetch_pe02_1980s` is deliberately left raising `NotImplementedError`
-  after its download step: the PE-02 sheet layout could not be inspected,
-  and 1981-89 sits outside the collision-data window, so it does not
-  block the Phase 6 merge. Everything else runs.
+- `fetch_pe02_1980s` was IMPLEMENTED 2026-09-08 (it previously raised
+  `NotImplementedError` after its download step, because the PE-02 sheet
+  layout could not be inspected). Layout confirmed against `pe-02-1985.xls`:
+  one sheet per file named after the state, 3,141 counties x 6 race/sex rows
+  = 18,846 data rows, collapsed to county totals. Other years assumed to
+  share the layout.
+- BUILT 2026-09-09 on Kodama: `population_county_year_1981_2025.{csv,dta}`,
+  the panel `build_main_data_county_year.do` SECTION 3 now reads. Kodama
+  holds both this and the older 1990-2025 pair side by side; **1981-2025 is
+  canonical**. The Mac's `dataCSV/Population` has only the 1990-2025 vintage.
 - Subset flags for small test runs before a full build:
   `--years`, `--states`, `--probe-api`, `--skip-ct`.
 
+## Descriptive exhibits
+
+### `09_descriptive_weather_full.ipynb`
+The SOURCE for the two descriptive scripts. Edit this, never `09a`/`09b`.
+- The notebook is the working surface: exhibits are judged by eye, and that
+  iteration belongs in a notebook. `09a`/`09b` exist so `_project_main.do` can
+  run the same code non-interactively.
+- `_full` is a leftover disambiguator from a `09_descriptive_weather.ipynb`
+  that no longer exists. Nothing is "partial"; the suffix no longer
+  distinguishes anything.
+- Page-geometry limits on the figures are strict and easy to break silently --
+  see the `bbox_inches="tight"` trap in project memory
+  (notebook-figure-page-constraints) before changing any figure size.
+
+### `make_scripts.py`
+Generates `09a`, `09b` and `weather_descriptives_utils.py` from the notebook.
+- Run it after every notebook edit. Nothing enforces that the three generated
+  files are newer than the `.ipynb`, so a stale pair is possible and silent.
+- `split_module()` sorts top-level statements into definitions (which go to the
+  shared module) and body work (which gets indented into `build_panel()`). A
+  bare string expression counts as body work -- which is why the generated
+  module's "do not edit by hand" banner used to end up buried inside
+  `build_panel()`. Fixed 2026-09-17 by prepending `HEADER` after assembly
+  rather than passing it through. Keep it that way.
+- `NB` defaults to a bare relative path, so it only resolves when cwd is
+  `codePYTHON/`.
+
+### `_nb_patch.py`
+Cell-targeted notebook editing, addressed by heading text because cell indices
+shift. Hand-driven; imported by nothing.
+- Written for the v2 exhibit revision (shipped 2026-09-11). Finished-purpose
+  tool, kept because the next structural notebook edit will want it.
+
+### `09a_descriptive_weather_tier1.py` -- GENERATED
+Tier 1: internal QA and exploratory exhibits. Coverage integrity, per-county
+and per-state sanity checks, QA findings. Written to `tables/weather/tier1/`
+and `figures/weather/tier1/`.
+- Internal only. These are the "eyeball it and say, okay, this checks out"
+  exhibits; no outside reader ever sees them.
+- Straight-line module code with no `__main__` guard, deliberately: Stata's
+  `python script` runs a file top to bottom. The cost is that it cannot be
+  imported without running everything.
+
+### `09b_descriptive_weather_tier2.py` -- GENERATED
+Tier 2: the polished exhibit set that `codeSTATA/10_generate_weather_report.do`
+knits into the dated PI report. Written to `tables/weather/tier2/` and
+`figures/weather/tier2/`.
+- Must run before `10`, which asserts every exhibit it expects exists.
+- Since 2026-09-17 it no longer reads the merged `.dta`: the two Winter
+  Severity Index exhibits read `06c`'s CSV. That removed the one place where a
+  Phase 4 output depended on a Phase 6 input.
+- One output is named `*_tier2_decisions_for_eyal.csv` -- a PI's first name
+  baked into a shipped filename. Harmless internally, worth renaming if these
+  ever leave the project.
+
 ## Shared library
+
+### `aggregation_utils.py`
+Shared helpers for the aggregation stage (`05`, `06`, `06c`, `07d`):
+`discover_input_files`, `load_daily_extract`, `flag_incomplete_months`,
+`check_for_year_conflicts`, `resolve_data_root`, `resolve_duplicate_rows`.
+- The aggregation stage's counterpart to `gee_extract_utils.py`'s role in the
+  extraction stage: the QA rules live here once, so `05` and `06` cannot drift
+  into two different definitions of "incomplete month" or two different
+  duplicate policies.
+- Duplicate policy: drop if identical, error if any non-key column disagrees.
+  Never silently pick one.
+
+### `era5_extract_utils.py`
+ERA5-Land-specific extraction logic shared by `03a` and `04a`: unit conversions
+(K->C, m->mm) and derived-band computation (`add_derived_bands`).
+- Deliberately ERA5-specific, unlike `gee_extract_utils.py` which is
+  dataset-agnostic. `03a` exists to validate exactly this logic at small scale
+  before `04a` runs it across CONUS, so the two must share the code rather than
+  keep two copies.
+
+### `ground_truth_utils.py`
+Row-filtering helpers shared by `07e` and `07g`, which pull the same
+county-year-months out of the PRISM and ERA5 panels for the ground-truth
+comparison.
+- NOTE: the case lists themselves are NOT shared. `07f`/`07g`/`07h` each carry
+  a hand-synced copy of `GROUND_TRUTH_CASES`, and `07e`'s list has drifted from
+  them -- different counties AND different years. Reconcile before trusting a
+  cross-dataset ground-truth comparison.
+
+### `weather_descriptives_utils.py` -- GENERATED
+Shared setup for `09a`/`09b`: the panel build, county/state geometry, the
+colour and figure helpers, and the trend/decade blocks both tiers use.
+- Generated by `make_scripts.py`. Do not edit by hand -- the banner is at the
+  top of the file as of 2026-09-17.
+- `build_panel()` is the only thing that does I/O; importing the module defines
+  but does not read. Callers do `globals().update(build_panel())`.
+- It resolves the project root by probing candidate paths rather than
+  `__file__`, because the notebook it is generated from has no `__file__`. That
+  candidate list is a notebook cell -- fix it THERE, or the next
+  `make_scripts.py` run reverts you.
 
 ### `population_utils.py`
 Shared library for the population scripts (08a/08b): FIPS crosswalk
@@ -470,7 +636,9 @@ the age-share pivot (`compute_age_shares`), the AGEGRP encoding guard
 (`assert_agegrp_encoding`), the county-universe spine
 (`load_county_universe`, `reindex_to_county_universe`), and the CSV/.dta
 writer. `resolve_data_root` is re-exported from `aggregation_utils.py`
-(identical logic, not duplicated); `setup_logging` is reimplemented
+(identical logic, not duplicated here -- though note `gee_extract_utils.py`
+does carry its own full copy of the same function); `setup_logging` is
+reimplemented
 rather than imported from `gee_extract_utils.py`, deliberately, so the
 population stage does not depend on earthengine-api. Mirrors
 `aggregation_utils.py`'s role for the aggregation stage.
