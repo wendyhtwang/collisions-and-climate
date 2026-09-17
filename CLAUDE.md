@@ -14,12 +14,21 @@ geographic units, keys, or variable naming here can break merges elsewhere.
 When a task's scope, resolution, or output format isn't specified, ask
 before assuming rather than defaulting to what a prior stage used.
 
+## Repository layout
+
+The repository root mirrors `/mnt/data_d/Dropbox/Research/` on Kodama: the
+three project folders sit directly beneath it, named as Kodama names them.
+This component's code is under `AnimalCollisionsWeather/codePYTHON/` and
+`AnimalCollisionsWeather/codeSTATA/`; `_repo/` holds repo-only tooling that
+is never copied to Dropbox. See README.md for the full tree and for the
+two-trees-on-Kodama caveat about stale inputs.
+
 ## Reference implementation
 
 Before writing or modifying Earth Engine extraction code, inspect relevant
 examples under:
 
-references/earthengine-api/python/examples/
+_repo/references/earthengine-api/python/examples/
 
 Use those files as references for API syntax and program structure, but do
 not copy code mechanically. Confirm that each adopted pattern is applicable
@@ -43,7 +52,8 @@ to the current Earth Engine Python API.
 
 ## File & data conventions
 
-- Save raw downloads in a subfolder under ~/dataRAW/, with a source.txt
+- Save raw downloads in a subfolder under AnimalCollisionsWeather/dataRAW/,
+  with a source.txt
   documenting where the data came from and the date it was obtained.
 - Build output paths off a single project-root variable rather than
   hardcoding absolute paths, consistent with the $path convention used in

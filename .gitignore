@@ -19,12 +19,22 @@ env/
 
 # Environment variables
 .env
-# Reference clones (not part of this repo)
-references/earthengine-api/
 
-# Raw & built data -- lives on Kodama's F: drive / gets regenerated from
-# raw + code, not source-controlled here.
+# Reference clones (not part of this repo)
+_repo/references/earthengine-api/
+
+# Data. Lives on Kodama (Dropbox/Research and /mnt/data_f) or is regenerated
+# from raw + code. Patterns are unanchored, so they apply inside every one of
+# the three project folders.
 dataRAW/
 dataCSV/
+dataCLEAN/
+dataGIS/
+dataPYTHON/
 # Built Stata data and estimates -- regenerated, not source-controlled.
 dataSTATA/
+
+# Two deliberate exceptions, tracked despite living under ignored trees:
+#   AnimalCollisionsWeather/dataCSV/Population/fips_crosswalk_1980_2025.csv
+#   AnimalCollisionsWeather/dataRAW/Population/source.txt
+# They are already in the index; re-add with `git add -f` if ever dropped.
