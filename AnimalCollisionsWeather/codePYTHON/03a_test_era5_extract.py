@@ -3,13 +3,13 @@ Small-scale ERA5-Land extraction test (IL/IN, 2020-2021), used to
 validate unit-conversion decisions before they're carried into the
 full-scale ERA5 script.
 
-- Validates several decisions before applying them in 03a: using
+- Validates several decisions before applying them in 04a: using
   ECMWF/ERA5_LAND/DAILY_AGGR (only dataset with all required bands),
   converting Kelvin->Celsius and precip/snowfall meters->mm inline (a new
   pattern for this project -- PRISM needed no such conversion), and
   computing wind speed from u/v components.
 - Includes tmin_c/tmax_c daily extremes; PRISM already covers
-  tmin/tmax, but still included here so ERA5 can server as a robustness check
+  tmin/tmax, but still included here so ERA5 can serve as a robustness check
   to the main PRISM dataset.
 - Run this before 04a_extract_era5_county.py; don't launch
   a full-scale run until a small test run succeeds.

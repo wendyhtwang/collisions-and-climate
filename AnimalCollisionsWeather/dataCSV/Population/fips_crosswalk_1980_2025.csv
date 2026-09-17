@@ -30,7 +30,7 @@
 #  - Connecticut's 2022 planning-region change. Planning regions do NOT nest
 #    into the legacy 8 counties, so it is not a rename/merger/split
 #    relationship and cannot be expressed as a row here. Handled instead by
-#    08b_population_ct_towns.py, which goes down to the 169 towns -- the
+#    08a_population_ct_towns.py, which goes down to the 169 towns -- the
 #    common building block of both schemes -- and re-aggregates up to the
 #    legacy counties.
 #  - Small boundary shifts where BOTH old and new geoid exist before and after

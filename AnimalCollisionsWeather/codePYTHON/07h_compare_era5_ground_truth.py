@@ -46,8 +46,6 @@ GROUND_TRUTH_CASES = [
 # checkout), add that machine's absolute path too.
 NOAA_STATION_MONTH_CANDIDATES = [
     REPO_ROOT / "dataCSV" / "PRISM" / "spot_check" / "noaa_station_daily_data" / "noaa_station_month.csv",
-    Path("/Users/wendyhtw/Documents/CAPP ('25-'27)/Q4 - Summer'26/EPIC/Repos/collisions-and-climate")
-    / "dataCSV" / "PRISM" / "spot_check" / "noaa_station_daily_data" / "noaa_station_month.csv",  # local repo fallback
 ]
 
 ERA5_AT_POINT_PATH = REPO_ROOT / "dataCSV" / "ERA5" / "spot_check" / "era5_at_point_month.csv"

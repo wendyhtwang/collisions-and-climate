@@ -4,7 +4,8 @@
  * 03a_test_era5_extract.py's CSV output.
  *
  * - Recomputes the same derived bands as add_derived_bands() in
- *   03a_test_era5_extract.py (Kelvin->Celsius, wind speed from u/v,
+ *   era5_extract_utils.py, which 03a_test_era5_extract.py imports
+ *   (Kelvin->Celsius, wind speed from u/v,
  *   meters->mm) -- unlike PRISM's console check, this is testing real
  *   conversion math, not just band selection. Keep in sync if
  *   add_derived_bands() changes.

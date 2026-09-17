@@ -26,7 +26,7 @@ from ground_truth_utils import filter_to_target_rows
 # Exact (geoid, year, month) rows to pull -- NOT a cross product of
 # separate GEOID/year/month lists, so different counties can specify
 # different months (e.g. because that's whichever period you actually
-# pulled station data for via 06d for that particular station).
+# pulled station data for via 07d for that particular station).
 TARGET_COUNTY_MONTHS = [
     ("18009", 2021, 12),  # Blackford County, IN
     ("47127", 2021, 12),  # Moore County, TN
