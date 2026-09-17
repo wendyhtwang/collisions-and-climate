@@ -206,7 +206,7 @@ def main():
                             and "county_variability = (" in cell_source(c))
     variability_block = variability_cell.split("variability_by_state = (")[0].rstrip() + "\n"
 
-    common = [HEADER.format(title="Shared setup for the weather descriptive scripts."), SHIM]
+    common = [SHIM]
     common += setup
     common.append(to_script(shared_geometry))
     # TrendFit and _linear_trend are defined in a Tier 1 cell but every Tier 2
@@ -220,7 +220,11 @@ def main():
                   + trend_block)
     common.append(decade_block)
     common.append(variability_block)
-    (OUT_DIR / COMMON).write_text(assemble_utils(common), encoding="utf-8")
+    # HEADER is prepended AFTER assembly, not passed through it: split_module()
+    # treats a bare string expression as body work and would indent the banner
+    # into build_panel(), where nobody opening the file would ever see it.
+    common_header = HEADER.format(title="Shared setup for the weather descriptive scripts.")
+    (OUT_DIR / COMMON).write_text(common_header + assemble_utils(common), encoding="utf-8")
 
     # `import *` skips names beginning with an underscore, and the notebook has
     # several private helpers (_linear_trend, _numeric_weather_columns, ...) that

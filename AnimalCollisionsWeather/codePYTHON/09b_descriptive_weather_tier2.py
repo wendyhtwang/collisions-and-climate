@@ -1117,41 +1117,32 @@ print(f"ERA5 minus PRISM national winter temperature: mean {mean_offset:+.3f}°C
 
 
 # Phase 4 checklist item open since 8/18, buildable only since 9/8/26 when
-# days_snow_depth_18in landed upstream and SECTION 7 of
-# build_main_data_county_year.do started populating winter_severity_index.
+# days_snow_depth_18in landed upstream.
 #
-# The index is READ from the merged county-year panel rather than recomputed
-# here. The merge script's header is explicit that the four winter measures are
-# "built here, not in the estimation .do files, so every downstream script uses
-# the identical construction" -- recomputing in Python would create a third
-# definition, which is exactly the failure this notebook already has one of (see
-# the anomaly section).
-MERGED_PANEL_PATH = REPO_ROOT / "dataSTATA" / "main_data_county_year.dta"
+# The index is READ, not recomputed here -- a second definition in Python is
+# exactly the failure this notebook already has one of (see the anomaly
+# section). Until 9/17/26 it was read out of the merged county-year panel,
+# which made this Phase 4 exhibit depend on a Phase 6 output. The index is pure
+# weather, so it now lives in 06c_build_winter_severity.py and both this
+# notebook and the merge read that one CSV.
+WSI_PATH = REPO_ROOT / "dataCSV" / "Weather" / "winter_severity_county_year.csv"
 wsi_map_path = None
 wsi_sensitivity_path = None
 
-if not MERGED_PANEL_PATH.exists():
-    # Deliberately a loud skip rather than an assertion: the exhibit depends on a
-    # different pipeline's output, and a missing merge should not cost the whole
-    # weather report.
-    print(f"NOTE: {MERGED_PANEL_PATH} not found -- the Winter Severity Index exhibits are "
-          f"skipped. Run codeSTATA/build_main_data_county_year.do first.")
+if not WSI_PATH.exists():
+    # Deliberately a loud skip rather than an assertion: a missing upstream file
+    # should not cost the whole weather report.
+    print(f"NOTE: {WSI_PATH} not found -- the Winter Severity Index exhibits are "
+          f"skipped. Run codePYTHON/06c_build_winter_severity.py first.")
 else:
-    merged = pd.read_stata(MERGED_PANEL_PATH, convert_categoricals=False)
-    key = next((c for c in ("geoid", "fips", "fips_num", "county_fips") if c in merged.columns), None)
-    assert key is not None, (
-        f"No recognisable county key in {MERGED_PANEL_PATH.name}; columns include "
-        f"{sorted(merged.columns)[:15]}"
-    )
-    merged["geoid"] = (merged[key].astype("Int64").astype(str).str.zfill(5)
-                       if pd.api.types.is_numeric_dtype(merged[key])
-                       else merged[key].astype(str).str.zfill(5))
+    merged = pd.read_csv(WSI_PATH, dtype={"geoid": str})
+    merged["geoid"] = merged["geoid"].astype(str).str.zfill(5)
 
     wsi_columns = [c for c in ("winter_severity_index", "winter_severity_index_snow12",
                                "wsi_cold_days", "wsi_snow_days") if c in merged.columns]
     assert "winter_severity_index" in wsi_columns, (
-        "winter_severity_index is not in the merged panel -- rerun SECTION 7 of "
-        "build_main_data_county_year.do."
+        f"winter_severity_index is not in {WSI_PATH.name} -- rerun "
+        "codePYTHON/06c_build_winter_severity.py."
     )
     wsi_county = (merged.groupby("geoid", as_index=False)[wsi_columns].mean()
                   .rename(columns={c: f"mean_{c}" for c in wsi_columns}))
@@ -1177,8 +1168,9 @@ else:
               "December to 30 April with a minimum temperature at or below 0°F, plus the count "
               "of days with at least 18 inches of snow on the ground; a day meeting both "
               "conditions counts twice. Conventional bands: below 50 mild, 50–80 moderate, "
-              "80–100 moderately severe, above 100 very severe. Read from the merged county-year "
-              "panel, not recomputed here. CAVEAT: snow depth is an ERA5-Land grid-box average "
+              "80–100 moderately severe, above 100 very severe. Read from the "
+              "county-winter-year file built by 06c_build_winter_severity.py, not "
+              "recomputed here. CAVEAT: snow depth is an ERA5-Land grid-box average "
               "averaged again over a county, and that spatial averaging removes the local maxima "
               "an 18-inch cutoff is meant to catch, so across most of the eastern and midwestern "
               "deer range the index is driven almost entirely by its cold-day component."),

@@ -1,3 +1,9 @@
+"""Shared setup for the weather descriptive scripts.
+
+GENERATED FILE -- do not edit by hand.
+Produced from codePYTHON/09_descriptive_weather_full.ipynb by make_scripts.py.
+Edit the notebook, then re-run make_scripts.py.
+"""
 # --- notebook compatibility ------------------------------------------------
 # The notebook renders every figure inline; a script does not. matplotlib runs
 # headless and the inline preview becomes a no-op, so the figure PDFs are the
@@ -554,12 +560,6 @@ def build_panel():
     global _BUILT, config, county_geometry, county_variability, county_winter, df, load_diagnostics, missing_area, state_geometry, winter_completeness, winter_diagnostics
     if _BUILT:
         return _panel()
-    """Shared setup for the weather descriptive scripts.
-
-    GENERATED FILE -- do not edit by hand.
-    Produced from codePYTHON/09_descriptive_weather_full.ipynb by make_scripts.py.
-    Edit the notebook, then re-run make_scripts.py.
-    """
     matplotlib.use("Agg")
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
