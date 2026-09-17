@@ -39,13 +39,15 @@ def resolve_repo_root():
     # Prefer the documented production roots before generic cwd discovery.
     candidates.extend([
         Path("/mnt/data_d/Dropbox/Research/AnimalCollisionsWeather"),
-        Path("/Users/wendyhtw/Documents/CAPP ('25-'27)/Q4 - Summer'26/EPIC/Repos/collisions-and-climate"),
+        Path("/Users/wendyhtw/Documents/CAPP ('25-'27)/Q4 - Summer'26/EPIC/Repos"
+             "/collisions-and-climate/AnimalCollisionsWeather"),
     ])
     for base in (cwd, *cwd.parents):
         candidates.extend([
             base,
-            base / "collisions-and-climate",
-            base / "Repos" / "collisions-and-climate",
+            base / "AnimalCollisionsWeather",
+            base / "collisions-and-climate" / "AnimalCollisionsWeather",
+            base / "Repos" / "collisions-and-climate" / "AnimalCollisionsWeather",
         ])
     checked = []
     for candidate in candidates:

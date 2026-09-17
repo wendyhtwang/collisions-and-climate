@@ -34,9 +34,10 @@ from pathlib import Path
 # Configuration
 # --------------------------------------------------------------------------
 
-# Where the markdown file lives.
-DEFAULT_OUTPUT = Path(
-    "/home/wendy-wang/collisions-and-climate/Kodama server - file system structure.md"
+# Where the markdown file lives: _repo/notes/, resolved from this script's own
+# location so the path holds on any clone of the repo.
+DEFAULT_OUTPUT = (
+    Path(__file__).resolve().parents[1] / "notes" / "Kodama server - file system structure.md"
 )
 
 # Each section = one directory + the tree flags to use for it.

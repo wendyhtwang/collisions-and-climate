@@ -73,7 +73,9 @@ except ImportError:
 DEFAULT_DTA = Path(
     "/mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/dataSTATA/main_data_county_year.dta"
 )
-DEFAULT_OUT_DIR = Path(__file__).resolve().parent
+DEFAULT_OUT_DIR = (
+    Path(__file__).resolve().parents[2] / "AnimalCollisionsWeather" / "documentation"
+)
 DEFAULT_BASENAME = "Variables in the main merged dataset"
 
 
