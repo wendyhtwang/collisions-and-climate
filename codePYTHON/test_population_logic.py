@@ -261,10 +261,10 @@ print("\n== cc-est YEAR code inference ==")
 import importlib.util as _ilu
 
 _s = _ilu.spec_from_file_location(
-    "m08a_pre", Path(__file__).resolve().parent / "08a_population_county.py"
+    "m08b_pre", Path(__file__).resolve().parent / "08b_population_county.py"
 )
 _m = _ilu.module_from_spec(_s)
-sys.modules["m08a_pre"] = _m
+sys.modules["m08b_pre"] = _m
 _s.loader.exec_module(_m)
 
 # The real cc-est2020int shape, from IL: codes 1-12 for an 11-year span.
@@ -333,11 +333,11 @@ print("\n== stack: priority resolution and the YEAR-offset backstop ==")
 import importlib.util
 
 _spec = importlib.util.spec_from_file_location(
-    "m08a", Path(__file__).resolve().parent / "08a_population_county.py"
+    "m08b", Path(__file__).resolve().parent / "08b_population_county.py"
 )
-m08a = importlib.util.module_from_spec(_spec)
-sys.modules["m08a"] = m08a
-_spec.loader.exec_module(m08a)
+m08b = importlib.util.module_from_spec(_spec)
+sys.modules["m08b"] = m08b
+_spec.loader.exec_module(m08b)
 
 
 # 20 counties with a realistic SPREAD of growth rates (0% to 9.5%/yr).
@@ -368,7 +368,7 @@ def source_frame(name, years, priority, *, year_offset=0):
     df["county_name"] = "x"
     df["source"] = name
     df["is_intercensal"] = True
-    cfg = m08a.PopulationSourceConfig(
+    cfg = m08b.PopulationSourceConfig(
         name=name, years=range(min(years), max(years) + 1),
         fetch_fn="", is_intercensal=True, priority=priority,
     )
@@ -381,7 +381,7 @@ frames = {
     "postcensal": source_frame("postcensal", [2020, 2021, 2022], priority=2),
 }
 try:
-    stacked = m08a.stack_sources(frames)
+    stacked = m08b.stack_sources(frames)
     check("aligned sources stack cleanly", True)
     n_2020 = stacked[(stacked["year"] == 2020)]["source"].unique()
     check("2020 resolved to the intercensal source", list(n_2020) == ["intercensal"],
@@ -400,7 +400,7 @@ frames_revised = {
     "postcensal": (cfg_rev, df_rev),
 }
 try:
-    m08a.stack_sources(frames_revised)
+    m08b.stack_sources(frames_revised)
     check("ordinary vintage revision does NOT trip the check", True)
 except ValueError as exc:
     check("ordinary vintage revision does NOT trip the check", False, str(exc)[:90])
@@ -413,7 +413,7 @@ frames_bad = {
     "postcensal": source_frame("postcensal", [2020, 2021, 2022], priority=2, year_offset=1),
 }
 try:
-    m08a.stack_sources(frames_bad)
+    m08b.stack_sources(frames_bad)
     check("one-year offset is caught", False, "no exception raised")
 except ValueError as exc:
     check("one-year offset is caught", "continuity" in str(exc).lower(), str(exc)[:80])

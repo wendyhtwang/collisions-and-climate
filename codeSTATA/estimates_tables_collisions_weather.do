@@ -17,26 +17,24 @@ PURPOSE:      Read back the .ster files written by
               four blocks are wrapped into one table with texdoc.
 
 CHANGELOG:
-  09/08/2026 Wendy Wang: initial version, per Eyal (9/1/26). Layout
-    follows the Sept 8 "Collisions on Winter Weather" mockup: panels
-    stack (winter measure), columns iterate (control set), R^2 /
-    Observations / Clusters under each panel, and a single X-block for
-    the control sets at the foot of the table rather than repeated under
-    every panel.
-  09/10/2026 Wendy Wang: revised against Eyal's comments on the mockup at
-    the 9/8/26 meeting --
-    (a) The X-block is now ONE weather row, not two. Eyal: "since you are
-        always going to be including the mean temperature and the
-        precipitation quantiles together, you can just narrow that to one
-        row and just call it weather controls." The ctrl_temp and
+  09/08/2026 Wendy Wang: initial version, per the 9/1/26 project
+    convention. Layout follows the Sept 8 "Collisions on Winter Weather"
+    mockup: panels stack (winter measure), columns iterate (control set),
+    R^2 / Observations / Clusters under each panel, and a single X-block
+    for the control sets at the foot of the table rather than repeated
+    under every panel.
+  09/10/2026 Wendy Wang: revised against the 9/8/26 review of the mockup --
+    (a) The X-block is now ONE weather row, not two. Mean temperature and
+        the precipitation quintiles always enter together, so they are
+        reported as a single weather-controls row: the ctrl_temp and
         ctrl_ppt indicator rows are replaced by a single ctrl_weather.
     (b) Panel B now shows ONE anomaly threshold, chosen by the panelB_sd
         switch in SECTION 1 and defaulting to 1SD. The estimation script
         runs the 1SD and 2SD dummies as separate specifications and
         prints them side by side; this file publishes whichever one that
         comparison favours, and the table notes say the other was
-        estimated separately. Eyal: "I would choose either or... you can
-        run both and decide which one you want to keep."
+        estimated separately -- the two thresholds overlap by
+        construction and do not belong in one regression.
     (c) A missing .ster now stops the run instead of printing a warning
         and letting estout fail later on an unstored estimate. Panel D is
         no longer expected to be missing: winter_severity_index has been
@@ -80,9 +78,9 @@ CHANGELOG:
         and February mean temperature, which are two of the three months
         composing mean_winter_temp, so the Panel A coefficient in those
         columns is exactly 3x the December(t-1) effect and is not
-        comparable to column (1). See Q1 in the estimation script: this is
-        a specification question for Eyal, and the caveat is what stands
-        until he has seen the evidence.
+        comparable to column (1). See Q1 in the estimation script: this
+        is a specification question, still open, and the caveat is what
+        stands until the evidence has been reviewed.
     (f) The rate table is labelled a robustness counterpart to the share
         table rather than reading as a co-equal main-text Table 2, per the
         Phase 6 task doc.
@@ -139,6 +137,12 @@ CHANGELOG:
     thing to check if the spacing goes odd again. Verified with a local
     pdflatex run against the Overleaf preamble (geometry, setspace,
     booktabs, threeparttable, ragged2e) and the Sept 10 panel files.
+  09/15/2026 Wendy Wang: comment pass, no code change. Design decisions
+    that were credited to an individual or quoted verbatim from project
+    discussion are now stated plainly as decisions, with the date kept
+    where the date is what makes the decision traceable. Nothing about
+    why the code does what it does was dropped; no names remain in the
+    file.
 
 * Inputs:
 *   $path/dataSTATA/estimates/collisions_weather/<outcome>_p<A|B1|B2|C|D>_c<1-4>_W<wt>.ster
@@ -222,7 +226,8 @@ cap mkdir "$tables/collisions_weather"
 
 * Open log file in the codeSTATA directory, matching
 * build_main_data_county_year.do
-local log_file = "$path/codeSTATA/estimates_tables_collisions_weather.log"
+cap mkdir "$path/codeSTATA/logs"
+local log_file = "$path/codeSTATA/logs/estimates_tables_collisions_weather.log"
 cap log close
 log using "`log_file'", replace text
 
@@ -237,7 +242,7 @@ if _rc ssc install texdoc
 
 * Which warm-winter anomaly threshold goes in Panel B: 1 or 2.
 * The estimation script estimates both and prints them side by side in
-* its SECTION 7. Eyal's tie-break, 9/8/26: if both are precise and point
+* its SECTION 7. Tie-break rule (9/8/26): if both are precise and point
 * the same way, keep 1SD, because a 1SD winter is far more common and the
 * estimate therefore has more support. Set this once, here, after looking
 * at that comparison.
@@ -414,7 +419,7 @@ if `n_missing' > 0 {
 }
 
 * The outcome mean goes in the column header, per the mockup and the
-* convention in Eyal's own tables.
+* project's table convention.
 estimates use "$estimates/collisions_weather/`y'_pA_c1_W`wt'.ster"
 if `share_scale' == 100 {
     local ybar : di %5.2f e(dep_var_mean)
@@ -465,8 +470,8 @@ estout p_A_c_1
 * 2c. Panel B -- warm-winter anomaly
 *---------------------------------------------------------------
 * One threshold only. The other was estimated as its own specification
-* and lives in the .ster folder; it is not in this table, per Eyal
-* 9/8/26, because the two dummies overlap by construction.
+* and lives in the .ster folder; it is not in this table, per the 9/8/26
+* review, because the two dummies overlap by construction.
 
 #delimit ;
 estout p_B_c_1
@@ -538,8 +543,8 @@ estout p_C_c_1
 * 2e. Panel D -- winter severity index
 *---------------------------------------------------------------
 * The control X-block is appended to THIS panel's stats() only, so it
-* prints once, at the foot of the table. One weather row, per Eyal
-* 9/8/26 -- the monthly temperature controls and the precipitation
+* prints once, at the foot of the table. One weather row, per the
+* 9/8/26 review -- the monthly temperature controls and the precipitation
 * quintiles always enter together, so they never need separate rows.
 
 #delimit ;
@@ -906,7 +911,7 @@ di as result "Wrote `file_name'"
 *   table_collisions_weather_rate.tex         <- and this one
 *   table_collisions_weather_rate_panel_A-D.tex
 * Then reference the two wrappers from the Results section with \input,
-* naming the wrapper, not the panels (Eyal, 9/8/26).
+* naming the wrapper, not the panels (settled 9/8/26).
 
 di as result _newline "Upload $tables/collisions_weather/*.tex to Overleaf;"
 di as result "input the two wrapper files from the Results section."

@@ -1,6 +1,6 @@
 """
-Shared helpers for the population-data scripts (08a_population_county.py,
-08b_population_ct_towns.py) -- FIPS crosswalk mechanics, age-bucket
+Shared helpers for the population-data scripts (08a_population_ct_towns.py,
+08b_population_county.py) -- FIPS crosswalk mechanics, age-bucket
 handling, and the panel-level assertions that protect the merge key.
 
 Mirrors aggregation_utils.py's role for the weather aggregation stage
@@ -203,7 +203,7 @@ def load_fips_crosswalk(path) -> pd.DataFrame:
     summarization, which had missed 2 of the 10). Connecticut's 2022
     planning-region change is deliberately NOT in this file -- planning
     regions don't nest into the legacy counties, so it isn't a
-    rename/merger/split relationship at all; 08b_population_ct_towns.py
+    rename/merger/split relationship at all; 08a_population_ct_towns.py
     handles it by going down to the town level instead.
 
     Columns: old_geoid, new_geoid, change_type, effective_year, source,

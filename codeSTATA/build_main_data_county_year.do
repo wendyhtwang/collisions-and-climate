@@ -171,7 +171,8 @@ cap mkdir "$tables/merge_diagnostics"
 * Open log file in the codeSTATA directory
 * Derive the codeSTATA path from the global path set above
 local codeSTATA_dir = "$path/codeSTATA"
-local log_file = "`codeSTATA_dir'/build_main_data_county_year.log"
+cap mkdir "`codeSTATA_dir'/logs"
+local log_file = "`codeSTATA_dir'/logs/build_main_data_county_year.log"
 cap log close
 log using "`log_file'", replace text
 

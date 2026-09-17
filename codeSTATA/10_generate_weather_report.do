@@ -1,38 +1,55 @@
-/*******************************************************************************
-Project:  Animal collisions, weather, and wildlife populations
-Purpose:  Knit the Tier 2 exhibits from 09_descriptive_weather_full.ipynb into a
-          single dated PDF report for the PI.
+/*==============================================================
+FILE:         10_generate_weather_report.do
+PROJECT:      Weather Changes, Ungulate Populations, & Vehicle Collisions
+CURRENT LEAD: Wendy Wang
 
-Inputs:   $path/figures/weather/tier2, files *.pdf   (exhibits)
-          $path/tables/weather/tier2, files *.csv    (exhibit index, notes, decisions)
-          $path/tables/weather/tier1, files *.csv    (coverage and QA tables)
-Output:   $path/reports/WeatherData/report_YYYY_MM_DD/
+PURPOSE:      Knit the Tier 2 weather exhibits produced by
+              codePYTHON/09_descriptive_weather_full.ipynb into a single
+              dated PDF report for the PI.
 
-Notes:    Tier 1 QA exhibits are indexed in Appendix B, not reproduced.
-          The multi-page state exhibit goes to Appendix A via \includepdf.
+INPUTS:       $path/figures/weather/tier2, files *.pdf   (exhibits)
+              $path/tables/weather/tier2,  files *.csv   (exhibit index,
+                                                          notes, decisions)
+              $path/tables/weather/tier1,  files *.csv   (coverage and QA)
 
-          v2 (09/10/2026). Rewritten for the revised exhibit set. Moved title
-	  and source note out of every exhibit so they live in the figure notes
-	  instead. So each exhibit now carries a short hand-written \caption{} 
-	  plus a Notes paragraph read from prism_tier2_exhibit_notes.csv, which the notebook
-          writes from the same strings it used to print inside the figures. The
-          captions cannot drift from the figures that way.
+OUTPUT:       $path/reports/WeatherData/report_YYYY_MM_DD/
 
-          DO NOT UNDO (each of these cost a debugging round on 8/28):
-            - encoding("utf-8") on every import delimited. Without it Stata
-              reads the UTF-8 CSVs as Latin-1 and re-emits them double-encoded,
-              which pdflatex rejects.
-            - xcolor BEFORE pdfpages in the preamble; pdfpages loads xcolor with
-              no options and the two clash otherwise.
-            - No dollar signs in any tex line: Stata expands them as global
-              macros. Use \ensuremath{\geq}, never $\geq$.
-            - No literal backticks in tex lines; Stata reads them as macro opens.
-            - The \DeclareUnicodeCharacter block is required.
-            - pdflatex -interaction=nonstopmode, or a LaTeX error hangs Stata
-              waiting for keyboard input with no visible cause.
-            - Exhibits are COPIED into the report folder, not linked by absolute
-              path, so old reports still render after a later notebook run.
-*******************************************************************************/
+NOTES:        Tier 1 QA exhibits are indexed in Appendix B, not reproduced.
+              The multi-page state exhibit goes to Appendix A via
+              \includepdf.
+
+              DO NOT UNDO (each of these cost a debugging round on 8/28):
+                - encoding("utf-8") on every import delimited. Without it
+                  Stata reads the UTF-8 CSVs as Latin-1 and re-emits them
+                  double-encoded, which pdflatex rejects.
+                - xcolor BEFORE pdfpages in the preamble; pdfpages loads
+                  xcolor with no options and the two clash otherwise.
+                - No dollar signs in any tex line: Stata expands them as
+                  global macros. Use \ensuremath{\geq}, never the math
+                  shorthand.
+                - No literal backticks in tex lines; Stata reads them as
+                  macro opens.
+                - The \DeclareUnicodeCharacter block is required.
+                - pdflatex -interaction=nonstopmode, or a LaTeX error hangs
+                  Stata waiting for keyboard input with no visible cause.
+                - Exhibits are COPIED into the report folder, not linked by
+                  absolute path, so old reports still render after a later
+                  notebook run.
+
+CHANGELOG:
+  08/28/2026 Wendy Wang: initial version, for the first Tier 2 exhibit set.
+  09/10/2026 Wendy Wang: rewritten for the revised (v2) exhibit set. Moved
+    the title and source note out of every exhibit so they live in the
+    figure notes instead: each exhibit now carries a short hand-written
+    \caption{} plus a Notes paragraph read from
+    prism_tier2_exhibit_notes.csv, which the notebook writes from the same
+    strings it used to print inside the figures. The captions cannot drift
+    from the figures that way.
+  09/17/2026 Wendy Wang: brought the file into the style guide's header and
+    SECTION-banner format; fixed the report folder date stamp, which
+    carried a leading underscore from the %td format string and produced
+    report__YYYY_MM_DD instead of report_YYYY_MM_DD.
+==============================================================*/
 
 clear all
 set more off
@@ -42,7 +59,7 @@ capture which texdoc
 if _rc ssc install texdoc, replace
 
 *------------------------------------------------------------------------------
-* 0. Paths
+* SECTION 0: PATHS
 *------------------------------------------------------------------------------
 if "$path" == "" {
     di as error "Global \$path is not set. Run _project_main.do, or set it here."
@@ -55,7 +72,7 @@ global tab1 "$path/tables/weather/tier1"
 global tab2 "$path/tables/weather/tier2"
 
 * Date stamp (Eyal's convention, minus the DD prefix -- this is not a diff-in-diff)
-local string_sysdate: di %td_CCYY_NN_DD date(c(current_date), "DMY")
+local string_sysdate: di %tdCCYY_NN_DD date(c(current_date), "DMY")
 local string_sysdate = subinstr("`string_sysdate'", " ", "_", .)
 
 cap mkdir "$path/reports"
@@ -65,8 +82,9 @@ cap mkdir "`outdir'"
 cap mkdir "`outdir'/exhibits"
 
 *------------------------------------------------------------------------------
-* 1. Verify every exhibit this report expects is on disk, and warn about any
-*    Tier 2 exhibit on disk that this report does not include.
+* SECTION 1: VERIFY EXHIBITS ON DISK
+*    Checks that every exhibit this report expects is present, and warns
+*    about any Tier 2 exhibit on disk that this report does not include.
 *------------------------------------------------------------------------------
 local expected ///
     prism_national_long_run_warming.pdf ///
@@ -184,7 +202,7 @@ program define exhibitblock
 end
 
 *------------------------------------------------------------------------------
-* 2. Preamble
+* SECTION 2: PREAMBLE
 *------------------------------------------------------------------------------
 local file_name "`outdir'/report_`string_sysdate'.tex"
 texdoc init "`file_name'", replace force
@@ -240,7 +258,7 @@ tex %
 tex \begin{document}
 
 *------------------------------------------------------------------------------
-* 3. Title page
+* SECTION 3: TITLE PAGE
 *------------------------------------------------------------------------------
 local prettydate = subinstr("`string_sysdate'", "_", "-", .)
 
@@ -278,7 +296,8 @@ tex \tableofcontents
 tex \newpage
 
 *------------------------------------------------------------------------------
-* 4. Section 1 -- coverage and integrity (driven by the Tier 1 CSVs)
+* SECTION 4: COVERAGE AND INTEGRITY
+*    Report section 1, driven by the Tier 1 CSVs.
 *------------------------------------------------------------------------------
 tex \section{Coverage and data integrity}
 tex The panel is complete: no duplicate keys, no unmatched rows across the monthly
@@ -324,7 +343,7 @@ tex \end{longtable}
 tex \clearpage
 
 *------------------------------------------------------------------------------
-* 5. Exhibit sections
+* SECTION 5: EXHIBIT SECTIONS
 *    EDIT THE SHORT CAPTIONS HERE after reading the new run. The Notes paragraph
 *    under each figure comes from the notebook and should be edited there.
 *------------------------------------------------------------------------------
@@ -427,7 +446,8 @@ exhibitblock "prism_era5_national_winter_temperature_comparison_area_weighted.pd
 
 /*
 *------------------------------------------------------------------------------
-* 6. Decisions requested (driven by the Tier 2 CSV)
+* SECTION 6: DECISIONS REQUESTED
+*    Driven by the Tier 2 CSV.
 *------------------------------------------------------------------------------
 tex \section{Decisions requested}
 tex \label{sec:decisions}
@@ -455,7 +475,7 @@ tex \clearpage
 */
 
 *------------------------------------------------------------------------------
-* 7. Appendices
+* SECTION 7: APPENDICES
 *------------------------------------------------------------------------------
 tex \appendix
 tex \section{State-level winter-temperature trends}
@@ -485,10 +505,11 @@ tex \end{document}
 texdoc close
 
 *------------------------------------------------------------------------------
-* 8. Compile. Twice: the first pass writes the .aux, the second resolves the
-*    table of contents and the \ref cross-references.
-*    -interaction=nonstopmode matters: without it a LaTeX error makes pdflatex
-*    wait for keyboard input and Stata hangs with no visible reason.
+* SECTION 8: COMPILE
+*    Twice: the first pass writes the .aux, the second resolves the table of
+*    contents and the \ref cross-references.
+*    -interaction=nonstopmode matters: without it a LaTeX error makes
+*    pdflatex wait for keyboard input and Stata hangs with no visible reason.
 *------------------------------------------------------------------------------
 * A one-command compile script, so the folder can be built on any machine
 * with LaTeX if this server has none.

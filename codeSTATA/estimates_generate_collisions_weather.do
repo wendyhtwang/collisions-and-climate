@@ -19,11 +19,11 @@ PURPOSE:      Estimate the collisions-on-winter-weather regressions and
               outcomes = 40 regressions.
 
 CHANGELOG:
-  09/08/2026 Wendy Wang: initial version, per Eyal (9/1/26): each RA
-    writes one estimation .do and one table .do; this is the estimation
-    half of the collisions-weather pair. Structure follows the Sept 8
-    "Collisions on Winter Weather" mockup, with three deviations from
-    that mockup, all deliberate:
+  09/08/2026 Wendy Wang: initial version, per the 9/1/26 project
+    convention: each RA writes one estimation .do and one table .do; this
+    is the estimation half of the collisions-weather pair. Structure
+    follows the Sept 8 "Collisions on Winter Weather" mockup, with three
+    deviations from that mockup, all deliberate:
     (a) state-by-year FE are absorbed as `state_fips_num#year` per style
         guide Section 10, not as a pre-built `egen group()` variable;
     (b) vce() takes `cluster fips_num`, not `cluster(fips_num)` -- the
@@ -31,24 +31,22 @@ CHANGELOG:
     (c) the precipitation-quintile control degrades to a documented
         substitute rather than erroring, since ppt_total is still not
         carried into prism_derived_weather_vars.csv (see SECTION 4).
-  09/10/2026 Wendy Wang: revised against Eyal's comments on the mockup at
-    the 9/8/26 meeting, and against the 9/9/26 rebuild of the panel --
-    (a) PANEL B IS NO LONGER ONE JOINT REGRESSION. Eyal: "I would choose
-        either or... I don't think we wanted the same regression with a
-        dummy for sigma and above and two sigma and above, especially
-        because there's going to be overlap." warm_winter_1sd and
-        warm_winter_2sd are now estimated separately as panels B1 and B2,
-        both saved, and SECTION 7 prints them side by side so the choice
-        of which to publish is made by looking at the numbers. Eyal's
-        tie-break rule, for the record: if both are precise and point the
-        same way, keep the 1SD version, "just because it has more
-        support, it's like we [have a] higher frequency of those events
-        in the data."
-    (b) The two control-indicator rows are collapsed into one. Eyal:
-        "since you're always going to be including the mean temperature
-        and the precipitation quantiles together, you can just narrow
-        that to one row and just call it 'weather controls.'" `ctrl_temp'
-        and `ctrl_ppt' are replaced by a single `ctrl_weather'.
+  09/10/2026 Wendy Wang: revised against the 9/8/26 review of the mockup
+    and the 9/9/26 rebuild of the panel --
+    (a) PANEL B IS NO LONGER ONE JOINT REGRESSION. The two thresholds do
+        not belong in one regression, since the >=1SD and >=2SD dummies
+        overlap by construction. warm_winter_1sd and warm_winter_2sd are
+        now estimated separately as panels B1 and B2, both saved, and
+        SECTION 7 prints them side by side so the choice of which to
+        publish is made by looking at the numbers. The tie-break rule,
+        for the record: if both are precise and point the same way, keep
+        the 1SD version, which has more support -- those events are more
+        frequent in the data.
+    (b) The two control-indicator rows are collapsed into one. Mean
+        temperature and the precipitation quintiles always enter
+        together, so they are reported as a single "weather controls"
+        row: `ctrl_temp' and `ctrl_ppt' are replaced by a single
+        `ctrl_weather'.
     (c) Q4 IS CLOSED. The 9/9/26 rebuild carries ppt_total through
         prism_derived_weather_vars.csv (12 base PRISM vars x 12 months),
         so ppt_total_m1..m12 are in the panel and the days-above-10mm
@@ -56,11 +54,11 @@ CHANGELOG:
         rather than silently substituting: with two project trees on
         Kodama (git clone vs Dropbox) a stale CSV is a live risk, and a
         quietly mislabelled control row is worse than a failed run.
-    (d) Added the all-animal backfill Eyal asked to verify on 9/8/26
-        ("if there is a non-missing deer value, that should also be a
-        minimum and non-missing any_animal value... you should not lose
-        any observations from using the any_animal whatsoever"). SECTION
-        3 now counts and fills, and reports the count. Note this is the
+    (d) Added the all-animal backfill flagged for verification on
+        9/8/26: a non-missing deer value implies a non-missing any_animal
+        value of at least that size, so moving to any_animal should not
+        cost observations. SECTION 3 now counts and fills, and reports
+        the count. Note this is the
         FILL; check_animal_deer_backfill.do is the standalone diagnostic.
     (e) Removed the animal_to_crashes cross-check. That variable does not
         exist in the built panel -- the ratio variables that do exist are
@@ -81,9 +79,9 @@ CHANGELOG:
         without saying so.
   09/10/2026 (evening) Wendy Wang: numerator and scale, after the 9/10
     diagnostics on the merged panel --
-    (a) THE NUMERATOR IS NOW any_animal_total, NOT animal_total. Eyal said
-        "any_animal" on 9/8; the panel carries three animal families and
-        the first pass used the smallest of them. any_animal_total has
+    (a) THE NUMERATOR IS NOW any_animal_total, NOT animal_total. The
+        family settled on 9/8 is any_animal; the panel carries three
+        animal families and the first pass used the smallest of them. any_animal_total has
         46,665 non-missing rows to animal_total's 29,130, contains every
         row animal_total does, and is identical in value wherever both
         exist -- so the switch cannot change an existing observation, only
@@ -113,7 +111,7 @@ CHANGELOG:
     exactly 3x the December(t-1) effect, not the effect of the winter mean
     -- proven numerically on 9/10 to eight significant figures. That is
     Q1, it is a specification question rather than a labelling one, and it
-    goes to Eyal with the evidence before anyone changes his control set.
+    goes up with the evidence before anyone changes the control set.
     The table notes carry the caveat in the meantime.
   09/10/2026 Wendy Wang: output subfolder renamed from
     dataSTATA/estimates/collisions to dataSTATA/estimates/collisions_weather,
@@ -122,6 +120,12 @@ CHANGELOG:
     estimates_tables_collisions_weather.do was changed in the same pass;
     any .ster files already sitting in the old folder are stale and should
     be deleted rather than moved, since they predate the Panel B split.
+  09/15/2026 Wendy Wang: comment pass, no code change. Design decisions
+    that were credited to an individual or quoted verbatim from project
+    discussion are now stated plainly as decisions, with the date kept
+    where the date is what makes the decision traceable. Nothing about
+    why the code does what it does was dropped; no names remain in the
+    file.
 
 * Inputs:
 *   $path/dataSTATA/main_data_county_year.dta
@@ -140,19 +144,19 @@ CHANGELOG:
 *       lag? Equation (1) writes Winter(c,t-1), but Methods footnote 5
 *       describes a 2010 outcome using Dec 2009 + Jan/Feb 2010 -- which
 *       is exactly what mean_winter_temp at t=2010 already contains.
-*       Eyal's Slack example used L1.mean_winter_temp, which would push
-*       it a full year further back. `winter_lag' below defaults to 0
-*       (contemporaneous) per footnote 5. EVERY coefficient in both
-*       tables depends on this. NOT YET RAISED WITH EYAL -- ask before
-*       these numbers go in the paper.
+*       An earlier worked example used L1.mean_winter_temp, which would
+*       push it a full year further back. `winter_lag' below defaults to
+*       0 (contemporaneous) per footnote 5. EVERY coefficient in both
+*       tables depends on this. NOT YET RAISED -- ask before these
+*       numbers go in the paper.
 *   Q2. Which numerator defines the outcome? Settled 9/8/26 in favour of
-*       all-animal ("take the all animal one because some states report
-*       by animal, some just report any animal"); `share_numerator' is
+*       all-animal, since some states report by animal type while others
+*       report only an any-animal total; `share_numerator' is
 *       kept as a switch only so the deer-only version can be run as a
 *       robustness cut without editing the body of the file.
 *   Q3. Population weights on the share regressions too, or only on the
-*       rate regressions? Both of Eyal's 2024 papers weight throughout;
-*       our Methods asks only for the rate. `weight_share' below, empty
+*       rate regressions? The two 2024 papers this design follows weight
+*       throughout; our Methods asks only for the rate. `weight_share' below, empty
 *       by default. Also not yet raised.
 ==============================================================*/
 
@@ -193,7 +197,8 @@ cap mkdir "$estimates/collisions_weather"
 
 * Open log file in the codeSTATA directory, matching
 * build_main_data_county_year.do
-local log_file = "$path/codeSTATA/estimates_generate_collisions_weather.log"
+cap mkdir "$path/codeSTATA/logs"
+local log_file = "$path/codeSTATA/logs/estimates_generate_collisions_weather.log"
 cap log close
 log using "`log_file'", replace text
 
@@ -217,10 +222,10 @@ local winter_lag = 0
 
 * Q2: numerator of the share and of the rate. Settled 9/8/26 in favour of
 *     the ALL-ANIMAL count; settled 9/10/26 as to WHICH all-animal
-*     variable that is. Eyal said "any_animal" repeatedly on 9/8 and the
-*     panel carries three families (animal_*, wild_animal_*,
-*     any_animal_*). Verified on the merged panel: any_animal_total has
-*     46,665 non-missing rows against animal_total's 29,130, is a strict
+*     variable that is -- the any_animal family. The panel carries three
+*     families (animal_*, wild_animal_*, any_animal_*). Verified on the
+*     merged panel: any_animal_total has 46,665 non-missing rows against
+*     animal_total's 29,130, is a strict
 *     superset of it (count if missing(any_animal_total) &
 *     !missing(animal_total) -> 0) and is identical in value wherever
 *     both exist (count if !missing(animal_total) & any_animal_total !=
@@ -298,16 +303,15 @@ label variable est_sample "1 if county-year is in the collisions estimation samp
 *---------------------------------------------------------------
 * SECTION 3: OUTCOMES
 *---------------------------------------------------------------
-* Eyal, 9/8/26, on which collision count is the numerator: "Take the all
-* animal one because some states report by animal, some just report any
-* animal... if there is a non-missing deer value, that should also be a
-* minimum and non-missing any_animal value... You should not lose any
-* observations from using the any_animal whatsoever. You should only be
-* gaining observations."
+* Settled 9/8/26: the numerator is the all-animal count, because some
+* states report by animal type while others report only an any-animal
+* total. A non-missing deer value implies a non-missing any_animal value
+* of at least that size, so moving to any_animal should only add
+* observations, never lose them.
 *
-* He believed the file that appended the state collisions data already
-* backfilled a missing animal value from a non-missing deer value, but
-* asked for it to be checked rather than assumed. The fill is applied
+* The file that appends the state collisions data was thought to backfill
+* a missing animal value from a non-missing deer value already, but that
+* was to be checked rather than assumed. The fill is applied
 * here so the estimation sample is right regardless of what the upstream
 * snapshot did; the counts below say whether it was needed.
 * check_animal_deer_backfill.do is the standalone diagnostic and reports
@@ -322,7 +326,7 @@ label variable est_sample "1 if county-year is in the collisions estimation samp
 *       deer-only state-year leaves the sample;
 *   (3) a floor at deer_total wherever a non-missing deer count EXCEEDS
 *       the all-animal count. That is impossible by construction, so
-*       those rows are an upstream defect; Eyal's rule (9/8/26) is that
+*       those rows are an upstream defect; the 9/8/26 rule is that
 *       deer is a minimum, so the floor is applied and the count is
 *       reported rather than the rows being silently kept or dropped.
 *
@@ -400,7 +404,7 @@ if `n_fill_floor' > 0 {
     di as error "  NOTE: deer exceeds all-animal on `n_fill_floor' rows,"
     di as error "  which is impossible by construction. This is an upstream"
     di as error "  defect in the 2022 collisions snapshot, concentrated in"
-    di as error "  NY and WV -- flag to Charvi and Eyal; a robustness cut"
+    di as error "  NY and WV -- flag upstream; a robustness cut"
     di as error "  excluding those two states is the obvious response."
 }
 di as text "{hline 70}"
@@ -432,7 +436,8 @@ di as text _newline "Share diagnostics on the estimation sample (`n_share_nm' ro
 di as text "  animal_share > 1 (denominator is not all-cause): `n_share_gt1'"
 di as text "  animal_share == 0 exactly:                       `n_share_zero'"
 di as text "  -- mass at both boundaries is a functional-form question"
-di as text "     for OLS, not only a data question. Raise with Eyal."
+di as text "     for OLS, not only a data question. Raise before"
+di as text "     these estimates are written up."
 
 gen double animal_rate_100k = 100000 * `share_numerator' / population ///
     if population > 0 & !missing(population)
@@ -453,11 +458,10 @@ clonevar winter_days_below_0f = wsi_cold_days
 label variable winter_days_below_0f "# days Dec 1-Apr 30 with min temp <=0F"
 
 * --- The winter measures, one per panel -------------------------------
-* B1 and B2 are the SAME panel of the published table, estimated twice:
-* Eyal, 9/8/26, on running both dummies in one regression -- "I would
-* choose either or... especially because there's going to be overlap
-* between one sigma and above and two sigma and above. So I would just --
-* you can run both and decide which one you want to keep."
+* B1 and B2 are the SAME panel of the published table, estimated twice.
+* Settled 9/8/26: the two dummies do not go in one regression, since
+* >=1SD and >=2SD overlap by construction. Run both, then decide which
+* one to keep.
 global rhsA  "`L'mean_winter_temp"
 global rhsB1 "`L'warm_winter_1sd"
 global rhsB2 "`L'warm_winter_2sd"
@@ -525,7 +529,7 @@ foreach a in 5_9 10_14 15_19 20_24 25_29 30_34 35_39 40_44 45_49 ///
 * --- The four column definitions -------------------------------------
 * Monthly mean temperature and the precipitation quintiles always enter
 * together, which is why the table reports them as a single "Weather
-* controls" row (Eyal, 9/8/26).
+* controls" row (settled 9/8/26).
 global col1 ""
 global col2 "$Wtemp $Wppt"
 global col3 "$Xage"
@@ -535,19 +539,19 @@ global col4 "$Wtemp $Wppt $Xage"
 * County FE + state-by-year FE, clustered at the county level. State-by-
 * year is the baseline rather than plain year because every outcome
 * series is assembled state by state, each with its own reporting regime
-* that changes over time (Eyal, 9/8/26).
+* that changes over time (settled 9/8/26).
 global FE "fips_num state_fips_num#year"
 global SE "cluster fips_num"
 
 *---------------------------------------------------------------
 * SECTION 5: WHAT THE CONTROL BLOCKS COST IN SAMPLE
 *---------------------------------------------------------------
-* Columns 1-4 are meant to "diagnose what and if at all the controls do
-* anything" (Eyal, 9/8/26). That reading only holds if the sample is
-* roughly stable across columns, so report the missingness each block
-* introduces before the table does. If N moves materially between column
-* 1 and column 4, raise a fixed-sample variant with Eyal rather than
-* letting the reader infer it from the N row.
+* Columns 1-4 are there to diagnose what, if anything, the controls do
+* (settled 9/8/26). That reading only holds if the sample is roughly
+* stable across columns, so report the missingness each block introduces
+* before the table does. If N moves materially between column 1 and
+* column 4, raise a fixed-sample variant rather than letting the reader
+* infer it from the N row.
 
 qui count if est_sample
 local n_est = r(N)
@@ -567,8 +571,8 @@ foreach block in Wtemp Wppt Xage {
     drop temp
 }
 
-* Frequency of each anomaly dummy, which is the "support" Eyal's
-* tie-break between 1SD and 2SD turns on.
+* Frequency of each anomaly dummy, which is the support the 1SD-vs-2SD
+* tie-break turns on.
 foreach v in warm_winter_1sd warm_winter_2sd {
     qui summ `v' if est_sample
     di as text "  share of rows with `v' == 1: " %6.4f r(mean) ///
@@ -654,7 +658,7 @@ foreach y in animal_share animal_rate_100k {
             estadd scalar dep_var_mean = r(mean)
 
             * Control-set indicator rows for the table footer. One row
-            * for the weather block, per Eyal 9/8/26.
+            * for the weather block, per the 9/8/26 review.
             if inlist(`c', 2, 4) {
                 estadd local ctrl_weather = "X"
             }
@@ -679,10 +683,10 @@ foreach y in animal_share animal_rate_100k {
 *---------------------------------------------------------------
 * SECTION 7: PANEL B -- 1SD VS 2SD, SIDE BY SIDE
 *---------------------------------------------------------------
-* Eyal, 9/8/26: "you can run both and decide which one you want to
-* keep... They'll have different magnitudes. Maybe one would be precise,
-* one won't be. If they're both precise... then I probably just keep the
-* one sigma, just because it has more support."
+* Settled 9/8/26: run both, then decide which one to keep. They will
+* have different magnitudes, and one may be precise where the other is
+* not. If both are precise, keep the 1SD version, which has more
+* support.
 *
 * Both are saved. This prints them next to each other so that decision is
 * made by looking at the numbers, then recorded once in the table file's
@@ -745,7 +749,7 @@ foreach y in animal_share animal_rate_100k {
 
 di as text _newline "Decide 1SD vs 2SD from the block above, then record it"
 di as text "in the panelB_sd switch in estimates_tables_collisions_weather.do."
-di as text "Eyal's tie-break: both precise and same-signed -> keep 1SD."
+di as text "Tie-break: both precise and same-signed -> keep 1SD."
 
 *---------------------------------------------------------------
 * SECTION 8: RECORD THE SETTINGS THIS RUN USED

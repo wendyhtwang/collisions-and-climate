@@ -35,14 +35,14 @@ SCOPE (narrowed 9/3/26 from the 8/31 scaffolding's 45 years):
     exists only in the Vintage 2025 file -- so it fell through as 8
     missing county-years in the first full build.
   * VALIDATION  2015, 2018 -- years where Census still published legacy
-    counties, so 08a's direct pull and this script's re-aggregation can
+    counties, so 08b's direct pull and this script's re-aggregation can
     be compared. Two years validate the town->county mapping as well as
     forty would; the mapping is static. Both pass within 0.1%.
   * TOTALS ONLY, no age. CT age shares are not recoverable for 2021-2025:
     Census publishes sub-county population as totals in every vintage,
     and CT DPH's town-level age data exists only for 2000, 2010,
     2011-2014 and 2020 -- not annually. Those 40 county-years of age
-    shares are flagged missing by 08a, deliberately, and should not be
+    shares are flagged missing by 08b, deliberately, and should not be
     modelled down.
 
 STATUS: this design is Wendy's own call and has NOT been ratified by
@@ -51,8 +51,8 @@ about the Dorn PDF and the 1980s; the CT question itself was never
 resolved. Raise it before treating the CT series as settled.
 
 Run:
-    python 08b_population_ct_towns.py --validate-only   # cheap first pass
-    python 08b_population_ct_towns.py
+    python 08a_population_ct_towns.py --validate-only   # cheap first pass
+    python 08a_population_ct_towns.py
 """
 
 from __future__ import annotations
@@ -151,7 +151,7 @@ SUBCOUNTY_SOURCES = {
 
 SUMLEV_COUNTY_SUBDIVISION = "061"
 REQUEST_TIMEOUT = 120
-USER_AGENT = "collisions-and-climate research pipeline (08b_population_ct_towns.py)"
+USER_AGENT = "collisions-and-climate research pipeline (08a_population_ct_towns.py)"
 
 # The town->county mapping is exact by construction, so any disagreement
 # with Census's own county figures is a real defect, not estimation noise.
@@ -522,7 +522,7 @@ def main():
     args = parser.parse_args()
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    setup_logging(LOG_DIR / f"08b_ct_towns_{date.today().isoformat()}.log")
+    setup_logging(LOG_DIR / f"08a_ct_towns_{date.today().isoformat()}.log")
 
     crosswalk = load_town_to_legacy_county_crosswalk(force=args.force_download)
 
@@ -546,7 +546,7 @@ def main():
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     production.to_csv(OUTPUT_PATH, index=False)
     logging.info(
-        "Wrote %s (%d rows, %d counties x %d years). 08a consumes this as its CT override.",
+        "Wrote %s (%d rows, %d counties x %d years). 08b consumes this as its CT override.",
         OUTPUT_PATH, len(production), production["geoid"].nunique(),
         production["year"].nunique(),
     )

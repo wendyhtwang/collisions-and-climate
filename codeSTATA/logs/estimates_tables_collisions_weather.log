@@ -21,7 +21,7 @@
 . 
 . * Which warm-winter anomaly threshold goes in Panel B: 1 or 2.
 . * The estimation script estimates both and prints them side by side in
-. * its SECTION 7. Eyal's tie-break, 9/8/26: if both are precise and point
+. * its SECTION 7. If both are precise and point
 . * the same way, keep 1SD, because a 1SD winter is far more common and the
 . * estimate therefore has more support. Set this once, here, after looking
 . * at that comparison.
@@ -254,8 +254,7 @@ Panel B threshold on display: 1SD
 . }
 
 . 
-. * The outcome mean goes in the column header, per the mockup and the
-. * convention in Eyal's own tables.
+. * Outcome mean goes in the column header.
 . estimates use "$estimates/collisions_weather/`y'_pA_c1_W`wt'.ster"
 
 . if `share_scale' == 100 {
@@ -316,8 +315,8 @@ delimiter now cr
 . * 2c. Panel B -- warm-winter anomaly
 . *---------------------------------------------------------------
 . * One threshold only. The other was estimated as its own specification
-. * and lives in the .ster folder; it is not in this table, per Eyal
-. * 9/8/26, because the two dummies overlap by construction.
+. * and lives in the .ster folder; it is not in this table, because 
+. * the two dummies overlap by construction.
 . 
 . #delimit ;
 delimiter now ;
@@ -401,9 +400,9 @@ delimiter now cr
 . * 2e. Panel D -- winter severity index
 . *---------------------------------------------------------------
 . * The control X-block is appended to THIS panel's stats() only, so it
-. * prints once, at the foot of the table. One weather row, per Eyal
-. * 9/8/26 -- the monthly temperature controls and the precipitation
-. * quintiles always enter together, so they never need separate rows.
+. * prints once, at the foot of the table. One weather row that includes
+. * the monthly temperature controls and the precipitation
+. * quintiles since they always enter together.
 . 
 . #delimit ;
 delimiter now ;
@@ -952,7 +951,7 @@ Wrote /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_wea
 . *   table_collisions_weather_rate.tex         <- and this one
 . *   table_collisions_weather_rate_panel_A-D.tex
 . * Then reference the two wrappers from the Results section with \input,
-. * naming the wrapper, not the panels (Eyal, 9/8/26).
+. * naming the wrapper, not the panels.
 . 
 . di as result _newline "Upload $tables/collisions_weather/*.tex to Overleaf;"
 

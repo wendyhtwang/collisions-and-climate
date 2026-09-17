@@ -21,7 +21,7 @@ most ways this can silently corrupt a series are ordering violations:
     2. STACK      resolve overlaps by priority. Never dedupes silently.
     3. CROSSWALK  recode onto TIGER/2018. The ONLY stage that changes a
                   geoid. Flags rather than fabricates.
-    4. CT         overlay 08b's town-reaggregated series. Already
+    4. CT         overlay 08a's town-reaggregated series. Already
                   resolved, so it must not be crosswalked twice.
     5. VALIDATE   assert and flag. Never mutates the panel.
 
@@ -52,9 +52,9 @@ THREE THINGS THAT WILL BITE ANYONE EDITING THIS:
     checks magnitude for exactly that reason.
 
 Run:
-    python 08a_population_county.py --probe-api
-    python 08a_population_county.py --years 2020 2021 --states 17
-    python 08a_population_county.py --years $(seq 1981 2025)
+    python 08b_population_county.py --probe-api
+    python 08b_population_county.py --years 2020 2021 --states 17
+    python 08b_population_county.py --years $(seq 1981 2025)
 """
 
 from __future__ import annotations
@@ -152,7 +152,7 @@ API_KEY_HELP = (
 )
 
 REQUEST_TIMEOUT = 120
-USER_AGENT = "collisions-and-climate research pipeline (08a_population_county.py)"
+USER_AGENT = "collisions-and-climate research pipeline (08b_population_county.py)"
 
 CENSUS_FLATFILE_ROOT = "https://www2.census.gov/programs-surveys/popest"
 CENSUS_API_ROOT = "https://api.census.gov/data"
@@ -967,13 +967,13 @@ def fetch_pe02_1980s(config: PopulationSourceConfig, states: list) -> pd.DataFra
 
 def fetch_ct_town_reaggregation(config: PopulationSourceConfig, states: list) -> pd.DataFrame:
     """
-    Load 08b_population_ct_towns.py's output. Not a network fetch --
-    a pipeline-ordering dependency: 08b must have been run first.
+    Load 08a_population_ct_towns.py's output. Not a network fetch --
+    a pipeline-ordering dependency: 08a must have been run first.
     """
     if not CT_TOWN_REAGGREGATION_PATH.exists():
         raise FileNotFoundError(
-            f"{CT_TOWN_REAGGREGATION_PATH} not found. Run 08b_population_ct_towns.py "
-            "before 08a, or pass --skip-ct to build without the CT override (CT 2022-2025 "
+            f"{CT_TOWN_REAGGREGATION_PATH} not found. Run 08a_population_ct_towns.py "
+            "before 08b, or pass --skip-ct to build without the CT override (CT 2022-2025 "
             "will then be missing or on the wrong geography)."
         )
 
@@ -982,7 +982,7 @@ def fetch_ct_town_reaggregation(config: PopulationSourceConfig, states: list) ->
     if stray:
         raise ValueError(
             f"{CT_TOWN_REAGGREGATION_PATH.name} contains non-CT state_fips {sorted(stray)} -- "
-            "08b's output looks corrupted or mixed with another source."
+            "08a's output looks corrupted or mixed with another source."
         )
     return ct
 
@@ -1053,7 +1053,7 @@ def assert_ct_geography(panel: pd.DataFrame, source_name: str):
         logging.warning(
             "[%s] CT reported under the 9 PLANNING REGIONS (%s). This is a scope finding, "
             "not just a parsing detail: CT's gap starts with this source's first year "
-            "rather than 2022, and 08b must cover that whole span. Raise with Eyal before "
+            "rather than 2022, and 08a must cover that whole span. Raise with Eyal before "
             "treating the CT series as complete.",
             source_name, sorted(ct_geoids),
         )
@@ -1067,11 +1067,11 @@ def assert_ct_geography(panel: pd.DataFrame, source_name: str):
 
 def apply_ct_override(panel: pd.DataFrame, ct: pd.DataFrame) -> pd.DataFrame:
     """
-    Replace CT's rows with 08b's town-reaggregated series, by geoid so it
+    Replace CT's rows with 08a's town-reaggregated series, by geoid so it
     cannot touch another state, and AFTER the crosswalk so CT's already
     resolved rows are never recoded twice.
 
-    08b produces totals only -- CT age shares are not recoverable for
+    08a produces totals only -- CT age shares are not recoverable for
     2022-2025 (Census publishes town population as totals only; CT DPH's
     town age data is 2000/2010/2011-2014/2020, not annual). Those rows
     carry an age flag and keep their totals.
@@ -1080,7 +1080,7 @@ def apply_ct_override(panel: pd.DataFrame, ct: pd.DataFrame) -> pd.DataFrame:
     keep = ~((panel["geoid"].isin(CT_LEGACY_GEOIDS)) & (panel["year"].isin(ct_years)))
     replaced = int((~keep).sum())
 
-    # Count the planning-region rows too. In the years 08b covers, Census
+    # Count the planning-region rows too. In the years 08a covers, Census
     # publishes CT under planning regions, so there are usually NO legacy
     # rows to displace and `replaced` is 0 -- which reads like the override
     # did nothing, when in fact it is the only thing supplying CT. The
@@ -1099,13 +1099,13 @@ def apply_ct_override(panel: pd.DataFrame, ct: pd.DataFrame) -> pd.DataFrame:
 
     out = pd.concat([panel[keep], ct], ignore_index=True)
     logging.info(
-        "CT override %s-%s: %d row(s) from 08b; displaced %d legacy-county row(s) and "
+        "CT override %s-%s: %d row(s) from 08a; displaced %d legacy-county row(s) and "
         "supersedes %d planning-region row(s) (the latter drop at the spine, not here).",
         min(ct_years), max(ct_years), len(ct), replaced, superseded_regions,
     )
     if len(ct) == 0:
         raise ValueError(
-            "CT override contributed no rows. 08b's output is empty or its years don't "
+            "CT override contributed no rows. 08a's output is empty or its years don't "
             "overlap this run -- CT would silently end up missing."
         )
     return out
@@ -1429,7 +1429,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--years", nargs="+", type=int, help="Subset of years (default 1981-2025)")
     parser.add_argument("--states", nargs="+", help="Subset of state FIPS (default CONUS + DC)")
-    parser.add_argument("--skip-ct", action="store_true", help="Build without 08b's CT override")
+    parser.add_argument("--skip-ct", action="store_true", help="Build without 08a's CT override")
     parser.add_argument("--probe-api", action="store_true",
                         help="Fetch and print one raw intercensal API response, then exit. "
                              "Use this first to confirm the AGEGRP/YEAR encoding.")
@@ -1441,7 +1441,7 @@ def main():
         FORCE_DOWNLOAD = True
 
     LOG_DIR.mkdir(parents=True, exist_ok=True)
-    setup_logging(LOG_DIR / f"08a_population_{date.today().isoformat()}.log")
+    setup_logging(LOG_DIR / f"08b_population_{date.today().isoformat()}.log")
 
     if args.probe_api:
         probe_api()
