@@ -16,6 +16,15 @@ CHANGELOG:
   09/17/2026 Wendy Wang: cut the commentary down to one or two lines per
     step; the context it carried is in the child scripts' own headers, and
     the open items are tracked separately.
+  09/17/2026 Wendy Wang: wired in the remaining two pipelines and the WSI --
+    - SECTION 2.2 runs 06c_build_winter_severity.py, so SECTION 3 no longer
+      depends on the merge in 2.5.
+    - SECTION 2.4 is live behind `run_upstream' (SECTION 0, default 0):
+      Nicole's and Charvi's appends plus the copy steps that stage their
+      output into this project. Charvi's output path is a placeholder that
+      refuses to run until confirmed.
+    - Documented the CENSUS_API_KEY requirement and the fact that a bare 08b
+      call is the full CONUS x 45-year build.
 ==============================================================*/
 
 *---------------------------------------------------------------
@@ -66,6 +75,16 @@ global tables     "$path/tables"
 global reports    "$path/reports"
 global pathUngulates  "`rootDir'/UngulatePopulationDataRepo"
 global pathCollisions "`rootDir'/VehicleCollisionsDataRepo"
+
+* Rebuild the two sibling-repo panels in SECTION 2.4 before merging? Off by
+* default: those scripts belong to Nicole and Charvi, write into their own
+* repos, and have not been run from here. See 2.4.
+local run_upstream = 0
+
+* 08b needs a Census API key for 1990-1999 on a cold cache, which the default
+* full-range run hits. It is read from the environment, not passed as a flag:
+*     export CENSUS_API_KEY=<key>      (before launching Stata)
+* Without it 08b raises rather than silently skipping the decade.
 
 * Named log: children open unnamed logs and would close this one otherwise.
 cap mkdir "$codeSTATA/logs"
@@ -148,10 +167,18 @@ python clear
 python script "$codePYTHON/06_build_derived_weather_vars.py"
 python clear
 
+* Winter severity index at county-winter-year grain, read by both the merge
+* (2.5) and the Tier 2 exhibits (SECTION 3). Built here rather than in the
+* merge so the descriptives do not depend on a Phase 6 output.
+python script "$codePYTHON/06c_build_winter_severity.py"
+python clear
+
 * ------------------ 2.3 County population -------------------
 
 * 08a is separate because CT reports planning regions, not counties.
 * 08b's CT override reads 08a's output and raises if it isn't there.
+* NOTE: 08b with no arguments is the full CONUS x 1981-2025 build, including
+* downloads on a cold cache. Pass --years/--states to scope a test run.
 python script "$codePYTHON/08a_population_ct_towns.py"
 python clear
 
@@ -160,12 +187,42 @@ python clear
 
 * -------- 2.4 Upstream panels from the other two RAs --------
 
-/* Nicole's and Charvi's, in their own repos. 2.5 reads the .dta they produce,
-   already staged here. Left commented until they confirm these are the right
-   entry points and how the output should be copied across.                  */
+/* Nicole's and Charvi's appends, in their own repos. 2.5 reads staged copies
+   inside this project, so this block is what refreshes them. Off unless
+   `run_upstream' is 1 at the top of SECTION 0 -- these scripts are owned by
+   their authors, write into their own trees, and have never been run from
+   here.
 
-* do "$pathUngulates/codeSTATA/deer_harvest_national_append.do"
-* do "$pathCollisions/codeSTATA/data_append_state_collisions_files.do"
+   Two things must be settled before it is turned on:
+     - Nicole's append writes US_deer_harvest_county_year.dta (no date), while
+       2.5 reads US_deer_harvest_county_year_04sep2026.dta. Decide whether the
+       staged copy stays date-stamped (and this block stamps it) or the merge
+       follows the live name.
+     - Charvi's append has no visible output in VehicleCollisionsDataRepo --
+       no collisions_CONUS_*, no US_*, no dvcs_US_*. Its output path is the
+       placeholder below and the block will refuse to run until it is filled
+       in. That path is also what un-freezes the collisions sample: the
+       snapshot in dataRAW predates her 2019-2020 updates.                   */
+
+local collisions_append_output "<CONFIRM WITH CHARVI>"
+
+if `run_upstream' {
+
+    do "$pathUngulates/codeSTATA/deer_harvest_national_append.do"
+    copy "$pathUngulates/dataCLEAN/US_deer_harvest_county_year.dta" ///
+         "$dataSTATA/US_deer_harvest_county_year.dta", replace
+
+    if "`collisions_append_output'" == "<CONFIRM WITH CHARVI>" {
+        di as error "SECTION 2.4: collisions append output path is still the " ///
+                    "placeholder. Fill in collisions_append_output above, or " ///
+                    "set run_upstream = 0 to use the staged snapshot."
+        exit 601
+    }
+
+    do "$pathCollisions/codeSTATA/data_append_state_collisions_files.do"
+    copy "`collisions_append_output'" ///
+         "$dataRAW/Collisions/collisions_CONUS_county_year.dta", replace
+}
 
 * ---------- 2.5 Merged county-year analysis panel -----------
 
@@ -182,8 +239,9 @@ do "$codeSTATA/check_animal_deer_backfill.do"
 
 /* 09a and 09b are GENERATED from 09_descriptive_weather_full.ipynb by
    make_scripts.py -- edit the notebook, then regenerate. Do not edit by hand.
-   09b must run before 10, and after 2.5: one 09b exhibit reads
-   winter_severity_index out of the merged .dta.                             */
+   09b must run before 10, which asserts every exhibit it expects exists.
+   Since 09/17/2026 this section no longer depends on 2.5: the WSI exhibits
+   read 06c's CSV rather than the merged .dta.                               */
 
 python script "$codePYTHON/09a_descriptive_weather_tier1.py"
 python clear
