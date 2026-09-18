@@ -1,15 +1,11 @@
 """
-Validates the monthly precipitation total added to 06's derived-variables
-output against the independently-computed total in 05's monthly aggregate.
+Validates the monthly precipitation total in 06's derived-variables output
+against the independently-computed total in 05's monthly aggregate; exits
+non-zero on any mismatch.
 
-Both files sum the SAME daily precipitation column over the SAME county-year-
-month grouping -- 05 via `sum_vars`, 06 via its `agg_kwargs` -- so they must
-agree exactly. Any disagreement means one of the two pipelines is reading a
-different set of daily files, grouping differently, or handling missing days
-differently, and that is worth knowing regardless of precipitation.
-
-Exits non-zero on any mismatch so it can be wired into a run without being
-read by a human every time.
+- Both sum the SAME daily column over the SAME county-year-month grouping, so
+  they must agree exactly. A mismatch means one pipeline is reading different
+  daily files, grouping differently, or handling missing days differently.
 
 Usage:
     python 06b_validate_ppt_total.py                  # PRISM

@@ -1,20 +1,14 @@
 """
-Constructs derived weather variables from the raw daily PRISM/ERA5 county extracts,
-aggregated to county-year-month.
+Constructs derived weather variables from the raw daily PRISM/ERA5 county
+extracts, aggregated to county-year-month.
 
-- Missing daily temp/precip readings are excluded from the relevant
-  count/sum/mean (default pandas .agg(sum/mean) logic).
-  PRISM has zero missing daily readings. ERA5 has exactly 16,436 missing 
-  (all six raw variables, every day 1981-2025) but it is a known/resolved gap & 
-  not a processing bug; no need to re-extract/investigate.
-  
-  All of the missing values are geoid 25019 (Nantucket County, MA), which is
-  a small island; ERA5-Land's grid has no valid land pixel whose center falls 
-  inside its county polygon, so reduceRegions() in 04a_extract_era5_county.py 
-  returns null for every band/day there.  
-- Same QA checks as the aggregation script (05), via aggregation_utils.py:
-    - flags county-months whose day count doesn't match the calendar), &
-    - handles duplicates (drop-if-identical / error-if-any-non-key-column-disagrees).
+- Missing daily readings are excluded from the relevant count/sum/mean.
+  PRISM has none; ERA5's 16,436 are all geoid 25019 (Nantucket, MA), where
+  ERA5-Land's grid has no valid land pixel inside the county polygon -- a
+  known gap, not a processing bug.
+- Same QA checks as 05, via aggregation_utils.py: flags county-months whose
+  day count doesn't match the calendar, and handles duplicate rows
+  (drop-if-identical / error-if-any-non-key-column-disagrees).
 """
 
 import argparse
@@ -63,30 +57,12 @@ FREEZING_32F = 0.0
 # Precipitation-above-threshold cutoff. Task doc gives 10mm as example.
 PRECIP_THRESHOLD_MM = 10.0
 
-# Snow-depth thresholds for the winter severity index (WSI) snow-hazard
-# component. ERA5-only -- PRISM has no snow variable at all.
-#
-# 18in is THE literature threshold: Kohn (1975) / WI DNR define the
-# component as the number of days with "18 or more inches of snow on the
-# ground", and days_snow_depth_18in is what feeds wsi_snow_days in
-# codeSTATA/build_main_data_county_year.do.
-#
-# 12in and 8in are SENSITIVITY VARIANTS, not competing definitions. They
-# exist because 18in is close to degenerate at this data's resolution:
-# Kohn's index was built from point station/snow-course observations,
-# while snow_depth here is an ERA5-Land grid-box average that is then
-# averaged again over an entire county, and that spatial averaging strips
-# out exactly the local maxima an 18in cutoff is meant to catch. Measured
-# on the 1981 extract (winter 1980-81, Dec + Jan-Apr): Wisconsin recorded
-# 8 county-days at >=18in statewide (all in Vilas County), and Minnesota,
-# Iowa, Illinois and Pennsylvania recorded none; most CONUS >=18in
-# county-days fell in mountain counties in WY/WA/ID/MT rather than in the
-# Great Lakes deer range the index was written for. Carrying the lower
-# cuts lets that be demonstrated rather than asserted.
-#
-# Units: ERA5-Land's snow_depth band is snow thickness on the ground in
-# metres -- NOT the separate snow_depth_water_equivalent band -- so the
-# thresholds convert straight through at 1in = 0.0254m (18in = 0.4572m).
+# Snow-depth thresholds for the winter severity index. ERA5-only; PRISM has
+# no snow variable. 18in is Kohn (1975) / WI DNR's literature threshold and
+# feeds wsi_snow_days downstream; 12in and 8in are sensitivity variants, not
+# competing definitions -- county-averaged ERA5-Land snow depth rarely reaches
+# 18in outside mountain counties, so the lower cuts let that be shown rather
+# than asserted. snow_depth is metres of snow on the ground (1in = 0.0254m).
 INCHES_TO_METERS = 0.0254
 SNOW_DEPTH_THRESHOLDS_IN = (18, 12, 8)
 
@@ -192,23 +168,12 @@ def compute_month_derived_vars(daily: pd.DataFrame, config: DatasetConfig) -> pd
     precip_col_name = f"days_precip_above_{int(PRECIP_THRESHOLD_MM)}mm"
     agg_kwargs = {
         "n_days": ("date", "count"),
-        # Monthly precipitation TOTAL. Named after each dataset's own precip
-        # column exactly as 05 does it (PRISM -> ppt_total, ERA5 ->
-        # precip_mm_total), so this file and prism_county_month.csv can be
-        # cross-checked column-for-column -- see 06b_validate_ppt_total.py.
-        # The Methods section's "annual precipitation quintiles" control is
-        # built from the 12 monthly totals downstream; before this existed the
-        # panel had only days_precip_above_10mm and the estimation script fell
-        # back to quintiles of that count.
-        # NOTE ON MISSINGNESS: pandas sum() skips NaN, so a month with missing
-        # days returns the total of the days PRESENT -- understated, not
-        # missing. Same convention as every other aggregation here (n_days /
-        # is_incomplete surface it), but understatement bites harder on a total
-        # than on a mean, so treat totals for flagged months with care.
-        # Concretely: geoid 25019 (Nantucket, ERA5-only -- see module
-        # docstring) has zero present days every month, so its
-        # precip_mm_total reads as 0.0, not NaN, for all 45 years. Expected,
-        # not a bug.
+        # Monthly precipitation TOTAL, named after each dataset's own precip
+        # column exactly as 05 does (ppt_total / precip_mm_total) so the two
+        # files cross-check column-for-column -- see 06b. The 12 monthly
+        # totals feed the annual precipitation quintile control downstream.
+        # pandas sum() skips NaN, so a month with missing days totals only
+        # the days present: understated, not missing (Nantucket reads 0.0).
         f"{config.precip_col}_total": (config.precip_col, "sum"),
         "days_extremely_cold": ("_extremely_cold", "sum"),
         "days_below_freezing_32f": ("_below_freezing_32f", "sum"),

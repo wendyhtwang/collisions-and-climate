@@ -1,23 +1,16 @@
 """
-Builds the three-way ground-truth decomposition for ERA5, joining real
-NOAA station readings, the independently-extracted "ERA5-at-point" values
-(07f), and the production ERA5 county-month panel (07g) -- the ERA5
-counterpart to the (manually-built) PRISM ground_truth_spotcheck_summary.xlsx.
+Builds the three-way ground-truth decomposition for ERA5, joining real NOAA
+station readings, 07f's independently-extracted ERA5-at-point values, and
+07g's production county-month rows.
 
-- Same two-step decomposition as the PRISM version (station vs.
-  ERA5-at-point isolates ERA5-Land's own model behavior; ERA5-at-point vs.
-  production county-mean isolates our own extraction/aggregation code) --
-  but step (a)'s interpretation differs: ERA5-Land doesn't directly
-  assimilate station observations, so that gap reflects model/
-  representativeness error, not a station-interpolation algorithm's
-  behavior the way PRISM's does. A bigger gap here isn't itself a red flag.
-- Reuses 07d_aggregate_noaa_station_daily.py's NOAA station-month values
-  as-is (dataset-agnostic, real station data); searches a short list of
-  candidate paths for that file since it may only exist wherever 07d was
-  actually run, not on every dev copy of this repo.
-- No fixed pass/fail tolerance, matching the PRISM methodology: leaves a
-  blank `notes` column for the same kind of human interpretation the
-  PRISM summary used, rather than trying to automate that judgment call.
+- Same two-step decomposition as the PRISM version, but step (a) reads
+  differently: ERA5-Land doesn't assimilate station observations, so the
+  station-vs-point gap is model/representativeness error, not an interpolation
+  algorithm's behaviour. A bigger gap here isn't itself a red flag.
+- Reuses 07d's station-month values as-is, searching candidate paths since
+  that file may exist only where 07d was actually run.
+- No fixed pass/fail tolerance, matching the PRISM methodology: leaves a blank
+  notes column for human interpretation.
 """
 
 from pathlib import Path
@@ -37,13 +30,9 @@ GROUND_TRUTH_CASES = [
      "station_id": "USC00405525"},
 ]
 
-# First existing candidate wins, same cross-machine-path pattern used
-# elsewhere in this repo. Produced by 07d_aggregate_noaa_station_daily.py,
-# which writes to a REPO_ROOT-relative path -- so unlike 05's
-# INPUT_DIR_CANDIDATES (an external raw-data mount), what's missing here
-# isn't a shared mount but simply having run 07d on *this* machine's
-# checkout. If 07d was only run elsewhere (e.g. Kodama's shared project
-# checkout), add that machine's absolute path too.
+# First existing candidate wins, the cross-machine-path pattern used elsewhere
+# here. Produced by 07d at a REPO_ROOT-relative path, so a miss means 07d
+# hasn't been run on this checkout -- add that machine's path if it ran there.
 NOAA_STATION_MONTH_CANDIDATES = [
     REPO_ROOT / "dataCSV" / "PRISM" / "spot_check" / "noaa_station_daily_data" / "noaa_station_month.csv",
 ]

@@ -465,9 +465,9 @@ town->county mapping.
 - The town->county mapping comes from a 2018 Gazetteer county-subdivision
   file, joined on COUSUB FIPS rather than town name -- name matching
   between sources is the predictable failure mode here.
-- THIS DESIGN IS NOT RATIFIED BY THE PI. Eyal was asked about CT on
-  9/1/26 and the answer that came back was about the Dorn PDF and the
-  1980s; the CT question itself was never resolved.
+- THIS DESIGN IS NOT RATIFIED BY THE PI. CT was raised on 9/1/26 and the
+  answer that came back was about the Dorn PDF and the 1980s; the CT
+  question itself was never resolved.
 - Collision data (Charvi's CT pipeline) was checked separately and
   confirmed to already key to the legacy 8 counties throughout
   1995-2025 -- no fix needed there. This script exists solely because
@@ -478,7 +478,7 @@ town->county mapping.
 Builds the county-year population panel 1981-2025 (CONUS + DC) from
 Census sources: total resident population plus 18 five-year age shares,
 keyed to `TIGER/2018/Counties` FIPS. Not an Earth Engine extraction.
-- Scope includes AGE SHARES as of Eyal's 9/1/26 guidance (total
+- Scope includes AGE SHARES as of the 9/1/26 guidance (total
   population "all ages, all sexes at birth", plus population share in
   each standard bucket 0-4 ... 85+, as time-varying regression
   controls). Sex and race are collapsed, never broken out. The earlier
@@ -582,9 +582,9 @@ knits into the dated PI report. Written to `tables/weather/tier2/` and
 - Since 2026-09-17 it no longer reads the merged `.dta`: the two Winter
   Severity Index exhibits read `06c`'s CSV. That removed the one place where a
   Phase 4 output depended on a Phase 6 input.
-- One output is named `*_tier2_decisions_for_eyal.csv` -- a PI's first name
-  baked into a shipped filename. Harmless internally, worth renaming if these
-  ever leave the project.
+- Renamed 2026-09-17 to `tier2_decisions_log` / `*_tier2_decisions_log.csv`
+  (previously carried the PI's first name in a shipped filename);
+  `10_generate_weather_report.do` SECTION 6 updated to match.
 
 ## Shared library
 

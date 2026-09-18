@@ -1,22 +1,15 @@
 """
 Filters the production ERA5 county-month panel down to the exact
-county-year-month rows selected for the ground-truth station comparison --
-the ERA5 counterpart to 07e_filter_prism_ground_truth_sample.py.
+county-year-month rows selected for the ground-truth comparison -- the ERA5
+counterpart to 07e.
 
-- Reuses the same three county-year-months already vetted for the PRISM
-  ground-truth check, rather than re-running
-  07c_find_ground_truth_counties.py: the station-density selection logic
-  is dataset-agnostic, and reusing the same sites gives a direct
-  PRISM-vs-ERA5-vs-station comparison at identical locations.
-- Keeps GROUND_TRUTH_CASES in sync by hand with
-  07f_extract_era5_ground_truth_points.py and
-  07h_compare_era5_ground_truth.py -- see SCRIPT_OVERVIEW.md.
-- Does no aggregation or Earth Engine calls -- a pure row filter, same as
-  07e, so it can't introduce any of the independent-reimplementation
-  concerns 07f was built to avoid.
-- Reports (rather than silently drops) any requested row not found in
-  production, distinguishing "GEOID not in production at all" from
-  "GEOID exists, just not for that year/month" -- same as 07e.
+- Reuses the three county-year-months already vetted for PRISM rather than
+  re-running 07c: the selection logic is dataset-agnostic, and identical sites
+  give a direct PRISM-vs-ERA5-vs-station comparison.
+- GROUND_TRUTH_CASES is kept in sync by hand with 07f and 07h -- see
+  SCRIPT_OVERVIEW.md.
+- A pure row filter, same as 07e: no aggregation, no Earth Engine calls, and
+  it reports rather than drops any requested row not found.
 """
 
 from pathlib import Path

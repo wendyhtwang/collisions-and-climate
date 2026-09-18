@@ -13,17 +13,12 @@ import pandas as pd
 
 
 def filter_to_target_rows(production: pd.DataFrame, targets, id_cols: list) -> pd.DataFrame:
-    """
-    Filter `production` down to the exact rows in `targets`.
+    """Filter `production` down to the exact rows in `targets`.
 
-    `targets` is an iterable of (geoid, year, month) triples -- pulled
-    explicitly rather than a cross-product of separate geoid/year/month
-    lists, so different counties can be checked against different periods.
-
-    Reports (rather than silently drops) any requested triple not found,
-    distinguishing "GEOID not in production at all" from "GEOID exists,
-    just not for that year/month". Report order follows `targets`' own
-    order, not an arbitrary sort.
+    `targets` is an iterable of (geoid, year, month) triples rather than a
+    cross-product, so different counties can be checked against different
+    periods. Reports rather than drops any triple not found, distinguishing a
+    missing GEOID from a missing year/month, in `targets`' own order.
     """
     targets = list(targets)
     target_set = set(targets)

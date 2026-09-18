@@ -1,22 +1,16 @@
 """
 Identifies candidate CONUS counties served by only one (or very few) NOAA
-weather stations, as candidates for a ground-truth spot check of PRISM
-against real station data (per the 08.07.26 Fri team meeting).
+weather stations, for a ground-truth spot check of PRISM against real station
+data. Outputs a candidate list for manual review rather than auto-picking one.
 
-- Uses NOAA GHCN-Daily station density as a proxy for how many stations
-  fed PRISM's interpolation for that county (PRISM's exact input station
-  list isn't published, so this is an imperfect but reasonable stand-in).
-- Requires a candidate station to report precipitation, max temp, and min
-  temp for every one of the target years.
-- Ranks candidates by land area ascending -- a smaller county means the
-  one station covers more of it, a better ground-truth case.
-- Excludes independent cities (e.g. Baltimore city, VA cities) even
-  though they're legitimate Census county-equivalents: their stations are
-  often urban/microclimate sites sitting inside well-instrumented metro
-  areas, a poor fit for the isolated-rural-county case wanted. 
-- Doesn't auto-pick a final county -- outputs a candidate list for manual
-  review. No Earth Engine calls; needs real internet access, so run this
-  locally (e.g. on Kodama), not from a network-restricted sandbox.
+- Station density stands in for how many stations fed PRISM's interpolation
+  there; PRISM's own input station list isn't published.
+- A candidate station must report precipitation, max temp and min temp in
+  every target year. Candidates rank by land area ascending -- a smaller
+  county means the one station covers more of it.
+- Independent cities are excluded: their qualifying stations are usually urban
+  microclimate sites sitting inside well-instrumented metro areas.
+- Needs real internet access, so run it locally, not in a restricted sandbox.
 """
 
 import io
@@ -41,17 +35,15 @@ COUNTY_SHP_URL = "https://www2.census.gov/geo/tiger/GENZ2018/shp/cb_2018_us_coun
 TARGET_YEARS = [2000, 2010, 2020, 2021, 2025]
 REQUIRED_ELEMENTS = ["PRCP", "TMAX", "TMIN"]  # station must report all of these
 
-# Eyal: "just 1 (or very few)" -- start strict at 1, loosen (e.g. to 2 or 3)
-# if that turns up too few/no candidates in practice.
+# Target is "just 1, or very few" stations per county -- start strict at 1,
+# loosen (e.g. to 2 or 3) if that turns up too few/no candidates in practice.
 MAX_STATIONS_PER_COUNTY = 1
 TOP_N_TO_PRINT = 25
 
 # Census LSAD codes for genuine county-type units: 06=County, 13=Parish,
-# 03/04/05=AK City-and-Borough/Borough/Census Area, 12=Municipality.
-# Allowlist (not a blocklist) so 25=independent city is excluded. Not yet
-# verified against this file's exact vintage -- load_conus_counties()
-# prints an LSAD -> example-name crosswalk each run so a wrong code here
-# is visible immediately.
+# 03/04/05=AK City-and-Borough/Borough/Census Area, 12=Municipality. An
+# allowlist, so 25=independent city is excluded. load_conus_counties() prints
+# an LSAD -> example-name crosswalk each run, so a wrong code shows up there.
 VALID_COUNTY_LSAD_CODES = {"06", "13", "03", "04", "05", "12"}
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

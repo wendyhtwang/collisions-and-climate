@@ -1,58 +1,23 @@
 """
-Reconstruct Connecticut county-year population under the 8 LEGACY
-counties (09001-09015, the TIGER/2018 geography the rest of this project
-uses), by pulling CT population at the TOWN level and re-aggregating up.
+Reconstructs Connecticut county-year population under the 8 LEGACY counties
+(09001-09015, the TIGER/2018 geography the rest of the project uses), by
+pulling CT population at the TOWN level and re-aggregating up.
 
-WHY THIS EXISTS. Connecticut replaced its 8 legacy counties with 9
-planning regions (09110-09190) as its county-equivalent geography. The
-switch reaches the DATA more broadly than the 2022 effective date
-suggests: Vintage 2025 reports planning regions for every year it covers,
-2020-2025. Planning regions do NOT nest inside legacy county boundaries, so
-there is no region -> county crosswalk to apply: a region can straddle
-two old counties. But CT's counties were never an operating government
-unit, and BOTH schemes are just different groupings of the same 169
-towns, whose boundaries have been stable throughout. So the fix is to go
-down a level rather than sideways:
+CT replaced its 8 counties with 9 planning regions, which Census reports for
+every year Vintage 2025 covers (2020-2025). Regions do not nest inside legacy
+counties, so no region -> county crosswalk exists -- but both schemes group the
+same 169 stable towns along town boundaries, so town -> county is clean.
 
-                     169 towns          <- atomic, stable
-                    /          \\
-        8 legacy counties    9 planning regions
-          (what we need)     (what Census now publishes)
+- PRODUCTION 2021-2025 (40 rows); VALIDATION 2015 and 2018, years where Census
+  still published legacy counties so the two methods can be compared.
+- TOTALS ONLY: Census publishes sub-county population as totals in every
+  vintage, so CT age shares stop in 2021. 08b flags those rows missing
+  deliberately -- they should not be modelled down.
+- The town -> county mapping is a 2018 Gazetteer file joined on COUSUB FIPS,
+  never on town name.
+- NOT RATIFIED BY THE PI: raise before treating the CT series as settled.
 
-Towns partition the state exhaustively, and both the county lines and the
-region lines are drawn ALONG town boundaries, so town -> legacy county is
-a clean many-to-one mapping. That is exactly the nesting property that
-region -> county lacks, and it is the whole reason this approach works.
-
-SCOPE (narrowed 9/3/26 from the 8/31 scaffolding's 45 years):
-  * PRODUCTION  2021-2025 -- the years Census reports CT on the wrong
-    geography. 5 years x 8 counties = 40 rows.
-    Originally scoped as 2022-2025, on the reasoning that the planning
-    regions arrived with Vintage 2022. That was right about the GEOGRAPHY
-    and wrong about the FILE: Vintage 2025 (cc-est2025) reports planning
-    regions for EVERY year it covers, 2020-2025. 2020 is rescued because
-    the 2010-2020 intercensal supplies it under legacy counties, but 2021
-    exists only in the Vintage 2025 file -- so it fell through as 8
-    missing county-years in the first full build.
-  * VALIDATION  2015, 2018 -- years where Census still published legacy
-    counties, so 08b's direct pull and this script's re-aggregation can
-    be compared. Two years validate the town->county mapping as well as
-    forty would; the mapping is static. Both pass within 0.1%.
-  * TOTALS ONLY, no age. CT age shares are not recoverable for 2021-2025:
-    Census publishes sub-county population as totals in every vintage,
-    and CT DPH's town-level age data exists only for 2000, 2010,
-    2011-2014 and 2020 -- not annually. Those 40 county-years of age
-    shares are flagged missing by 08b, deliberately, and should not be
-    modelled down.
-
-STATUS: this design is Wendy's own call and has NOT been ratified by
-Eyal. He was asked about CT on 9/1 and the answer that came back was
-about the Dorn PDF and the 1980s; the CT question itself was never
-resolved. Raise it before treating the CT series as settled.
-
-Run:
-    python 08a_population_ct_towns.py --validate-only   # cheap first pass
-    python 08a_population_ct_towns.py
+Run: python 08a_population_ct_towns.py [--validate-only]
 """
 
 from __future__ import annotations
@@ -98,34 +63,24 @@ CT_LEGACY_COUNTIES = {
 PRODUCTION_YEARS = range(2021, 2026)
 VALIDATION_YEARS = [2015, 2018]
 
-# Town -> legacy county comes from a 2018 Gazetteer county-subdivision
-# file: a plain tab-delimited text file whose GEOID is
-# state(2) + county(3) + cousub(5), i.e. the legacy county is carried in
-# the identifier itself. Chosen over CT DPH's town reports (which group
-# towns by county in prose, requiring name matching) and over a TIGER
-# shapefile (which would pull in geopandas for one lookup). Any vintage
-# strictly before 2022 works; 2018 matches the project's county vintage.
+# Town -> legacy county comes from a 2018 Gazetteer county-subdivision file,
+# whose GEOID is state(2)+county(3)+cousub(5) -- the legacy county is carried
+# in the identifier itself. Chosen over CT DPH's town reports (name matching)
+# and over a TIGER shapefile (geopandas for one lookup). Any pre-2022 vintage
+# works; 2018 matches the project's county vintage.
 GAZETTEER_URL = (
     "https://www2.census.gov/geo/docs/maps-data/data/gazetteer/2018_Gazetteer/"
     "2018_gaz_cousubs_09.txt"
 )
 
 # Sub-county (county subdivision) population estimates. SUMLEV 061 is the
-# county-subdivision level -- filtering to it is what stops incorporated
-# places, which nest INSIDE towns, from being double-counted.
-#
-# URL NAMING, confirmed 9/3/26 after a 404: the per-state files use an
-# UNPADDED state FIPS -- sub-est2025_1.csv is Alabama, _6 California, so
-# Connecticut is _9 and NOT _09. That is the opposite of the zero-padded
-# convention every other Census file in this pipeline uses, and the
-# opposite of how state_fips is carried everywhere else in this repo, so
-# it is worth the explicit note.
-#
-# Candidates are tried in order and the first that returns 200 wins,
-# because the padding and the vintage/directory naming both varied by
-# decade and neither is documented anywhere reachable. The winning URL is
-# logged and recorded in source.txt, so a run's provenance is exact even
-# though the lookup is a fallback chain.
+# county-subdivision level; filtering to it stops incorporated places, which
+# nest INSIDE towns, from being double-counted.
+# URL naming, confirmed 9/3/26 after a 404: the per-state files use an UNPADDED
+# state FIPS, so CT is _9 and NOT _09 -- the opposite of every other Census file
+# here. Candidates are tried in order, first 200 wins, and the winning URL is
+# logged to source.txt, since neither the padding nor the vintage naming is
+# documented anywhere reachable.
 _SUBCOUNTY_ROOT = "https://www2.census.gov/programs-surveys/popest/datasets"
 
 SUBCOUNTY_SOURCES = {
@@ -186,14 +141,11 @@ def download_to_raw(url: str, filename: str = "", *, force: bool = False) -> Pat
 
 
 def download_first_available(url_templates: list, *, state: str, force: bool = False) -> Path:
-    """
-    Try each candidate URL in order; return the first that downloads.
+    """Try each candidate URL in order; return the first that downloads.
 
-    Exists because Census's subcounty file naming is not consistent across
-    decades -- the state suffix is unpadded in some vintages, the vintage
-    year in the filename doesn't always match the directory, and none of
-    it is documented anywhere machine-readable. Rather than hardcode one
-    guess and 404, try the known shapes and record which one answered.
+    Census's subcounty file naming isn't consistent across decades (padding,
+    vintage year vs. directory) and none of it is machine-readable, so try the
+    known shapes and record which one answered rather than hardcoding a guess.
     """
     formatted = [
         template.format(state=state, state_unpadded=str(int(state)))
@@ -271,13 +223,11 @@ def load_town_to_legacy_county_crosswalk(*, force: bool = False) -> pd.DataFrame
 
 
 def _assert_crosswalk_shape(crosswalk: pd.DataFrame) -> pd.DataFrame:
-    """
-    169 towns, each mapped to exactly one of the 8 legacy counties.
+    """169 towns, each mapped to exactly one of the 8 legacy counties.
 
-    If the town count is off, the likeliest cause is that the source is
-    already using the 9-planning-region scheme -- in which case the county
-    codes would be 09110-09190 and this check fails loudly rather than
-    producing a plausible-looking wrong answer.
+    A wrong town count most likely means the source is already on the
+    9-planning-region scheme, so this fails loudly rather than producing a
+    plausible-looking wrong answer.
     """
     counties = set(crosswalk["county_geoid"])
     unexpected = counties - set(CT_LEGACY_COUNTIES)
@@ -314,13 +264,11 @@ def _assert_crosswalk_shape(crosswalk: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------
 
 def fetch_town_population(years, *, force: bool = False) -> pd.DataFrame:
-    """
-    Pull CT town-level population for `years` from Census sub-county
+    """Pull CT town-level population for `years` from Census sub-county
     estimates. Returns long: cousub_fips, year, population.
 
-    Census sub-county files are TOTALS ONLY in every vintage -- there is
-    no age detail at this level, which is the structural reason CT age
-    shares stop in 2021 (see module docstring).
+    Sub-county files are TOTALS ONLY in every vintage, which is the structural
+    reason CT age shares stop in 2021.
     """
     wanted = set(years)
     frames = []
@@ -377,13 +325,10 @@ def fetch_town_population(years, *, force: bool = False) -> pd.DataFrame:
 def aggregate_towns_to_legacy_counties(
     town_population: pd.DataFrame, crosswalk: pd.DataFrame
 ) -> pd.DataFrame:
-    """
-    Join town population onto the crosswalk and sum to (county, year).
+    """Join town population onto the crosswalk and sum to (county, year).
 
-    Joins on cousub_fips, not town name -- name matching between sources
-    is the predictable failure mode here (the same class of problem as the
-    city_name normalization in Charvi's CT collision pipeline), and the
-    FIPS code makes it unnecessary.
+    Joins on cousub_fips, not town name -- name matching between sources is the
+    predictable failure mode here, and the FIPS code makes it unnecessary.
     """
     merged = town_population.merge(
         crosswalk[["cousub_fips", "county_geoid"]], on="cousub_fips", how="left"
@@ -425,17 +370,12 @@ def aggregate_towns_to_legacy_counties(
 # ---------------------------------------------------------------------
 
 def cross_check_against_direct_county_pull(reaggregated: pd.DataFrame) -> pd.DataFrame:
-    """
-    For VALIDATION_YEARS -- years when Census still published CT under the
-    legacy 8 counties -- compare this script's re-aggregation against
-    Census's own county-level figures.
+    """For VALIDATION_YEARS -- years when Census still published CT under the
+    legacy 8 counties -- compare this script's re-aggregation against Census's
+    own county-level figures.
 
-    This is a free correctness check on the town->county mapping: both
-    sides derive from the same underlying estimates, so they should agree
-    to rounding. A gap here means the crosswalk is wrong, not that the
-    estimates differ. Restricted to pre-2022 by construction: 2022+ has no
-    independent county-level figure to compare against, which is the whole
-    reason this script exists.
+    Both sides derive from the same underlying estimates, so a gap means the
+    crosswalk is wrong, not that the estimates differ. Pre-2022 by construction.
     """
     check_years = [y for y in VALIDATION_YEARS if y < 2022]
     subject = reaggregated[reaggregated["year"].isin(check_years)]

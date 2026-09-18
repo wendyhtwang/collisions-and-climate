@@ -36,37 +36,26 @@ ESTIMAND_NOTE = (
 )
 ESTIMAND_NOTE_AREA = (
     "Estimand: the average square kilometre of the contiguous United States "
-    "(counties weighted by land area). Eyal ruled out population weighting (8/28); "
+    "(counties weighted by land area, population weighting ruled out 8/28); "
     "counties in the west are much larger than counties in the east, so the "
     "unweighted and area-weighted series answer different questions."
 )
 
 # --------------------------------------------------------------------------
-# Figure conventions for v2 (Eyal, Slack 8/28)
-#
-#   1. "You can remove the title (already repeated in the figure caption) and
-#      the notes from the image itself (worth having those notes in the figure
-#      notes)."
-#   2. "I hate to make readers ... turn their heads to read anything off a
-#      graph. Would it be possible to move the legend text so it is horizontal
-#      and positioned at south-west kind of direction?"
-#
-# So: no exhibit carries its own title, and no exhibit carries its source note
-# as a text artist. Notes are collected here and written to a CSV that
-# codeSTATA/10_generate_weather_report.do reads, which keeps each caption's
-# Notes paragraph in sync with the figure that produced it -- they cannot drift
-# the way hand-copied caption text does. Panel labels ("Early period:
-# 1982-1991") are NOT titles and stay: they are not repeated in the caption.
+# Figure conventions for v2 (decided 8/28): no exhibit carries its own title
+# (the caption repeats it) and none carries its source note as a text artist;
+# legend text is horizontal, placed toward the south-west, so nobody has to
+# turn their head. Notes are collected here and written to a CSV that
+# codeSTATA/10_generate_weather_report.do reads, so a caption cannot drift from
+# its figure. Panel labels ("Early period: 1982-1991") are not titles and stay.
 # --------------------------------------------------------------------------
 EXHIBIT_NOTES = {}
 
 
 def finalize_tier2(fig, filename, panel_titles_ok=False):
-    """Assert an exhibit carries no title and no in-image note.
-
-    Checked rather than silently stripped: a title that reappears because a new
-    figure was copied from an old one should fail the run, not be quietly
-    removed and forgotten.
+    """Assert an exhibit carries no title and no in-image note. Checked rather
+    than silently stripped: a title that reappears because a figure was copied
+    from an old one should fail the run, not be quietly removed.
     """
     problems = []
     suptitle = getattr(fig, "_suptitle", None)
@@ -110,12 +99,9 @@ def save_tier2_figure(fig, filename, note=None, panel_titles_ok=False):
 
 def add_southwest_colorbar(ax, cmap, vmin, vmax, label, fmt=None,
                            width=0.31, height=0.024, x=0.015, y=0.07):
-    """Horizontal colorbar inset at the lower-left of a map.
-
-    GeoPandas' default legend is a vertical bar at the right edge with a
-    90-degree-rotated label -- the text Eyal was tilting his head to read. In an
-    EPSG:5070 Albers projection of the contiguous US the lower-left corner is
-    open ocean, so the bar sits inside the axes without covering land.
+    """Horizontal colorbar inset at the lower-left of a map: GeoPandas' default
+    legend is a vertical bar with a rotated label, and in EPSG:5070 the
+    lower-left corner is open ocean, so the inset covers no land.
     """
     cax = ax.inset_axes([x, y, width, height])
     mappable = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin, vmax))
@@ -131,13 +117,9 @@ def add_southwest_colorbar(ax, cmap, vmin, vmax, label, fmt=None,
 
 
 # --------------------------------------------------------------------------
-# Area weighting (Eyal, 8/28: "an area-weighted mean is also a sensible way to
-# think about that", and "these distributions ... probably should have an
-# area-weighted version as well").
-#
-# scipy is deliberately not used: it is absent from requirements.txt and from
-# the Kodama environment, and a missing dependency there has already cost this
-# project a day. A weighted Gaussian KDE is fifteen lines of numpy.
+# Area weighting: an area-weighted mean is a sensible companion view (decided
+# 8/28). scipy is deliberately not used -- it is absent from requirements.txt
+# and from Kodama, and a weighted Gaussian KDE is fifteen lines of numpy.
 # --------------------------------------------------------------------------
 def weighted_annual_mean(frame, value_col, weight_col=None, group_col="winter_year"):
     """Collapse the county panel to one row per year, weighted or not."""
@@ -286,18 +268,11 @@ tier2_outputs.append(state_warming_path)
 print(f"Saved {state_warming_path}")
 
 
-# Eyal, 8/28: "If you could pull all of these state-specific lines into one
-# figure ... you don't need to label each of the lines, so they can be the same
-# colour. Might help to have some transparency ... seeing how they have different
-# intercepts and have different slopes." And: "Definitely not a figure that we'd
-# want each state to be separately legible."
-#
-# Fitted lines rather than raw series: 49 connect-the-dots traces is an ink blob,
-# and what the figure is for is the spread of intercepts and slopes. He also
-# asked to flag the outliers -- "maybe it's worth annotating them with, like, a
-# small line and a two-letter code for that state next to it."
-# Same 49 units as STATE_FIPS_TO_NAME, keyed to the two-letter codes the
-# annotations use. Asserted against it below so the two cannot drift.
+# Decided 8/28: all state lines in one figure, unlabeled, one colour with
+# transparency -- the point is the spread of intercepts and slopes, not any
+# individual state. Fitted lines rather than raw series (49 traces is an ink
+# blob); the six extreme slopes get a leader line and a two-letter code.
+# Same 49 units as STATE_FIPS_TO_NAME, asserted below so the two cannot drift.
 STATE_FIPS_TO_USPS = {
     "01":"AL","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","11":"DC",
     "12":"FL","13":"GA","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY",
@@ -307,10 +282,10 @@ STATE_FIPS_TO_USPS = {
     "47":"TN","48":"TX","49":"UT","50":"VT","51":"VA","53":"WA","54":"WV","55":"WI",
     "56":"WY",
 }
-# Eyal floated EPA ecoregions (Slack, 8/28) but they cut across state lines, which
-# would need a county-level spatial join. Wendy's suggestion on the call -- EPA's
-# own climate-impact regions -- assigns whole states, so it drops straight onto a
-# state-level figure. Great Plains split north/south, as EPA does.
+# EPA ecoregions were considered (8/28) but they cut across state lines, which
+# would need a county-level spatial join. Using EPA's own climate-impact regions
+# instead assigns whole states, so it drops straight onto a state-level figure.
+# Great Plains split north/south, as EPA does.
 assert set(STATE_FIPS_TO_USPS) == CONUS_STATE_FIPS, (
     "STATE_FIPS_TO_USPS and STATE_FIPS_TO_NAME cover different states."
 )
@@ -513,14 +488,10 @@ warming_change_map_path = save_tier2_figure(
 )
 
 
-# Eyal, 8/28, looking at the change map and the two period maps: "I can see this
-# being like the top panel of the figure, and then these two panels at the bottom
-# below that to show the two periods. That would be, like, a super nice figure in
-# the Data section."
-#
-# Built as a third exhibit rather than as a replacement: the standalone change and
-# early/recent maps stay, because they read better on a slide than a three-panel
-# composite does.
+# Decided 8/28: combine the change map and the two period maps into one figure
+# for the Data section -- change on top, the two periods below. Built as a third
+# exhibit rather than a replacement: the standalone maps stay, because they read
+# better on a slide than a three-panel composite does.
 fig = plt.figure(figsize=(8.0, 6.5))
 grid = fig.add_gridspec(2, 2, height_ratios=[1.30, 1.0], hspace=0.02, wspace=0.01,
                         left=0.01, right=0.99, top=0.99, bottom=0.01)
@@ -620,9 +591,8 @@ extreme_cold_map_path = save_tier2_figure(
 )
 
 
-# Eyal, 8/28, on the extreme-cold map: "could you do a version of these cold
-# extremes like you did here for [the temperature change] -- like the first
-# decade, last decade, and the difference?"
+# Decided 8/28: build the extreme-cold map the same way as the temperature-change
+# map -- early period, recent period, and the difference.
 early_cold = period_mean(county_winter, "days_extremely_cold", EARLY_PERIOD, "early_cold_days")
 recent_cold = period_mean(county_winter, "days_extremely_cold", RECENT_PERIOD, "recent_cold_days")
 cold_periods = early_cold.merge(
@@ -680,26 +650,11 @@ extreme_cold_triptych_path = save_tier2_figure(
 
 # --------------------------------------------------------------------------
 # Warm-winter anomalies, defined to MATCH the regression variable.
-#
-# Conflict found while auditing on 9/10/26: this notebook previously flagged a
-# DETRENDED residual above 1.5 residual SD, with a >=30-complete-winter filter,
-# while codeSTATA/build_main_data_county_year.do SECTION 7 builds
-# warm_winter_1sd / warm_winter_2sd as the RAW mean winter temperature above the
-# county's own full-sample mean plus k SD -- undetrended, unfiltered. Figure 5
-# and Table 1 were therefore describing different objects, which defeats the
-# stated purpose of these exhibits ("as a collage of descriptive evidence, this
-# all helps us think about where the identifying variation is coming from",
-# Eyal, 8/28).
-#
-# Eyal also asked on 8/28 to drop the arbitrary 1.5 SD cut in favour of a
-# 1-sigma and a 2-sigma version ("someone would ask, well, why one and a half?"),
-# each with its own companion time series. That rebuild is the moment to make
-# the descriptive exhibit describe the regressor.
-#
-# The detrended construction is kept as a Tier 1 diagnostic: it answers a
-# different and still useful question -- which winters were anomalous relative
-# to where that county's climate was heading, rather than relative to its
-# whole-sample average.
+# The 9/10/26 audit found this notebook flagging a DETRENDED residual above
+# 1.5 SD while build_main_data_county_year.do SECTION 7 builds
+# warm_winter_1sd/2sd on RAW levels, so figure and table described different
+# objects. Now 1-sigma and 2-sigma versions with companion time series; the
+# detrended version stays as a Tier 1 diagnostic (vs. trend, not vs. mean).
 # --------------------------------------------------------------------------
 ANOMALY_THRESHOLDS = (1.0, 2.0)
 
@@ -711,10 +666,9 @@ def threshold_tag(threshold):
 def classify_warm_anomalies(frame, threshold, detrend=False, min_winters=0):
     """Flag county-winters warmer than the county's own climatology by `threshold` SD.
 
-    detrend=False reproduces SECTION 7 of build_main_data_county_year.do exactly:
-    the reference mean and SD are the county's own over the full sample, taken on
-    raw levels. detrend=True removes each county's linear trend first and
-    standardises the residual, which is the Tier 1 diagnostic.
+    detrend=False reproduces SECTION 7 of build_main_data_county_year.do exactly
+    (the county's own full-sample mean and SD, raw levels); detrend=True removes
+    each county's linear trend first, which is the Tier 1 diagnostic.
     """
     work = frame.dropna(subset=["mean_temp_c", "winter_year"]).copy()
     grouped = work.groupby("geoid")["mean_temp_c"]
@@ -760,7 +714,7 @@ for threshold, flagged in warm_anomalies.items():
 # (and the 2sd equivalent) in the merged county-year .dta. A mismatch means the
 # two pipelines disagree about which winters are complete, or about how the
 # three monthly means are averaged -- see the mean-winter-temperature row in
-# decisions_for_eyal.
+# tier2_decisions_log.
 anomaly_crosscheck = pd.DataFrame([
     {
         "threshold": f"{threshold:g} SD",
@@ -870,7 +824,7 @@ for threshold in ANOMALY_THRESHOLDS:
     )
 
 
-# Eyal, 8/28: "a figure like this will go with each map." The map is
+# Decided 8/28: pair each map with a companion figure like this one. The map is
 # cross-sectional -- which counties run warm relative to their own climatology --
 # and this is the time-series companion showing those shocks are episodic rather
 # than a steady drift.
@@ -941,10 +895,9 @@ decade_counts_note = "; ".join(
 def draw_violins(ax, datasets, weights=None, color=None, center_line=None):
     """Draw one violin per period from a (optionally weighted) Gaussian KDE.
 
-    Both the unweighted and the area-weighted exhibits go through this same
-    path so the two are visually comparable; matplotlib's own violinplot takes
-    no weights, and mixing the two renderers would make a difference in method
-    look like a difference in the data.
+    Both the unweighted and area-weighted exhibits take this path so the two
+    stay comparable; matplotlib's violinplot takes no weights, and mixing
+    renderers would make a difference in method look like one in the data.
     """
     colour = color or TIER2_COLORS["annual"]
     finite = np.concatenate([np.asarray(d, dtype=float) for d in datasets])
@@ -986,10 +939,9 @@ def period_values(column, weight_col=None):
 
 
 # --- Tier 1 only: pooled levels ------------------------------------------------
-# Eyal, 8/28: "this is nice, but to be honest, I don't think this will make it to
-# the paper or the appendix ... I don't think this adds a whole lot of information
-# relative to the other figures already." Demoted rather than deleted: it is the
-# reference the county-demeaned exhibit below is implicitly compared against.
+# Demoted to Tier 1 rather than deleted (8/28: judged unlikely to add enough on
+# its own to make the paper or appendix): it is the reference the
+# county-demeaned exhibit below is implicitly compared against.
 level_values, _ = period_values("mean_temp_c")
 fig, ax = plt.subplots(figsize=(8.0, 4.6))
 draw_violins(ax, level_values)
@@ -1084,8 +1036,8 @@ era5_comparison_path = save_tier2_figure(
           f"ERA5 is a robustness check only. {ESTIMAND_NOTE}"),
 )
 
-# Area-weighted companion (Eyal, 8/28, on the exhibits that pool counties into a
-# national number).
+# Area-weighted companion (decided 8/28, for the exhibits that pool counties into
+# a national number).
 prism_national_area = weighted_annual_mean(
     county_winter, "mean_temp_c", "land_area_km2").rename(columns={"mean_temp_c": "PRISM"})
 era5_area = era5_winter.merge(
@@ -1116,15 +1068,11 @@ print(f"ERA5 minus PRISM national winter temperature: mean {mean_offset:+.3f}°C
       f"correlation {correlation:.4f}")
 
 
-# Phase 4 checklist item open since 8/18, buildable only since 9/8/26 when
-# days_snow_depth_18in landed upstream.
-#
-# The index is READ, not recomputed here -- a second definition in Python is
-# exactly the failure this notebook already has one of (see the anomaly
-# section). Until 9/17/26 it was read out of the merged county-year panel,
-# which made this Phase 4 exhibit depend on a Phase 6 output. The index is pure
-# weather, so it now lives in 06c_build_winter_severity.py and both this
-# notebook and the merge read that one CSV.
+# Phase 4 checklist item, buildable only since days_snow_depth_18in landed
+# upstream on 9/8/26. The index is READ, never recomputed here -- a second
+# definition in Python is the failure the anomaly section already had. Since
+# 9/17/26 it comes from 06c_build_winter_severity.py rather than the merged
+# panel, so this Phase 4 exhibit no longer depends on a Phase 6 output.
 WSI_PATH = REPO_ROOT / "dataCSV" / "Weather" / "winter_severity_county_year.csv"
 wsi_map_path = None
 wsi_sensitivity_path = None
@@ -1206,17 +1154,11 @@ else:
         )
 
 
-# Eyal, 9/1: "is it the case that a county has warmed by one degree Celsius in
-# the summer, does that provide me everything I need to know about how our winter
-# is now? ... It might be, but it also could be that summers have gone up by one
-# degree Celsius, winters have only gone up by point two. If that's the case,
-# that's super interesting, because then it means that what we know from the
-# literature on climate change impacts ... doesn't provide us all the information
-# about how winters are becoming [warmer]."
-#
-# Two exhibits, both binscatters rather than maps -- he was explicit that these
-# are not maps, and ~140,000 county-years would be an unreadable ink blob as a
-# raw scatter.
+# Motivating question (9/1): does a county's summer warming tell us everything
+# about how its winter is changing, or do the two seasons move at different
+# rates -- which would mean summer-focused climate-impact work misses how
+# winters specifically are changing? Two binscatters rather than maps: a map
+# wouldn't show the relationship and a raw scatter of ~140,000 points is a blob.
 SEASONS = {"Winter": (12, 1, 2), "Spring": (3, 4, 5),
            "Summer": (6, 7, 8), "Fall": (9, 10, 11)}
 SEASON_ORDER = ["Winter", "Spring", "Summer", "Fall"]
@@ -1226,10 +1168,9 @@ MONTH_TO_SEASON = {month: season for season, months in SEASONS.items() for month
 def construct_county_season_panel(monthly):
     """County-season-year means, built the same way as the winter panel.
 
-    Same completeness rules and the same day-count weighting, so the Winter rows
-    of this panel are identical to county_winter -- asserted below. December is
-    keyed to the FOLLOWING year, matching winter_year and the L1. construction in
-    build_main_data_county_year.do.
+    Same completeness rules and day-count weighting, so the Winter rows match
+    county_winter exactly (asserted below). December is keyed to the FOLLOWING
+    year, matching winter_year and the L1. construction in the merge.
     """
     work = monthly.dropna(subset=["mean_temp_c"]).copy()
     work["season"] = work["month"].map(MONTH_TO_SEASON)
@@ -1383,7 +1324,7 @@ season_trend_path, trend_stats = cross_season_panel_figure(
     point_alpha=0.12,
 )
 
-# The table is what answers Eyal's question in numbers; the binscatters show the shape.
+# The table answers the motivating question in numbers; the binscatters show the shape.
 trend_summary = (
     season_trend_long.groupby("season")["trend_c_per_decade"]
     .agg(mean="mean", p25=lambda s: s.quantile(0.25), median="median",
@@ -1440,8 +1381,8 @@ exhibit_index = pd.DataFrame(
 )
 exhibit_index.to_csv(TIER2_TABLES_DIR / f"{config.name.lower()}_tier2_exhibit_index.csv", index=False)
 
-# The note each exhibit used to print inside its own image. Eyal asked (Slack,
-# 8/28) for those to move into the figure notes; 10_generate_weather_report.do
+# The note each exhibit used to print inside its own image. Moved into the
+# figure notes (decided 8/28); 10_generate_weather_report.do
 # reads this file and emits each one as the Notes paragraph under its figure, so
 # the caption cannot drift from the figure that produced it.
 missing_notes = [row.filename for row in exhibit_index.itertuples()
@@ -1458,7 +1399,7 @@ manifest_rows += [{"artifact_type": "table", "path": str(path)}
 output_manifest = pd.DataFrame(manifest_rows).drop_duplicates().sort_values(["artifact_type", "path"])
 output_manifest.to_csv(TIER2_TABLES_DIR / f"{config.name.lower()}_tier2_output_manifest.csv", index=False)
 
-decisions_for_eyal = pd.DataFrame([
+tier2_decisions_log = pd.DataFrame([
     {
         "decision": "Mean winter temperature: two constructions",
         "current_choice": ("This notebook takes a DAY-COUNT-WEIGHTED mean of the three monthly "
@@ -1520,10 +1461,10 @@ decisions_for_eyal = pd.DataFrame([
         "status": "DOCUMENTED",
     },
 ])
-decisions_for_eyal.to_csv(TIER2_TABLES_DIR / f"{config.name.lower()}_tier2_decisions_for_eyal.csv", index=False)
+tier2_decisions_log.to_csv(TIER2_TABLES_DIR / f"{config.name.lower()}_tier2_decisions_log.csv", index=False)
 
 display(exhibit_index)
-display(decisions_for_eyal)
+display(tier2_decisions_log)
 print(f"Tier 2 complete: {len(exhibit_index)} exhibits in {TIER2_FIGURES_DIR}")
 
 

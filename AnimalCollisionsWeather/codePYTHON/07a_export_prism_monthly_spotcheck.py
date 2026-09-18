@@ -1,24 +1,17 @@
 """
-Independently reproduces a small PRISM county-month panel directly in
-Earth Engine, without using any of this repo's own extraction/aggregation
-code, so it can be compared against the production panel as a check on
-the production pipeline's logic.
+Independently reproduces a small PRISM county-month panel directly in Earth
+Engine, without using this repo's own extraction/aggregation code, as a check
+on the production pipeline's logic.
 
-- Deliberately avoids importing gee_extract_utils.py or reusing any
-  production function, so a bug shared between the two wouldn't be
-  invisible to this check.
-- Reduces each daily image to county means first, then aggregates to
-  monthly inside GEE -- matches production's order of operations, since
-  compositing images before reducing was found to shift results ~1-2%.
-- Samples 8 explicit counties across 5 years (including the 2020/2021
-  PRISM vintage boundary), not the full CONUS panel, to keep the check
-  fast and its scope transparent/repeatable.
-- Errors out if the source county collection contains more than one
-  feature for a requested GEOID (see the known WI duplication case in
-  SCRIPT_OVERVIEW.md), rather than silently picking one.
+- Imports no production function on purpose, so a bug shared between the two
+  wouldn't be invisible to this check.
+- Reduces each daily image to county means first, then aggregates monthly
+  inside GEE -- production's order of operations (compositing first shifts
+  results ~1-2%).
+- Samples 8 counties across 5 years (including the 2020/2021 vintage
+  boundary); errors out if a GEOID returns more than one feature.
 
-Workflow: run this, sync the exported CSV into dataCSV/PRISM/, then run
-07b_compare_prism_monthly_spotcheck.py.
+Workflow: run this, sync the exported CSV into dataCSV/PRISM/, then run 07b.
 """
 
 from __future__ import annotations

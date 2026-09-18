@@ -3,40 +3,28 @@ FILE:         check_animal_deer_backfill.do
 PROJECT:      Weather Changes, Ungulate Populations, & Vehicle Collisions
 CURRENT LEAD: Wendy Wang
 
-PURPOSE:      Verify the collisions-data assumption Eyal flagged on the
-              9/8/26 call: using all-animal collisions (`animal_*`) as
-              the outcome instead of deer-only (`deer_*`) should ONLY
-              ever gain observations, never lose any. His words: "if
-              there is a non-missing deer value, that should also be a
-              minimum [floor] and non-missing any_animal value... you
-              should not lose any observations from using the any_animal
-              whatsoever. You should only be gaining observations."
+PURPOSE:      Verify a collisions-data assumption flagged on the 9/8/26
+              call: switching the outcome from deer-only (`deer_*`) to
+              all-animal (`animal_*`) should only ever GAIN observations,
+              never lose any -- i.e. every non-missing deer value also
+              carries a non-missing animal value.
 
-              Eyal believes a backfill step already exists upstream (in
-              whatever code produced collisions_CONUS_county_year_1985_2020
-              .dta) that replaces a missing animal_* with a non-missing
-              deer_* value, but asked Wendy to check it rather than
-              assume it. This script checks it empirically, on the built
-              data, rather than tracing code Wendy doesn't have (the file
-              that appends the state-level collisions data together is
-              not in this repo -- Eyal placed a finished snapshot at
-              $dataRAW/Collisions/collisions_CONUS_county_year_1985_2020
-              .dta, per SECTION 4 of build_main_data_county_year.do).
+              An upstream backfill is believed to do this but has never
+              been confirmed, and the code that appends the state
+              collisions files is not in this repo, so this checks the
+              built data empirically instead.
 
-USAGE:        Run standalone. Defaults to reading the built
-              main_data_county_year.dta (so it also implicitly checks
-              that the merge in build_main_data_county_year.do didn't
-              introduce new gaps). To check the raw collisions snapshot
-              directly instead -- e.g. if you want to isolate whether an
-              issue is upstream vs from the county-year merge -- set
-              check_raw_file below to 1.
+USAGE:        Run standalone. Reads main_data_county_year.dta by default,
+              which also checks that the merge introduced no new gaps;
+              set check_raw_file below to 1 to test the raw collisions
+              snapshot instead and isolate upstream issues.
 
-OUTPUT:       Console summary (pass/fail per outcome category) plus, for
-              any category that fails, a CSV of the offending geoid-year
-              rows at $tables/checks/animal_deer_backfill_violations.csv.
+OUTPUT:       Console pass/fail per outcome, plus a CSV of offending
+              geoid-year rows at
+              $tables/checks/animal_deer_backfill_violations.csv.
 
 CHANGELOG:
-  09/09/2026 Wendy Wang: initial version, per Eyal's 9/8/26 ask.
+  09/09/2026 Wendy Wang: initial version, per the 9/8/26 review.
 ==============================================================*/
 
 cap log close
@@ -93,7 +81,7 @@ use "`file_name'", clear
 local suffixes total fatal fatalities injury injuries pdo
 
 di as text _newline "Checking: does every non-missing deer_<suffix> row also have a non-missing animal_<suffix>?"
-di as text "(Eyal's rule: all_animal as the outcome should only ever GAIN observations vs. deer, never lose any.)"
+di as text "(Rule: all_animal as the outcome should only ever GAIN observations vs. deer, never lose any.)"
 
 local any_failures = 0
 tempname violations_all
@@ -125,7 +113,7 @@ foreach s of local suffixes {
     }
     else {
         local any_failures = 1
-        di as error "FAIL  deer_`s' (n=`n_deer'') -> animal_`s'' (n=`n_animal''): `n_gap'' row(s) have a non-missing deer_`s'' but a MISSING animal_`s''. The backfill Eyal expects does not hold for this outcome."
+        di as error "FAIL  deer_`s' (n=`n_deer'') -> animal_`s'' (n=`n_animal''): `n_gap'' row(s) have a non-missing deer_`s'' but a MISSING animal_`s''. The expected backfill does not hold for this outcome."
 
         preserve
             keep if !missing(deer_`s') & missing(animal_`s')
@@ -154,9 +142,9 @@ if !`first_export' {
 
 di as result _newline "============================================================"
 if `any_failures' {
-    di as error "OVERALL: FAIL -- the animal_*/deer_* backfill does NOT fully hold in `file_name'. See violations CSV above. Flag this to Eyal before treating all_animal as a strict superset of deer."
+    di as error "OVERALL: FAIL -- the animal_*/deer_* backfill does NOT fully hold in `file_name'. See violations CSV above. Flag this before treating all_animal as a strict superset of deer."
 }
 else {
-    di as result "OVERALL: PASS -- every non-missing deer_<suffix> has a non-missing animal_<suffix>, for every outcome checked, in `file_name'. Confirms Eyal's assumption; safe to use all_animal as the outcome without losing observations relative to deer."
+    di as result "OVERALL: PASS -- every non-missing deer_<suffix> has a non-missing animal_<suffix>, for every outcome checked, in `file_name'. Confirms the assumption; safe to use all_animal as the outcome without losing observations relative to deer."
 }
 di as result "============================================================"

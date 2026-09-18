@@ -341,11 +341,9 @@ _spec.loader.exec_module(m08b)
 
 
 # 20 counties with a realistic SPREAD of growth rates (0% to 9.5%/yr).
-# Heterogeneity is the point: under a one-year shift each county moves by
-# its own growth rate, so the upper tail separates a shift from a vintage
-# revision. A fixture where every county grew at the same rate would make
-# the two indistinguishable -- and would have quietly passed a check that
-# cannot actually do its job on real data.
+# Heterogeneity is the point: under a one-year shift each county moves by its
+# own growth rate, so the upper tail separates a shift from a vintage revision.
+# A uniform-growth fixture would make the two indistinguishable.
 COUNTIES = [f"17{i:03d}" for i in range(1, 41, 2)]
 GROWTH = {geoid: 1 + 0.005 * i for i, geoid in enumerate(COUNTIES)}
 BASE_YEAR, BASE_POP = 2019, 100_000
