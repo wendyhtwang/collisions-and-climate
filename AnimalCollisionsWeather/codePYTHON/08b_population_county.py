@@ -1,60 +1,25 @@
 """
-Build the county-year population panel from Census sources: total
-resident population plus 18 five-year age shares, keyed to TIGER/2018
-county FIPS, CONUS + DC.
+Builds the county-year population panel from Census sources: total resident
+population plus 18 five-year age shares, keyed to TIGER/2018 county FIPS,
+CONUS + DC, 1981-2025 (139,860 rows = 3,108 counties x 45 years). Feeds the
+Phase 6 merge as the collision-rate denominator and as time-varying controls;
+sex and race are collapsed, never broken out.
 
-Builds 1981-2025 (139,860 rows = 3,108 counties x 45 years) now that
-fetch_pe02_1980s is implemented -- CONFIRMED 9/8/26 against
-pe-02-1985.xls; the other 8 years of the 1980s are expected to share
-that layout but have not each been individually verified (see the
-fetcher's docstring).
+- Five stages, in order: fetch (native FIPS, never recodes) -> stack (never
+  dedupes silently) -> crosswalk onto TIGER/2018 (the only stage that changes a
+  geoid) -> CT overlay from 08a (already resolved, never crosswalked twice) ->
+  validate (never mutates).
+- One vintage per period, never spliced mid-decade: PE-02 1981-89, intercensal
+  API 1990-99 (key required), co-est00int 2000-09, cc-est2020int 2010-20,
+  cc-est2025 2020-25 (postcensal, provisional). 2020 comes from the intercensal
+  file. The 1980s layout is confirmed against pe-02-1985.xls only.
+- AGEGRP means three different things across those products and YEAR is a code
+  whose layout differs per file, so both are worked out from the data rather
+  than assumed -- see detect_agegrp_encoding, YEAR_CODE_RULES, SCRIPT_OVERVIEW.
+- validate_panel checks MAGNITUDE, not just shape: an early build passed every
+  structural check with its 2000s decade 70x wrong.
 
-Consumed by the Phase 6 merge as the collision-rate denominator and as
-time-varying controls (Eyal, 9/1/26: total population "all ages, all
-sexes at birth", plus the share in each standard age bucket). Sex and
-race are collapsed, never broken out.
-
-PIPELINE ORDER -- each stage's rule matters more than its code, because
-most ways this can silently corrupt a series are ordering violations:
-
-    1. FETCH      per-period, native FIPS. Never recodes geography.
-    2. STACK      resolve overlaps by priority. Never dedupes silently.
-    3. CROSSWALK  recode onto TIGER/2018. The ONLY stage that changes a
-                  geoid. Flags rather than fabricates.
-    4. CT         overlay 08a's town-reaggregated series. Already
-                  resolved, so it must not be crosswalked twice.
-    5. VALIDATE   assert and flag. Never mutates the panel.
-
-SOURCES, all verified against decennial counts 9/3-9/4/26:
-
-    1981-89  PE-02, one .xls per year           verified against 1985 only
-    1990-99  intercensal API                    key required
-    2000-09  co-est00int, one .csv per state
-    2010-20  cc-est2020int, one .csv per state
-    2020-25  cc-est2025, one .csv per state     postcensal, provisional
-
-Everything except 2020-25 is intercensal: final, revised, and reconciled
-to the decennial count at both ends of its decade. 2020-25 is postcensal
-because the 2030 census has not anchored it yet, and is revised each June.
-2020 itself comes from cc-est2020int, not the postcensal file.
-
-THREE THINGS THAT WILL BITE ANYONE EDITING THIS:
-
-  * AGEGRP means three different things across these five products.
-    Never assume: detect_agegrp_encoding works it out from the data, and
-    every source is normalized and then re-verified. Wiring that check to
-    only one source is what let the 2000s ship 70x wrong.
-  * YEAR is a code, not a year, and the layouts differ. co-est00int even
-    carries a census row in the MIDDLE of its sequence, so it needs an
-    explicit map. See YEAR_CODE_RULES.
-  * Structural validation is not enough. Row counts, dtypes, uniqueness
-    and key coverage all passed on that 70x-wrong panel; validate_panel
-    checks magnitude for exactly that reason.
-
-Run:
-    python 08b_population_county.py --probe-api
-    python 08b_population_county.py --years 2020 2021 --states 17
-    python 08b_population_county.py --years $(seq 1981 2025)
+Run: python 08b_population_county.py [--probe-api] [--years ...] [--states ...]
 """
 
 from __future__ import annotations
@@ -106,12 +71,9 @@ OUTPUT_CSV = OUTPUT_DIR / "population_county_year_1981_2025.csv"
 OUTPUT_DTA = OUTPUT_DIR / "population_county_year_1981_2025.dta"
 REVIEW_FLAGS_CSV = OUTPUT_DIR / "population_review_flags.csv"
 
-# Subset runs (--years / --states) write to their own filenames rather
-# than the production ones. Without this a 2-year, 1-state smoke test
-# overwrites population_county_year_1981_2025.csv with 204 rows, and
-# nothing downstream can tell that it isn't the real panel -- the Phase 6
-# merge would just silently lose 99% of the country. CLAUDE.md's "do not
-# overwrite existing outputs without approval" applies squarely here.
+# Subset runs (--years / --states) write to their own filenames. Without this a
+# 2-year, 1-state smoke test overwrites the production panel with 204 rows and
+# nothing downstream can tell that it isn't the real thing.
 SUBSET_PREFIX = "SUBSET_"
 
 # The county universe comes from the weather panel, not from a hardcoded
@@ -127,20 +89,13 @@ CT_PLANNING_REGION_GEOIDS = {
     "09110", "09120", "09130", "09140", "09150", "09160", "09170", "09180", "09190",
 }
 
-# REQUIRED for the 1990s intercensal API path. Confirmed 9/3/26 by
-# probing the endpoint: without a key it returns HTTP *200* carrying an
-# HTML page titled "Missing Key" rather than a JSON error or a 401, so an
-# unguarded .json() dies with an unhelpful JSONDecodeError. That is why
-# _parse_api_json below checks the payload shape rather than trusting the
-# status code.
-#
-# Keys are free and issued instantly at
-# https://api.census.gov/data/key_signup.html. Set it in the shell (or a
-# .venv activate hook) -- never commit it:
+# REQUIRED for the 1990s intercensal API path, and only for that path. Without
+# a key the endpoint returns HTTP 200 carrying an HTML "Missing Key" page, not
+# a 401, so _parse_api_json below checks the payload shape rather than the
+# status code. Keys are free and instant:
+# https://api.census.gov/data/key_signup.html. Set it in the shell, never
+# commit it:
 #     export CENSUS_API_KEY=...
-#
-# Only the 1990s source needs this. Every other period reads flat files
-# and needs no key at all.
 CENSUS_API_KEY_ENV_VAR = "CENSUS_API_KEY"
 
 API_KEY_HELP = (
@@ -161,29 +116,18 @@ CENSUS_API_ROOT = "https://api.census.gov/data"
 # ---------------------------------------------------------------------
 # YEAR code rules for the cc-est / co-est "-alldata" files
 # ---------------------------------------------------------------------
-# These files key their time dimension with a small integer, NOT a
-# calendar year, and the first one or two codes are the decennial census
-# count and the estimates BASE -- two different numbers for the same date.
-# Keeping both double-counts the base year at every decade seam, so the
-# non-estimate codes are dropped deliberately here rather than left to
-# collide downstream.
-#
-# `confirmed` records whether the mapping has been checked against the
-# file's own layout PDF. Where it is False, assert_period_continuity()
-# is what actually protects the series.
+# These files key time with a small integer, not a calendar year, and the
+# leading codes are the decennial count and the estimates BASE -- two numbers
+# for the same date. Keeping both double-counts the base year at each decade
+# seam, so non-estimate codes are dropped here. `confirmed` records whether a
+# mapping was checked against the file's layout PDF; where it is False,
+# assert_period_continuity() is what protects the series.
 
-# DESIGN: declare the file's YEAR SPAN, then derive the code->year map
-# from the codes the file actually contains. Hardcoding an offset was
-# tried first and was wrong for the 2010s (assumed 3->2010, actual
-# 2->2010), which filtered every row out. The span is the thing we can
-# state confidently from the product name; the number of leading
-# census/base rows is the thing that varies and is better read from the
-# data.
-#
-# Every leading code is a census count and/or an estimates base -- two
-# different numbers for the same April date. Keeping them alongside the
-# July estimates double-counts the base year at each decade seam, so the
-# extra leading codes are dropped deliberately.
+# DESIGN: declare the file's YEAR SPAN, then derive the code->year map from the
+# codes the file actually contains. Hardcoding an offset was tried first and was
+# wrong for the 2010s (assumed 3->2010, actual 2->2010), filtering out every
+# row. The span is statable from the product name; the number of leading
+# census/base rows varies and is better read from the data.
 
 @dataclass(frozen=True)
 class YearCodeRule:
@@ -199,19 +143,14 @@ class YearCodeRule:
         return self.last_year - self.first_year + 1
 
     def code_to_year(self, observed_codes) -> dict:
-        """
-        Map the file's YEAR codes onto calendar years.
+        """Map the file's YEAR codes onto calendar years.
 
-        Default: the highest `n_years` codes are the estimate series and
-        anything below them is a census/base row, dropped. That inference
-        holds whenever the non-estimate rows sit at the START of the
-        sequence, which is true for cc-est2020int and cc-est2025.
-
-        It is NOT true for co-est00int, which carries a 4/1/2010 census row
-        at code 12, BETWEEN 7/1/2009 and 7/1/2010. A contiguous-tail rule
-        maps that whole decade one year late, so that file supplies an
-        explicit map instead. When `explicit_codes` is set it wins, and the
-        file must contain every code it names.
+        Default: the highest `n_years` codes are the estimate series, anything
+        below is a census/base row and is dropped -- true for cc-est2020int and
+        cc-est2025. NOT true for co-est00int, whose 4/1/2010 census row sits at
+        code 12, between 7/1/2009 and 7/1/2010, so that file supplies an
+        explicit map. When `explicit_codes` is set it wins, and every code it
+        names must exist in the file.
         """
         codes = sorted(int(c) for c in observed_codes)
 
@@ -246,22 +185,11 @@ class YearCodeRule:
 
 
 YEAR_CODE_RULES = {
-    # 1 = 4/1/2000 census, 2 = 4/1/2000 base, then 7/1 estimates, and a
-    # trailing 4/1/2010 census. Span declared through 2010; we only USE
-    # 2000-2009 from this file (2010 comes from the 2010s intercensal,
-    # which has priority).
-    # EXPLICIT, because this file breaks the contiguous-tail assumption.
-    # Verified against Illinois 9/4/26 -- statewide totals by raw code:
-    #   code  1  12,419,927   4/1/2000 estimates base (census: 12,419,293)
-    #   code  2  12,434,161   7/1/2000   <- the decade starts here
-    #   code 11  12,796,778   7/1/2009
-    #   code 12  12,830,632   4/1/2010 CENSUS -- exact match to the count
-    #   code 13  12,843,166   7/1/2010   (cc-est2020int's 7/1/2010 is
-    #                                     12,845,460, i.e. 0.018% apart)
-    # So the annual series is codes 2-11, with a census row sitting BETWEEN
-    # it and code 13. Inferring "the top 11 codes are 2000-2010" mapped the
-    # whole decade a year late and put the 2010 census count in 2009.
-    # 2010 is taken from cc-est2020int regardless, so codes 12 and 13 are
+    # EXPLICIT, because this file breaks the contiguous-tail assumption: code 1
+    # is the 4/1/2000 base, codes 2-11 are 7/1/2000-2009, and a 4/1/2010 census
+    # row sits BETWEEN those and code 13. Inferring "the top 11 codes are
+    # 2000-2010" mapped the whole decade a year late. Verified against Illinois
+    # 9/4/26. 2010 comes from cc-est2020int regardless, so codes 12-13 are
     # dropped here rather than mapped.
     "co-est00int": YearCodeRule(
         2000, 2009, confirmed=True,
@@ -269,24 +197,18 @@ YEAR_CODE_RULES = {
         note="explicit: codes 2-11 = 2000-2009; 1 (base), 12 (2010 census) "
              "and 13 (7/1/2010) dropped. Verified against IL, 9/4/26.",
     ),
-    # CONFIRMED 9/3/26 against Illinois: YEAR=1 gives IL 12,831,572 vs the
-    # 2010 census 12,830,632 (the April base), and YEAR=12 gives
-    # 12,812,436 vs the 2020 census 12,812,508. So 12 codes = 1 base row +
-    # 11 estimate years, and codes 2-12 are 2010-2020. 2020 comes from
-    # HERE, not from the postcensal file: this product reconciles through
-    # the 4/1/2020 census itself.
+    # CONFIRMED 9/3/26 against Illinois: 12 codes = 1 base row + 11 estimate
+    # years, so codes 2-12 are 2010-2020. 2020 comes from HERE, not the
+    # postcensal file -- this product reconciles through the 4/1/2020 census.
     "cc-est2020int": YearCodeRule(
         2010, 2020, confirmed=True,
         note="verified against IL 2010/2020 decennial counts, 9/3/26",
     ),
-    # CONFIRMED 9/3/26. The file carries codes 1-7: one base row plus six
-    # estimate years, so codes 2-7 are 2020-2025. Verified by the 2020
-    # overlap against cc-est2020int across 102 Illinois counties -- median
-    # difference 0.207%, p95 0.733%, which is ordinary
-    # intercensal-vs-postcensal revision noise. A one-year shift would have
-    # put the p95 several percent out. assert_period_continuity() re-runs
-    # this check on every build, so a future vintage that changes the
-    # leading-row count cannot slip through.
+    # CONFIRMED 9/3/26: codes 1-7 = one base row plus six estimate years, so
+    # codes 2-7 are 2020-2025. Verified on the 2020 overlap against
+    # cc-est2020int (median difference 0.207%), ordinary revision noise rather
+    # than the several-percent gap a one-year shift would leave.
+    # assert_period_continuity() re-runs this check on every build.
     "cc-est2025": YearCodeRule(
         2020, 2025, confirmed=True,
         note="verified via the 2020 overlap against cc-est2020int, 9/3/26",
@@ -346,12 +268,10 @@ SOURCES = [
     ),
     PopulationSourceConfig(
         name="census_postcensal_2020s",
-        # Fetches 2020 as well as 2021-2025, DELIBERATELY. 2020 itself is
-        # taken from the intercensal source (priority 1 beats this one's 2),
-        # but fetching the overlap is what gives assert_period_continuity a
-        # year where two independent sources can be compared -- which is the
-        # only thing standing between an unconfirmed YEAR-code offset and a
-        # 2020s series shifted by a year. Do not narrow this back to 2021.
+        # Fetches 2020 as well as 2021-2025, DELIBERATELY. 2020 itself comes
+        # from the intercensal source (higher priority), but the overlap gives
+        # assert_period_continuity a year where two independent sources can be
+        # compared. Do not narrow this back to 2021.
         years=range(2020, 2026),
         fetch_fn="fetch_ccest_flatfile",
         is_intercensal=False,
@@ -376,18 +296,12 @@ FORCE_DOWNLOAD = False
 
 
 def download_to_raw(url: str, source_name: str, filename: str = "", *, force: bool = False) -> Path:
-    """
-    Download `url` into dataRAW/Population/<source_name>/, skipping the
-    fetch if the file is already there (CLAUDE.md: jobs must be
-    restartable and must not re-do completed work). Writes/updates a
-    source.txt recording where each file came from and when.
+    """Download `url` into dataRAW/Population/<source_name>/, skipping the fetch
+    if the file is already cached, and recording provenance in source.txt.
 
-    `force` (or --force-download at the CLI, via FORCE_DOWNLOAD) always
-    re-downloads even if a file is already cached -- use it if a cached
-    file is suspected corrupt or truncated. The content check below only
-    catches the "got an HTML error page" case, not every way a download
-    can go wrong (e.g. a connection dropped mid-transfer, which still
-    looks like a plausible file size).
+    `force` (--force-download) re-downloads anyway -- use it if a cached file is
+    suspected corrupt. The content check below only catches the "got an HTML
+    error page" case, not a connection dropped mid-transfer.
     """
     dest_dir = RAW_DIR / source_name
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -401,15 +315,11 @@ def download_to_raw(url: str, source_name: str, filename: str = "", *, force: bo
     response = requests.get(url, timeout=REQUEST_TIMEOUT, headers={"User-Agent": USER_AGENT})
     response.raise_for_status()
 
-    # A 2xx status is not proof the body is the file asked for -- Census
-    # (or a CDN/proxy in front of it) can serve an HTML error or
-    # rate-limit page with a 200 status. Left unchecked, that gets
-    # cached as if it were real data and the failure only surfaces
-    # several stack frames later as something opaque like
-    # KeyError('YEAR') out of pandas, with nothing pointing back at "the
-    # download was bad." Catch the common case here instead: a body that
-    # starts with '<' is not a CSV and not an .xls (an .xls is a
-    # zip/OLE binary blob, never starts with '<').
+    # A 2xx status is not proof the body is the file asked for: Census or a
+    # proxy can serve an HTML error page with a 200, which then caches as if it
+    # were data and surfaces later as something opaque like KeyError('YEAR').
+    # A body starting with '<' is neither a CSV nor an .xls (which is a binary
+    # zip/OLE blob), so catch that here.
     head = response.content[:200].lstrip()
     if head[:1] == b"<":
         raise RuntimeError(
@@ -460,16 +370,12 @@ def _standardize(df: pd.DataFrame, config: PopulationSourceConfig) -> pd.DataFra
 
 
 def fetch_ccest_flatfile(config: PopulationSourceConfig, states: list) -> pd.DataFrame:
-    """
-    Read a Census "-alldata" county characteristics file: one CSV per
-    state, long on AGEGRP, wide on race/sex. Serves co-est00int (2000s),
-    cc-est2020int (2010s) and cc-est2025 (2020s) -- the three share a
-    layout, which is why they share a parser.
+    """Read a Census "-alldata" county characteristics file: one CSV per state,
+    long on AGEGRP, wide on race/sex. Serves co-est00int, cc-est2020int and
+    cc-est2025, which share a layout.
 
-    Use the `-alldata` variant, never `-agesex`: alldata is long with a
-    clean AGEGRP key and 5-year bins; agesex is wide with collapsed,
-    partly overlapping groupings that would need a second parser and give
-    worse buckets.
+    Use `-alldata`, never `-agesex`: alldata is long with a clean AGEGRP key and
+    5-year bins; agesex is wide with collapsed, partly overlapping groupings.
     """
     rule = YEAR_CODE_RULES[config.file_key]
     wanted_years = set(config.years)
@@ -517,14 +423,11 @@ def fetch_ccest_flatfile(config: PopulationSourceConfig, states: list) -> pd.Dat
         # TOT_POP is the all-race, both-sex total for the AGEGRP; using it
         # is what "collapse over sex and race" means for this file family.
         df["population"] = df["TOT_POP"]
-        # county_name here is cosmetic only -- the authoritative name comes
-        # from the weather panel's county universe at the spine step, which
-        # is what guarantees it matches the merge key. Read defensively:
-        # Census ships CTYNAME entirely BLANK for Connecticut in this
-        # product (all 1,824 rows null, so pandas types the column float64
-        # and .str raises), presumably fallout from the county-equivalent
-        # transition. Illinois has it populated. Never assume a source
-        # column is populated just because it exists in the header.
+        # county_name here is cosmetic: the authoritative name comes from the
+        # weather panel's county universe at the spine step, which is what
+        # guarantees it matches the merge key. Read defensively -- Census ships
+        # CTYNAME entirely BLANK for Connecticut in this product, so pandas
+        # types the column float64 and .str raises.
         if "CTYNAME" in df.columns and df["CTYNAME"].notna().any():
             df["county_name"] = (
                 df["CTYNAME"].astype(str).str.replace(r"\s+County$", "", regex=True)
@@ -611,17 +514,12 @@ def _parse_api_json(response, context: str):
 
 
 def fetch_intercensal_api(config: PopulationSourceConfig, states: list) -> pd.DataFrame:
-    """
-    Pull one decade of county intercensal estimates from the Census API
-    (api.census.gov/data/{base}/pep/int_charagegroups), one request per
-    state per year.
+    """Pull one decade of county intercensal estimates from the Census API
+    (pep/int_charagegroups), one request per state per year.
 
-    This endpoint is a DIFFERENT product line from the annual "Vintage
-    YYYY" estimates that left the API after Vintage 2019: the decadal
-    intercensals were published once and are still served. Confirmed
-    9/3/26 to exist with county geography and 5-year age groups; the
-    AGEGRP code list is NOT published in variables.json, which is why
-    assert_agegrp_encoding() runs on the result before anything trusts it.
+    A DIFFERENT product line from the annual "Vintage YYYY" estimates that left
+    the API after Vintage 2019. Its AGEGRP code list is not published in
+    variables.json, so assert_agegrp_encoding() runs before anything trusts it.
     """
     # The key is fetched lazily, on the first cache MISS -- not up front.
     # A fully cached run makes no requests, so it must not require a key:
@@ -632,12 +530,10 @@ def fetch_intercensal_api(config: PopulationSourceConfig, states: list) -> pd.Da
     cache_dir.mkdir(parents=True, exist_ok=True)
     frames = []
 
-    # ONE REQUEST PER STATE, covering the whole decade. YEAR is a variable
-    # to SELECT, not a predicate to filter on: passing YEAR=1995 returns
-    # HTTP 204 (valid request, no rows), which is how this was found on
-    # 9/3/26. The endpoint's own examples.html confirms the shape --
-    # get=POP,YEAR,AGEGRP,RACE_SEX,HISP with for/in and nothing else. This
-    # also cuts the call count 10x versus one request per state-year.
+    # ONE REQUEST PER STATE, covering the whole decade. YEAR is a variable to
+    # SELECT, not a predicate to filter on: passing YEAR=1995 returns HTTP 204
+    # (valid request, no rows). This also cuts the call count 10x versus one
+    # request per state-year.
     url = f"{CENSUS_API_ROOT}/{config.api_base_year}/pep/int_charagegroups"
 
     for state in states:
@@ -725,14 +621,11 @@ def fetch_intercensal_api(config: PopulationSourceConfig, states: list) -> pd.Da
 
 
 def _collapse_api_race_sex_hisp(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Reduce the API's race/sex/Hispanic-origin detail to one row per
+    """Reduce the API's race/sex/Hispanic-origin detail to one row per
     (geoid, year, agegrp).
 
-    Census char files carry an explicit "all categories" code alongside
-    the components. Where that total code is present we USE it rather than
-    summing, because summing components risks double-counting if any
-    aggregate rows are also present. Where it isn't, we sum the components.
+    Uses the explicit "all categories" code where present rather than summing
+    components, which would double-count if aggregate rows are also present.
     """
     has_totals = False
     subset = df
@@ -760,26 +653,14 @@ def _collapse_api_race_sex_hisp(df: pd.DataFrame) -> pd.DataFrame:
 def _normalize_api_year(
     df: pd.DataFrame, config: PopulationSourceConfig, *, value_col: str = "population"
 ) -> pd.DataFrame:
-    """
-    Add a calendar `year` column from the API's YEAR values.
+    """Add a calendar `year` column from the API's YEAR values.
 
-    CONFIRMED 9/3/26 by probing: the 1990s endpoint returns TWO-DIGIT
-    years ('90' ... '99'). Both two- and four-digit forms are handled; the
-    form is chosen by which one covers more rows, not by assumption.
-
-    A wrong mapping would shift the whole decade, and -- unlike the 2020s
-    -- the 1990s has no overlapping source for assert_period_continuity to
-    catch it downstream. So the guard has to stay strict about that. But
-    strict-about-the-decade is not the same as strict-about-every-row:
-    Census's own data carries the occasional malformed cell. Wyoming's
-    Weston County (56045) has exactly one row with YEAR='9' and POP=0 --
-    an empty cell for 85+, one race/sex group, Hispanic origin -- out of
-    ~9.5 million rows nationally.
-
-    So the rule is: rows whose YEAR doesn't map are dropped ONLY if they
-    carry no population, and the drop is logged with the counties
-    involved. A genuinely shifted decade fails both tests (every row
-    unmappable, and the populations are non-zero), so it still raises.
+    The 1990s endpoint returns TWO-DIGIT years (confirmed 9/3/26); both forms
+    are handled, chosen by which covers more rows. The 1990s has no overlapping
+    source for assert_period_continuity to catch a shift downstream, so this
+    stays strict -- but rows whose YEAR doesn't map are dropped ONLY if they
+    carry no population (Census ships the occasional empty cell), and the drop
+    is logged. A genuinely shifted decade fails both tests and still raises.
     """
     years = pd.to_numeric(df["YEAR"], errors="coerce").astype("Int64")
     decade = sorted(range(config.api_base_year, config.api_base_year + 10))
@@ -839,33 +720,14 @@ def _record_api_source(cache_dir: Path, filename: str, url: str, state: str):
 
 
 def fetch_pe02_1980s(config: PopulationSourceConfig, states: list) -> pd.DataFrame:
-    """
-    Read the PE-02 intercensal county file for one year of the 1980s
-    (one .xls per year, county x 5-year age group x sex x race).
+    """Read the PE-02 intercensal county file for one year of the 1980s (one
+    .xls per year, county x 5-year age group x sex x race).
 
-    CONFIRMED 9/8/26 against pe-02-1985.xls (cached under
-    dataRAW/Population/census_pe02_1980s/): one sheet named after the
-    year, a title block in rows 1-5, column headers on row 6
-    ("Year of Estimate", "FIPS State and County Codes", "Race/Sex
-    Indicator", then 18 age-bucket columns "Under 5 years" ...
-    "85 years and over"), one row per (county, race/sex) with 6
-    race/sex rows per county: White/Black/Other races x male/female.
-    3,141 counties x 6 = 18,846 data rows, plus one leading blank
-    spacer row. No Hispanic-origin breakdown (this vintage predates
-    it) and no pre-summed total row -- sex and race are collapsed
-    here, and the AGEGRP_TOTAL_CODE row is synthesized below.
-
-    The 18 age-bucket labels line up EXACTLY with this project's
-    standard AGE_BUCKETS codes 1-18 (population_utils.AGE_BUCKETS):
-    "Under 5 years" IS the 0-4 bucket (code 1), not a STCH-ICEN
-    under-1 bucket -- this file predates that convention, so no
-    age-code translation is needed, only a label -> code lookup.
-
-    Only 1985 has been verified. Other years in 1981-1989 are
-    expected to share this layout (same product, same vintage), but
-    each year's file is validated against the required columns below
-    before being trusted -- if Census varied the layout in another
-    year, this raises rather than silently mis-mapping columns.
+    CONFIRMED 9/8/26 against pe-02-1985.xls: headers on row 6, 3,141 counties
+    x 6 race/sex rows, no Hispanic breakdown and no pre-summed total row -- so
+    sex and race are collapsed here and the total row is synthesized below. The
+    18 age-bucket labels map straight onto AGE_BUCKETS codes 1-18. Only 1985 is
+    verified; other years are validated against the required columns first.
     """
     age_col_labels = [
         "Under 5 years", "5 to 9 years", "10 to 14 years", "15 to 19 years",
@@ -940,14 +802,10 @@ def fetch_pe02_1980s(config: PopulationSourceConfig, states: list) -> pd.DataFra
             long.groupby(["geoid", "year", "agegrp"], as_index=False)["population"].sum()
         )
 
-        # Synthesize the AGEGRP_TOTAL_CODE row PE-02 doesn't ship. Every other
-        # source in this pipeline either arrives with a total row (standard
-        # encoding) or gets one built by normalize_agegrp (the STCH-ICEN
-        # sources). PE-02's 18 buckets already ARE the standard encoding (see
-        # the docstring), so summing them here is exact, not an approximation
-        # -- and it's what lets detect_agegrp_encoding / assert_agegrp_encoding
-        # run on this source exactly like every other, rather than special
-        # casing it.
+        # Synthesize the AGEGRP_TOTAL_CODE row PE-02 doesn't ship. Its 18
+        # buckets already ARE the standard encoding, so summing them is exact,
+        # not an approximation -- and it lets detect_agegrp_encoding /
+        # assert_agegrp_encoding run on this source like every other.
         totals = collapsed.groupby(["geoid", "year"], as_index=False)["population"].sum()
         totals["agegrp"] = AGEGRP_TOTAL_CODE
         collapsed = pd.concat([collapsed, totals], ignore_index=True)
@@ -1053,7 +911,7 @@ def assert_ct_geography(panel: pd.DataFrame, source_name: str):
         logging.warning(
             "[%s] CT reported under the 9 PLANNING REGIONS (%s). This is a scope finding, "
             "not just a parsing detail: CT's gap starts with this source's first year "
-            "rather than 2022, and 08a must cover that whole span. Raise with Eyal before "
+            "rather than 2022, and 08a must cover that whole span. Raise this before "
             "treating the CT series as complete.",
             source_name, sorted(ct_geoids),
         )
@@ -1066,27 +924,22 @@ def assert_ct_geography(panel: pd.DataFrame, source_name: str):
 
 
 def apply_ct_override(panel: pd.DataFrame, ct: pd.DataFrame) -> pd.DataFrame:
-    """
-    Replace CT's rows with 08a's town-reaggregated series, by geoid so it
+    """Replace CT's rows with 08a's town-reaggregated series, by geoid so it
     cannot touch another state, and AFTER the crosswalk so CT's already
     resolved rows are never recoded twice.
 
-    08a produces totals only -- CT age shares are not recoverable for
-    2022-2025 (Census publishes town population as totals only; CT DPH's
-    town age data is 2000/2010/2011-2014/2020, not annual). Those rows
-    carry an age flag and keep their totals.
+    08a produces totals only -- CT age shares are not recoverable for 2022-2025
+    -- so those rows carry an age flag and keep their totals.
     """
     ct_years = set(ct["year"].unique())
     keep = ~((panel["geoid"].isin(CT_LEGACY_GEOIDS)) & (panel["year"].isin(ct_years)))
     replaced = int((~keep).sum())
 
-    # Count the planning-region rows too. In the years 08a covers, Census
-    # publishes CT under planning regions, so there are usually NO legacy
-    # rows to displace and `replaced` is 0 -- which reads like the override
-    # did nothing, when in fact it is the only thing supplying CT. The
-    # planning-region rows are not deleted here; they fall out at the spine
-    # step, because they aren't in the TIGER/2018 universe. Report both
-    # numbers so a reviewer can see what actually happened.
+    # Count the planning-region rows too. In the years 08a covers Census
+    # publishes CT under planning regions, so there are usually NO legacy rows
+    # to displace and `replaced` is 0 -- which reads as if the override did
+    # nothing when it is in fact the only thing supplying CT. The
+    # planning-region rows fall out later at the spine step.
     superseded_regions = int(
         (panel["geoid"].isin(CT_PLANNING_REGION_GEOIDS) & panel["year"].isin(ct_years)).sum()
     )
@@ -1118,27 +971,13 @@ def apply_ct_override(panel: pd.DataFrame, ct: pd.DataFrame) -> pd.DataFrame:
 def assert_period_continuity(
     panel: pd.DataFrame, *, median_tolerance: float = 0.01, tail_tolerance: float = 0.03
 ):
-    """
-    Where two sources cover the same year, compare them COUNTY BY COUNTY
-    to catch a YEAR-code misalignment that nothing else would notice.
+    """Where two sources cover the same year, compare them COUNTY BY COUNTY to
+    catch a YEAR-code misalignment that nothing else would notice.
 
-    This is the backstop for the unconfirmed 2020s YEAR offset (module
-    docstring, unverified item 2), and it uses only data already in hand --
-    no external anchor needed.
-
-    Why the county distribution rather than the national total: national
-    population grows roughly half a percent a year, so a one-year shift
-    moves the national total by about the same amount as an ordinary
-    vintage revision, and no single national threshold separates them.
-    County by county the two look nothing alike. A revision nudges every
-    county by a small, broadly similar fraction; a one-year shift moves
-    each county by ITS OWN growth rate, which in the fastest-growing
-    counties is several percent. So the upper tail is the discriminating
-    statistic, and the median is what stays small under a legitimate
-    revision.
-
-    Fails if the median county disagrees by more than `median_tolerance`
-    or the 95th percentile by more than `tail_tolerance`.
+    County by county rather than on the national total: a one-year shift moves
+    the national total by about as much as an ordinary vintage revision, but it
+    moves each county by ITS OWN growth rate, so the upper tail discriminates.
+    Fails on median_tolerance, or on tail_tolerance at the 95th percentile.
     """
     level = AGEGRP_TOTAL_CODE if (panel["agegrp"] == AGEGRP_TOTAL_CODE).any() else None
     subject = panel[panel["agegrp"] == level] if level is not None else panel
@@ -1250,18 +1089,12 @@ def validate_panel(panel: pd.DataFrame, universe: pd.DataFrame, years) -> pd.Dat
     if negative.any():
         problems.append(panel[negative].assign(issue="negative population"))
 
-    # MAGNITUDE CHECK. Everything above tests shape -- row counts, dtypes,
-    # uniqueness, key coverage. All of it passed while the entire 2000s
-    # decade sat at ~4 million people instead of ~285 million, because a
-    # structurally perfect panel can still hold nonsense. So assert the
-    # numbers are the right SIZE, not just the right shape.
-    #
-    # CONUS + DC ran ~250M in 1990 and ~335M in 2025; a 150M-400M band is
-    # wide enough never to fire on real data and narrow enough to catch an
-    # order-of-magnitude error. Year-over-year, national population has
-    # never moved more than ~1.5% -- 3% leaves generous headroom.
-    # Only meaningful on a full-country build -- on a state subset the
-    # "national" total is just that subset, and the band would false-alarm.
+    # MAGNITUDE CHECK. Everything above tests shape, and all of it passed while
+    # the 2000s sat at ~4 million people instead of ~285 million. CONUS + DC ran
+    # ~250M in 1990 and ~335M in 2025, so a 150M-400M band never fires on real
+    # data but catches an order-of-magnitude error; national population has never
+    # moved more than ~1.5% year-over-year, so 3% leaves headroom. Only
+    # meaningful on a full-country build -- a state subset would false-alarm.
     national = panel.groupby("year")["population"].sum()
     is_full_country = set(panel["state_fips"]) == set(CONUS_STATE_FIPS)
     implausible = (
@@ -1393,16 +1226,10 @@ def build_population_panel(
         df = FETCHERS[config.fetch_fn](scoped, states)
 
         # EVERY source is detected, normalized and then verified -- no
-        # exceptions, no per-source special-casing.
-        #
-        # This used to run only on the API source, because that was the one
-        # whose encoding I was unsure of. That is exactly why the 2000s
-        # shipped wrong: co-est00int turned out to use a THIRD convention
-        # (total at code 99, code 0 = under-1), the guard that would have
-        # caught it in one line was never pointed at it, and every 2000s
-        # county-year came out as a single birth cohort -- a 70x error that
-        # passed every structural check. Certainty about a format is not a
-        # reason to skip the check; it is usually where the surprise is.
+        # per-source special-casing. This used to run only on the API source,
+        # which is exactly why the 2000s shipped 70x wrong: co-est00int uses a
+        # THIRD convention (total at code 99, code 0 = under-1) and the guard
+        # that would have caught it was never pointed at it.
         df = normalize_agegrp(df, source_name=config.name)
         assert_agegrp_encoding(df, source_name=config.name)
         assert_ct_geography(df, config.name)
@@ -1501,15 +1328,9 @@ def main():
 
 
 def probe_api(state: str = "09", year: int = 1995):
-    """
-    Fetch one county-year from the intercensal API and check the AGEGRP
-    encoding, in a single command. Written because the encoding could not
-    be verified from the session that wrote this script -- run this before
-    trusting the 1990s series.
-
-    Does the reconciliation itself rather than printing a wall of JSON:
-    the question that matters is whether codes 1-18 sum to code 0, and a
-    human eyeballing 19 rows is a worse test than arithmetic.
+    """Fetch one county-year from the intercensal API and check the AGEGRP
+    encoding in a single command. Does the reconciliation itself -- whether
+    codes 1-18 sum to code 0 -- rather than printing a wall of JSON.
     """
     try:
         api_key = _get_api_key()

@@ -1,52 +1,22 @@
 """
-Shared helpers for the population-data scripts (08a_population_ct_towns.py,
-08b_population_county.py) -- FIPS crosswalk mechanics, age-bucket
-handling, and the panel-level assertions that protect the merge key.
+Shared helpers for the population scripts (08a, 08b): FIPS crosswalk mechanics,
+age-bucket handling, and the panel-level assertions that protect the merge key.
+Mirrors aggregation_utils.py's role for the weather stage.
 
-Mirrors aggregation_utils.py's role for the weather aggregation stage
-(05/06) -- see SCRIPT_OVERVIEW.md. resolve_data_root is re-exported from
-aggregation_utils.py rather than duplicated, since the logic is identical
-(first existing candidate path wins). setup_logging is reimplemented here
-rather than imported from gee_extract_utils, deliberately: importing that
-module pulls in earthengine-api, and nothing in the population stage
-touches Earth Engine. Keep the two implementations in sync if either
-changes.
-
-DESIGN NOTES worth reading before modifying anything here:
-
-1. HARMONIZATION DIRECTION. Every county-year is recoded FORWARD onto the
-   TIGER/2018 FIPS set, because that is the weather panel's county
-   universe and therefore the project's merge key (see project memory:
-   county-geometry-vintage). David Dorn's FIPS_County_Code_Changes.pdf --
-   the reference Eyal pointed to on 9/1/26 -- goes the OTHER way, mapping
-   modern codes back onto 1980-era codes, because his target geography is
-   1990 commuting zones ("replace FIPS code 12086 with the old code
-   12025"). We take his change list and his case-by-case reasoning and
-   invert his direction. Do not "fix" this back after reading Dorn.
-
-2. RELABEL ALL YEARS, NOT JUST POST-CHANGE YEARS. apply_fips_crosswalk
-   recodes every occurrence of an old_geoid regardless of year. This
-   differs from the 8/31 scaffolding, which relabeled only rows at
-   year >= effective_year. That rule was wrong in two ways:
-     (a) Sources are published under the geography vintage current at
-         PUBLICATION, not at the date being estimated -- the 1990s
-         intercensal product may well report Miami-Dade as 12086 for
-         1991. A year-conditional rule silently misses those.
-     (b) For a merger it produced a real undercount. South Boston city
-         (51780) was a separate county-equivalent through 1995; Halifax
-         County (51083) covers that territory in 2018 geography. To make
-         every year comparable to the 2018 unit, South Boston's
-         population must be added to Halifax in the pre-1995 years too.
-         Relabeling only post-1995 rows would leave 51780 as an orphan
-         geoid (dropped at merge time) and leave Halifax undercounted for
-         15 years.
-   Recoding unconditionally is both simpler and correct: if a source
-   already uses the modern code, the rule is a no-op.
-
-3. FLAG, NEVER FABRICATE. Splits and merge_splits have no defensible
-   county-level apportionment for a population DENOMINATOR. They are
-   flagged and left NaN. See apply_fips_crosswalk for the per-type
-   reasoning.
+- resolve_data_root is re-exported from aggregation_utils.py; setup_logging is
+  reimplemented rather than imported from gee_extract_utils, deliberately, so
+  the population stage doesn't depend on earthengine-api. Keep them in sync.
+- HARMONIZATION DIRECTION: every county-year is recoded FORWARD onto TIGER/2018,
+  the weather panel's universe and so the project's merge key. Dorn's
+  FIPS_County_Code_Changes.pdf goes the other way (modern codes back onto
+  1980-era ones, for 1990 commuting zones) -- we take his change list and invert
+  his direction. Do not "fix" this back after reading Dorn.
+- RELABEL ALL YEARS, not just post-change years: sources are published under the
+  vintage current at PUBLICATION, and for a merger a year-conditional rule would
+  leave the absorbed county an orphan geoid and undercount the survivor for
+  years. Recoding unconditionally is a no-op where a source is already modern.
+- FLAG, NEVER FABRICATE: splits and merge_splits have no defensible
+  apportionment for a population DENOMINATOR, so they are flagged and left NaN.
 """
 
 from __future__ import annotations
@@ -193,21 +163,15 @@ VALID_CHANGE_TYPES = {"rename", "merger", "split", "merge_split"}
 
 
 def load_fips_crosswalk(path) -> pd.DataFrame:
-    """
-    Load the static county FIPS-change crosswalk
+    """Load the static county FIPS-change crosswalk
     (dataCSV/Population/fips_crosswalk_1980_2025.csv).
 
-    10 rows, CONUS + DC, 1981-2025, verified 9/3/26 against the Census
-    Bureau's own "Substantial Changes to Counties and County Equivalent
-    Entities" decade pages read directly (not via automated page
-    summarization, which had missed 2 of the 10). Connecticut's 2022
-    planning-region change is deliberately NOT in this file -- planning
-    regions don't nest into the legacy counties, so it isn't a
-    rename/merger/split relationship at all; 08a_population_ct_towns.py
-    handles it by going down to the town level instead.
-
-    Columns: old_geoid, new_geoid, change_type, effective_year, source,
-    notes. `#`-prefixed comment lines precede the header.
+    10 rows, CONUS + DC, 1981-2025, verified 9/3/26 against Census's own
+    "Substantial Changes to Counties" decade pages. CT's 2022 planning-region
+    change is deliberately NOT here -- regions don't nest into the legacy
+    counties, so it isn't a rename/merger/split at all; 08a handles it via
+    towns. Columns: old_geoid, new_geoid, change_type, effective_year, source,
+    notes.
     """
     path = Path(path)
     crosswalk = pd.read_csv(path, comment="#", dtype=FIPS_DTYPES)
@@ -269,51 +233,19 @@ def apply_fips_crosswalk(
     value_col: str = "population",
     group_cols: tuple = ("agegrp",),
 ) -> pd.DataFrame:
-    """
-    Recode `df`'s geoid column onto the TIGER/2018 FIPS set. Returns a new
-    DataFrame; never mutates `df`.
+    """Recode `df`'s geoid column onto the TIGER/2018 FIPS set. Returns a new
+    DataFrame; never mutates `df`. Adds POP_FLAG_COL (NA where clean).
 
-    Adds POP_FLAG_COL (NA where clean). Behaviour by change_type:
-
-    rename   -- relabel old_geoid -> new_geoid, ALL years (see module
-                docstring note 2). Same geography, no value change.
-
-    merger   -- relabel, ALL years, then sum within
-                (new_geoid, year, *group_cols). In post-change years the
-                source already reports only the survivor, so nothing is
-                summed; in pre-change years the absorbed county's
-                population is correctly folded into the survivor, which is
-                what makes every year comparable to the 2018 unit.
-
-    split    -- the new county's territory belonged to a parent before
-                effective_year. Two consequences, both flagged, neither
-                fabricated:
-                  * child, year < effective_year: no separable population
-                    exists. Left absent here; the spine reindex in
-                    reindex_to_county_universe() materialises the row and
-                    this function's flag text is attached there.
-                  * parent, year < effective_year: the parent's reported
-                    population INCLUDES territory that is a different
-                    county in 2018 geography, so the series has a real
-                    discontinuity at effective_year. Flagged, value kept
-                    (dropping it would throw away good data for a small
-                    boundary effect; county FE absorbs the level, and the
-                    flag is what makes the break visible in the appendix).
-                Areal apportionment is deliberately NOT attempted: this
-                is a rate DENOMINATOR. Back-apportioning Broomfield to
-                1981 would manufacture a denominator for county-years
-                whose collision numerator is structurally zero (pre-2001
-                Broomfield crashes were filed under the four parents),
-                producing a fake ~0 collision rate for two decades. NaN
-                correctly drops those rows from the regression.
-
-    merge_split -- old_geoid dissolves into MULTIPLE targets (only
-                Yellowstone NP/MT, 30113 -> 30031;30067). Assigning the
-                whole value to one target or splitting it evenly are both
-                fabrication. The old rows are dropped (30113 is not a 2018
-                geoid) and the magnitude dropped is logged so its
-                materiality is visible rather than assumed; the targets'
-                pre-change rows are flagged as marginally under-inclusive.
+    rename  -- relabel, ALL years. No value change.
+    merger  -- relabel ALL years, then sum within (new_geoid, year, *group_cols).
+    split   -- child rows before effective_year are left absent (the spine
+               reindex materialises and flags them); parent rows are flagged but
+               kept. No areal apportionment: this is a rate DENOMINATOR, and
+               back-apportioning would manufacture one where the numerator is
+               structurally zero, giving a fake ~0 rate.
+    merge_split -- dissolves into MULTIPLE targets (Yellowstone NP/MT only). Any
+               assignment would be fabrication, so old rows are dropped, the
+               magnitude logged, and the targets' pre-change rows flagged.
     """
     out = df.copy()
     if POP_FLAG_COL not in out.columns:
@@ -386,14 +318,11 @@ def apply_fips_crosswalk(
 
 
 def _parse_parent_geoids(notes) -> list:
-    """
-    Pull parent county FIPS codes out of a crosswalk `notes` string.
+    """Pull parent county FIPS codes out of a crosswalk `notes` string.
 
-    Parents live in prose because a split can have several of them
-    (Broomfield has four) and there is no single old_geoid to put in a
-    column. The convention the crosswalk file follows is that every
-    parent appears as a bare 5-digit code inside parentheses, e.g.
-    "created from parts of Adams (08001) / Boulder (08013) / ...".
+    Parents live in prose because a split can have several (Broomfield has
+    four) with no single old_geoid for a column. Convention: every parent
+    appears as a bare 5-digit code in parentheses.
     """
     import re
 
@@ -409,15 +338,11 @@ def _parse_parent_geoids(notes) -> list:
 def collapse_to_county_year_age(
     df: pd.DataFrame, *, value_col: str = "population"
 ) -> pd.DataFrame:
-    """
-    Sum over every dimension except (geoid, year, agegrp).
+    """Sum over every dimension except (geoid, year, agegrp).
 
-    Sources ship population broken out by sex and race (and sometimes
-    Hispanic origin). Eyal's 9/1 spec is total population and age shares
-    only -- "all ages, all sexes at birth" -- so sex and race are collapsed
-    here, never carried downstream. Doing it in one place rather than per
-    fetcher keeps the four sources from disagreeing about what "total"
-    means.
+    Sources ship population broken out by sex and race (sometimes Hispanic
+    origin); scope is totals and age shares only, so those are collapsed here.
+    Doing it in one place keeps the sources from disagreeing about "total".
     """
     keep = ["geoid", "year", "agegrp"]
     id_extras = [c for c in ID_COLS if c != "geoid" and c in df.columns]
@@ -434,24 +359,18 @@ def detect_agegrp_encoding(
     df: pd.DataFrame, *, source_name: str, value_col: str = "population",
     tolerance: float = 0.001,
 ) -> str:
-    """
-    Work out, from the numbers themselves, which AGEGRP convention a
-    source uses. Returns "standard", "stch_icen", or "stch_icen_99".
-
-    THREE conventions appear across the five Census products in this
-    pipeline, all using the same column name and overlapping code values:
+    """Work out, from the numbers themselves, which AGEGRP convention a source
+    uses. Returns "standard", "stch_icen", or "stch_icen_99".
 
       standard      cc-est2020int, cc-est2025
                     0 = TOTAL, 1 = 0-4, 2 = 5-9 ... 18 = 85+
       stch_icen     1990s intercensal API
                     0 = under 1, 1 = 1-4, 2 = 5-9 ... 18 = 85+, NO total
       stch_icen_99  co-est00int (2000s)
-                    same bins as stch_icen, but the total sits at code 99
+                    same bins as stch_icen, total at code 99
 
-    Detecting rather than declaring is deliberate: a per-source config
-    value is only as good as whoever typed it, whereas "does code 0 equal
-    the sum of codes 1-18?" is checkable arithmetic that cannot be wrong
-    about the file in front of it.
+    Detected, not declared: "does code 0 equal the sum of codes 1-18?" is
+    checkable arithmetic; a config value is only as good as whoever typed it.
     """
     codes = {int(c) for c in df["agegrp"].unique()}
 
@@ -490,16 +409,13 @@ def detect_agegrp_encoding(
 def normalize_agegrp(
     df: pd.DataFrame, *, source_name: str, value_col: str = "population"
 ) -> pd.DataFrame:
-    """
-    Convert any of the three AGEGRP conventions to this project's
-    standard: 0 = total, 1 = 0-4, 2 = 5-9 ... 18 = 85+.
+    """Convert any of the three AGEGRP conventions to this project's standard:
+    0 = total, 1 = 0-4, 2 = 5-9 ... 18 = 85+.
 
-    For the two STCH-ICEN variants, codes 0 and 1 are added together to
-    form the 0-4 bucket -- the step that would otherwise drop every child
-    under one -- and codes 2-18 keep their numbers, because from 5-9
-    upward the schemes already agree. Where the source ships its own total
-    (code 99) it is used to CHECK the synthesized one before being
-    dropped, rather than simply discarded.
+    For the two STCH-ICEN variants codes 0 and 1 are added to form the 0-4
+    bucket -- the step that would otherwise drop every child under one -- and
+    codes 2-18 keep their numbers. A source's own total (code 99) is used to
+    CHECK the synthesized one before being dropped.
     """
     encoding = detect_agegrp_encoding(df, source_name=source_name, value_col=value_col)
     if encoding == "standard":
@@ -557,18 +473,13 @@ def normalize_agegrp(
 
 
 def assert_agegrp_encoding(df: pd.DataFrame, *, source_name: str, tolerance: float = 0.001):
-    """
-    Verify that AGEGRP means what AGE_BUCKETS says it means, by checking
-    that codes 1-18 reconcile to code 0 (the source's own total row).
+    """Verify that AGEGRP means what AGE_BUCKETS says, by checking that codes
+    1-18 reconcile to code 0 (the source's own total row).
 
-    This exists because the Census API does NOT publish a code list for
-    AGEGRP in variables.json -- the encoding is an assumption there, and a
-    wrong assumption would shift every age bucket by one and silently drop
-    the under-5s (which is exactly what happens if the 1990s fixed-width
-    convention is in play instead). Cheap, and it catches the failure at
-    the source rather than 3 stages downstream.
-
-    Raises rather than warns: a frame that fails this is not usable.
+    The Census API publishes no AGEGRP code list in variables.json, so the
+    encoding is otherwise an assumption -- and a wrong one shifts every bucket
+    by one and silently drops the under-5s. Raises rather than warns: a frame
+    that fails this is not usable.
     """
     codes = set(df["agegrp"].unique())
 
@@ -619,18 +530,13 @@ def assert_agegrp_encoding(df: pd.DataFrame, *, source_name: str, tolerance: flo
 
 
 def compute_age_shares(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Pivot long AGEGRP rows into one row per (geoid, year) with a
-    `population` total and 18 `pop_share_*` columns.
+    """Pivot long AGEGRP rows into one row per (geoid, year) with a `population`
+    total and 18 `pop_share_*` columns.
 
-    Wide, not long, because these are regression controls -- columns in a
-    Stata county-year panel, per Eyal's 9/1 spec ("population share in an
-    age category"). Shares, not counts: counts stay out and are
-    recoverable as share x population.
-
-    Rows whose age detail is missing or inconsistent keep their total
-    population and get AGE_FLAG_COL set, so a hole in the age series never
-    blanks out the denominator.
+    Wide because these are regression controls in a Stata county-year panel;
+    shares not counts, which are recoverable as share x population. Rows whose
+    age detail is missing or inconsistent keep their total and get AGE_FLAG_COL,
+    so a hole in the age series never blanks out the denominator.
     """
     long = df.copy()
     long["agegrp"] = long["agegrp"].astype(int)
@@ -679,17 +585,12 @@ def compute_age_shares(df: pd.DataFrame) -> pd.DataFrame:
 # ---------------------------------------------------------------------
 
 def load_county_universe(weather_panel_path) -> pd.DataFrame:
-    """
-    Read the project's county universe from the weather panel itself.
+    """Read the project's county universe from the weather panel itself
+    (TIGER/2018/Counties, CONUS + DC -- 3,108 geoids), so the population panel
+    cannot silently drift from the thing it has to merge with.
 
-    The universe is TIGER/2018/Counties, CONUS + DC -- 3,108 geoids as of
-    the 9/3/26 check. Deriving it from the weather panel rather than
-    hardcoding a count means the population panel cannot silently drift
-    away from the thing it has to merge with.
-
-    NOTE: take the GEOID SET from this file, not the year range. The PRISM
-    CSVs currently in dataCSV/ are the 2020-2021 test-run slice; the full
-    1981-2025 extraction lives on Kodama.
+    Take the GEOID SET from this file, not the year range: the PRISM CSVs in
+    dataCSV/ are the 2020-2021 test slice; the full extraction is on Kodama.
     """
     weather = pd.read_csv(weather_panel_path, dtype=FIPS_DTYPES, usecols=ID_COLS)
     universe = weather.drop_duplicates(subset=["geoid"]).sort_values("geoid")
@@ -704,22 +605,14 @@ def load_county_universe(weather_panel_path) -> pd.DataFrame:
 def reindex_to_county_universe(
     panel: pd.DataFrame, universe: pd.DataFrame, years, crosswalk: pd.DataFrame
 ) -> pd.DataFrame:
-    """
-    Expand `panel` to the full (universe x years) spine, so a missing
+    """Expand `panel` to the full (universe x years) spine, so a missing
     county-year becomes an explicit flagged row rather than an absent one.
 
-    Rows materialised here fall into two groups:
-      * structurally impossible -- a split county before it existed
-        (Broomfield 1981-2000). Flagged with the reason, population NaN.
-        Expected; not a defect.
-      * everything else -- a genuine gap worth investigating, flagged as
-        such so it shows up in the review file.
-
-    The weather panel has the opposite property and the asymmetry is worth
-    stating: weather is COMPUTED over 2018 polygons for every year, so
-    Broomfield has weather back to 1981. Population cannot, because nobody
-    enumerated that polygon before 2001. Weather present + population NaN
-    is the correct output for those county-years, not a bug to repair.
+    Two kinds of materialised row: structurally impossible (a split county
+    before it existed, e.g. Broomfield 1981-2000), flagged with the reason and
+    left NaN; and genuine gaps, flagged for the review file. Weather is computed
+    over 2018 polygons for every year, so weather present + population NaN is
+    the correct output for those county-years, not a bug to repair.
     """
     spine = (
         universe.assign(key=1)

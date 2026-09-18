@@ -1,31 +1,19 @@
 """
-Parses the independently-downloaded ERA5-Land hourly GRIB files (pulled
-directly from the Copernicus CDS, not GEE) for the ground-truth stations,
-and aggregates each to an "ERA5-at-point" county-year-month value -- the
-ERA5 counterpart to PRISM's Data Explorer point lookup.
+Parses independently-downloaded ERA5-Land hourly GRIB files (straight from the
+Copernicus CDS, not GEE) for the ground-truth stations and aggregates each to
+an "ERA5-at-point" county-year-month value.
 
-- Independent of GEE and this repo's own extraction code: these files were
-  downloaded straight from the CDS, so a bug shared with the production
-  pipeline wouldn't be invisible to this check.
-- Uses `cfgrib.open_datasets()` (plural), not `open_dataset()`: ERA5-Land
-  hourly downloads bundle variables across incompatible GRIB groups that
-  can't be merged into a single dataset.
-- Precip/snowfall are ERA5(-Land)'s "accumulated since reference time"
-  fields, so each day's total is the last available step of that day's
-  own block, not a diff of consecutive hours. The last day of a requested
-  month is often missing its final step; that row is flagged
-  (`n_days_flagged`) rather than silently under-counted.
-- tmin/tmax/tmean and wind speed follow production's exact order of
-  operations (04a_extract_era5_county.py's `add_derived_bands()`): wind
-  speed comes from the daily mean u/v components, not the mean of hourly
-  speeds.
-- Grid-cell selection falls back to the nearest unmasked cell if the
-  closest one is land-sea-masked (see "ERA5-Land land-sea masking" in
-  SCRIPT_OVERVIEW.md), flagging the row (`used_fallback_grid_cell`)
-  rather than returning all-NaN monthly stats.
-- Monthly aggregation convention matches
-  05_aggregate_daily_to_monthly.py exactly: precip_mm/snowfall_mm
-  summed, everything else averaged.
+- Independent of GEE and this repo's extraction code, so a shared bug wouldn't
+  be invisible to this check.
+- Uses cfgrib.open_datasets() (plural): ERA5-Land hourly downloads bundle
+  variables across incompatible GRIB groups that can't be merged.
+- Precip/snowfall are accumulated-since-reference fields, so a day's total is
+  the last step of its own block, not a diff of consecutive hours. A month's
+  last day often lacks its final step and is flagged (n_days_flagged).
+- tmin/tmax/tmean and wind speed follow 04a's order of operations; monthly
+  aggregation matches 05 (precip/snowfall summed, everything else averaged).
+- Falls back to the nearest unmasked grid cell when the closest is land-sea
+  masked, flagging the row (used_fallback_grid_cell) instead of all-NaN.
 """
 
 from __future__ import annotations
@@ -39,10 +27,9 @@ import xarray as xr
 import cfgrib
 
 # ---------------------------------------------------------------------
-# Ground-truth cases -- keep in sync with 07g_filter_era5_ground_truth_sample.py
-# and 07h_compare_era5_ground_truth.py. Coordinates rounded to 1 decimal
-# (from the PRISM ground-truth summary) -- within one ERA5-Land grid cell
-# (0.1 deg), so nearest-neighbor selection below is robust to it.
+# Ground-truth cases -- keep in sync with 07g and 07h. Coordinates rounded to
+# 1 decimal, within one ERA5-Land grid cell (0.1 deg), so the nearest-neighbor
+# selection below is robust to the rounding.
 # ---------------------------------------------------------------------
 
 GROUND_TRUTH_CASES = [
@@ -90,15 +77,11 @@ MEAN_VARS = [
 # ---------------------------------------------------------------------
 
 def load_groups(path: Path) -> list[xr.Dataset]:
-    """
-    Open all internally-consistent variable groups in one GRIB file, and
-    normalize any 0-360 longitude to -180/180 so every group indexes the
-    same way.
+    """Open all internally-consistent variable groups in one GRIB file,
+    normalizing 0-360 longitudes to -180/180 so every group indexes alike.
 
-    `indexpath=""` disables cfgrib's on-disk .idx cache: in a cloud-synced
-    folder, a stale/locked .idx file can make cfgrib read garbage instead
-    of the real GRIB bytes. Re-parsing each run avoids that at a small
-    time cost.
+    indexpath="" disables cfgrib's .idx cache: in a cloud-synced folder a
+    stale .idx can make cfgrib read garbage instead of the GRIB bytes.
     """
     with warnings.catch_warnings():
         # cfgrib doesn't expose xr.merge's `compat` kwarg, so this can't be
@@ -199,12 +182,9 @@ def select_point(da: xr.DataArray, lat: float, lon: float) -> xr.DataArray:
 # ---------------------------------------------------------------------
 
 def daily_accumulated_totals(da: xr.DataArray, year: int, month: int) -> pd.DataFrame:
-    """
-    Daily total for an accumulated field (precip, snowfall): each day's
-    reference-time block accumulates from zero across 24 steps, so the
-    total is that block's last available step. Flags days missing
-    step=24 (expected for the last day of the range -- see
-    SCRIPT_OVERVIEW.md).
+    """Daily total for an accumulated field (precip, snowfall): the last
+    available step of that day's own 24-step block, not a diff of hours.
+    Flags days missing step=24 (expected for the range's last day).
     """
     rows = []
     for i, t in enumerate(da.time.values):

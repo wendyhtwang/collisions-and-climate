@@ -1,19 +1,14 @@
 """
-Shared validation/IO helpers for the daily-to-monthly aggregation scripts --
-05_aggregate_daily_to_monthly.py and 06_build_derived_weather_vars.py. Both
-read one year's daily county extract at a time and roll it up to
-county-year-month, so they were independently carrying near-identical
-copies of the same data-quality
-checks: locating/validating input files, resolving the known WI-county
-duplicate rows, and flagging incomplete months. Extracted here so a fix or
-review of this logic only has to happen once -- see SCRIPT_OVERVIEW.md.
+Shared validation/IO helpers for the daily-to-monthly aggregation scripts (05
+and 06), which both read one year's daily county extract at a time and roll it
+up to county-year-month: locating/validating input files, resolving the known
+WI-county duplicate rows, and flagging incomplete months.
 
-Dataset-specific logic (which columns to sum vs. average, unit conversions,
-derived variables) stays in the calling script; this module only assumes
-the columns every daily extract shares (`geoid`, `date`, `year`, `month`).
-Mirrors gee_extract_utils.py's role for the extraction-stage scripts
-(00/02a/02b/03a/04a/04b) -- this is the equivalent shared module for the
-aggregation stage.
+Extracted so a fix here happens once rather than twice -- see SCRIPT_OVERVIEW.md.
+Dataset-specific logic (sum vs. average, unit conversions, derived variables)
+stays in the calling script; this module assumes only the columns every daily
+extract shares (geoid, date, year, month). Mirrors gee_extract_utils.py's role
+for the extraction stage.
 """
 
 import glob
@@ -51,15 +46,12 @@ def discover_input_files(input_dir, pattern):
 
 
 def check_for_year_conflicts(paths, filename_year_re, expected_years, *, label=None, naming_hint=None):
-    """
-    Raise if any file doesn't match the expected <year> naming convention
-    (e.g. a small-scale test file sitting in the same folder), or if more
-    than one input file claims the same year -- stops rather than silently
-    guessing which file to use.
+    """Raise if any file doesn't match the expected <year> naming convention, or
+    if more than one input file claims the same year -- stops rather than
+    silently guessing which to use.
 
-    `label`, if given, prefixes messages with "[label] " (e.g. "[PRISM]").
-    `naming_hint`, if given, is quoted in the naming-convention error
-    message (e.g. "prism_county_daily_<year>_<run_timestamp>.csv").
+    `label` prefixes messages (e.g. "[PRISM]"); `naming_hint` is quoted in the
+    naming-convention error.
     """
     prefix = f"[{label}] " if label else ""
     years_to_files: dict[str, list[Path]] = {}

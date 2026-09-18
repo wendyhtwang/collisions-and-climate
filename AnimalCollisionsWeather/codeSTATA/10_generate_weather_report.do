@@ -8,47 +8,39 @@ PURPOSE:      Knit the Tier 2 weather exhibits produced by
               dated PDF report for the PI.
 
 INPUTS:       $path/figures/weather/tier2, files *.pdf   (exhibits)
-              $path/tables/weather/tier2,  files *.csv   (exhibit index,
-                                                          notes, decisions)
+              $path/tables/weather/tier2,  files *.csv   (index, notes,
+                                                          decisions)
               $path/tables/weather/tier1,  files *.csv   (coverage and QA)
 
 OUTPUT:       $path/reports/WeatherData/report_YYYY_MM_DD/
 
-NOTES:        Tier 1 QA exhibits are indexed in Appendix B, not reproduced.
-              The multi-page state exhibit goes to Appendix A via
-              \includepdf.
+NOTES:        Tier 1 QA exhibits are indexed in Appendix B, not
+              reproduced; the multi-page state exhibit goes to Appendix A
+              via \includepdf.
 
-              DO NOT UNDO (each of these cost a debugging round on 8/28):
-                - encoding("utf-8") on every import delimited. Without it
-                  Stata reads the UTF-8 CSVs as Latin-1 and re-emits them
-                  double-encoded, which pdflatex rejects.
-                - xcolor BEFORE pdfpages in the preamble; pdfpages loads
-                  xcolor with no options and the two clash otherwise.
-                - No dollar signs in any tex line: Stata expands them as
-                  global macros. Use \ensuremath{\geq}, never the math
-                  shorthand.
-                - No literal backticks in tex lines; Stata reads them as
-                  macro opens.
+              DO NOT UNDO (each cost a debugging round on 8/28):
+                - encoding("utf-8") on every import delimited, or Stata
+                  reads the CSVs as Latin-1 and pdflatex rejects them.
+                - xcolor BEFORE pdfpages; pdfpages loads xcolor with no
+                  options and the two clash otherwise.
+                - No dollar signs or backticks in any tex line: Stata
+                  expands them as macros. Use \ensuremath{\geq}.
                 - The \DeclareUnicodeCharacter block is required.
-                - pdflatex -interaction=nonstopmode, or a LaTeX error hangs
-                  Stata waiting for keyboard input with no visible cause.
-                - Exhibits are COPIED into the report folder, not linked by
-                  absolute path, so old reports still render after a later
-                  notebook run.
+                - pdflatex -interaction=nonstopmode, or a LaTeX error
+                  hangs Stata waiting on keyboard input.
+                - Exhibits are COPIED into the report folder, not linked,
+                  so old reports still render after a later notebook run.
 
 CHANGELOG:
   08/28/2026 Wendy Wang: initial version, for the first Tier 2 exhibit set.
-  09/10/2026 Wendy Wang: rewritten for the revised (v2) exhibit set. Moved
-    the title and source note out of every exhibit so they live in the
-    figure notes instead: each exhibit now carries a short hand-written
+  09/10/2026 Wendy Wang: rewritten for the v2 exhibit set -- titles and
+    source notes moved out of the images, so each exhibit carries a short
     \caption{} plus a Notes paragraph read from
     prism_tier2_exhibit_notes.csv, which the notebook writes from the same
-    strings it used to print inside the figures. The captions cannot drift
-    from the figures that way.
-  09/17/2026 Wendy Wang: brought the file into the style guide's header and
-    SECTION-banner format; fixed the report folder date stamp, which
-    carried a leading underscore from the %td format string and produced
-    report__YYYY_MM_DD instead of report_YYYY_MM_DD.
+    strings. Captions cannot drift from their figures that way.
+  09/17/2026 Wendy Wang: brought into the style guide's header/SECTION
+    format; fixed the report folder date stamp, which carried a leading
+    underscore from the %td format string.
 ==============================================================*/
 
 clear all
@@ -71,7 +63,7 @@ global fig2 "$path/figures/weather/tier2"
 global tab1 "$path/tables/weather/tier1"
 global tab2 "$path/tables/weather/tier2"
 
-* Date stamp (Eyal's convention, minus the DD prefix -- this is not a diff-in-diff)
+* Date stamp (YYYY_MM_DD, minus the DD prefix -- this is not a diff-in-diff)
 local string_sysdate: di %tdCCYY_NN_DD date(c(current_date), "DMY")
 local string_sysdate = subinstr("`string_sysdate'", " ", "_", .)
 
@@ -452,7 +444,7 @@ exhibitblock "prism_era5_national_winter_temperature_comparison_area_weighted.pd
 tex \section{Decisions requested}
 tex \label{sec:decisions}
 
-import delimited using "$tab2/prism_tier2_decisions_for_eyal.csv", ///
+import delimited using "$tab2/prism_tier2_decisions_log.csv", ///
     varnames(1) stringcols(_all) bindquote(strict) encoding("utf-8") clear
 
 forvalues i = 1/`=_N' {

@@ -2,15 +2,11 @@
 Filters the production PRISM county-month panel down to the exact
 county-year-month rows selected for the ground-truth station comparison.
 
-- Pulls an explicit list of (geoid, year, month) triples rather than a
-  cross-product of separate lists, so different counties can be checked
-  against different periods.
-- Reports (rather than silently drops) any requested row not found in
-  production, distinguishing "GEOID not in production at all" from
-  "GEOID exists, just not for that year/month."
-- Does no aggregation or Earth Engine calls -- a pure row filter, so it
-  can't introduce any of the independent-reimplementation concerns the
-  06/06b scripts were built to avoid.
+- Pulls explicit (geoid, year, month) triples rather than a cross-product, so
+  different counties can be checked against different periods.
+- Reports rather than drops any requested row not found, distinguishing a
+  missing GEOID from a missing year/month for a GEOID that is present.
+- A pure row filter: no aggregation, no Earth Engine calls.
 """
 
 from pathlib import Path

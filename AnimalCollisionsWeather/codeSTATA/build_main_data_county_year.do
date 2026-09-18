@@ -9,143 +9,64 @@ PURPOSE:      Merge PRISM/ERA5 weather, Census population, vehicle
               weather regressors on top of it.
 
 CHANGELOG:
-  09/04/2026 Wendy Wang: initial version -- per Eyal (9/1/26 meeting),
-    merges deliberately keep every row (no `assert _merge==3`, nothing
-    dropped) instead of following the style guide's default assert/drop
-    convention; SECTION 5 exports per-county unmatched-year diagnostics
-    in its place.
-  09/05/2026 Wendy Wang: per the 9/4/26 and 9/5/26 team calls --
-    (a) month-wide weather variables renamed to a "_m1".."_m12" suffix
-        instead of a bare trailing digit, for readability;
-    (b) added SECTION 2, merging ERA5's snow depth (and snowfall) into
-        the panel alongside PRISM, since the winter severity index needs
-        snow depth and PRISM has no equivalent;
-    (c) added SECTION 6 (fips_num numeric FIPS + xtset) and SECTION 7
-        (mean_winter_temp, warm_winter_1sd/2sd, winter_severity_index),
-        built here rather than in the estimation .do files;
-    (d) corrected the collisions and wildlife geoid-construction blocks
-        (SECTIONS 4-5) against the two files' actual confirmed schemas
-        (previously unverified guesses) and the wildlife file's real
-        path/name;
-    (e) fips variable naming settled on "fips_num" (matches the style
-        guide's own convention, resolving the earlier fips/fips_numeric
-        naming question).
-  09/08/2026 Wendy Wang: closed out open item 1 (the WSI snow-hazard
-    component) --
-    (a) codePYTHON/06_build_derived_weather_vars.py now builds the ERA5
-        county-month day counts days_snow_depth_18in (Kohn's literature
-        threshold) plus days_snow_depth_12in / days_snow_depth_8in as
-        sensitivity variants;
-    (b) SECTION 2 now carries those counts through the ERA5 reshape --
-        previously it kept only mean_snow_depth and total_snowfall_mm, so
-        SECTION 7's auto-detect could never have fired even once the
-        upstream variable existed. The three counts are treated as
-        OPTIONAL, so this script still runs against an ERA5 CSV built
-        before that change;
-    (c) SECTION 7 now populates wsi_snow_days and winter_severity_index,
-        and adds wsi_snow_days_12in / _8in and the matching
-        winter_severity_index_snow12 / _snow8 sensitivity indices;
-    (d) upstream, days_extremely_cold changed from tmin < 0F to
-        tmin <= 0F to match Kohn's "0F or below" -- so wsi_cold_days's
-        existing "<=0F" label is now literally correct. On the 1981 and
-        2025 extracts the change moves zero county-days (no daily tmin
-        lands exactly on -17.7778C), but 06 must be rerun for the CSVs
-        to reflect the corrected definition.
-    REQUIRES a rerun of 06_build_derived_weather_vars.py before this
-    script will pick any of it up.
-  09/09/2026 Wendy Wang: added additional merge diagnostics to distinguish
-    EXPECTED merge gaps (before/after a source's own coverage window)
-    from genuine glitches (a gap inside it) --
-    (a) each source panel now captures its own min/max `year' as locals
-        right after it's built (SECTIONS 2-5);
-    (b) SECTION 8 now also runs `tab year if merge_<src> != 3' per
-        source (exactly what Eyal described on the call), and exports a
-        second CSV per source -- unmatched_<src>_in_window.csv -- holding
-        only the unmatched geoid-year rows that fall inside that source's
-        own coverage window. The existing unmatched_<src>_by_county.csv
-        export is unchanged.
-  09/09/2026 Wendy Wang: SECTION 3 now points at
-    population_county_year_1981_2025.dta (the full panel Wendy built on
-    Kodama) instead of population_county_year_1990_2025.dta. Removed the
-    SECTION 3 comment calling 1980s population-merge gaps "expected" --
-    that's no longer true now that the panel covers 1981 onward. This
-    also means min_year_population (SECTION 3/8) should now read 1981
-    instead of 1990 the next time this runs -- if it doesn't, the Kodama
-    file isn't the one actually being picked up.
-  09/17/2026 Wendy Wang: SECTION 7 no longer BUILDS the winter severity
-    index -- it merges codePYTHON/06c_build_winter_severity.py's
-    dataCSV/Weather/winter_severity_county_year.csv instead. The index is
-    pure weather, so constructing it here and having 09b read it back out of
-    this script's output made a Phase 4 exhibit depend on a Phase 6 input.
-    The definition was ported unchanged (Kohn 1975 / WI DNR, Dec 1-Apr 30,
-    day counts not monthly means, the 12in/8in sensitivity variants, and
-    missing-propagation) and verified county-by-county against this script's
-    prior output before the switch. mean_winter_temp and warm_winter_1sd/2sd
-    stay here: 09b recomputes those rather than reading them, so they are not
-    part of the backwards dependency. merge_winter_severity is deliberately
-    NOT added to SECTION 8's loop -- the merge is expected to match
-    everywhere, and the panel's first year (no prior December) would export
-    an unmatched-by-county file listing every county.
+  09/04/2026 Wendy Wang: initial version. Merges keep every row (no
+    `assert _merge==3`, nothing dropped) rather than the style guide's
+    assert/drop default; SECTION 5 exports unmatched-year diagnostics instead.
+  09/05/2026 Wendy Wang: month-wide weather renamed to "_m1".."_m12"; added
+    SECTION 2 (ERA5 snow depth, which PRISM has no equivalent for), SECTION 6
+    (fips_num + xtset) and SECTION 7 (winter variables, built here rather than
+    in the estimation files); corrected the SECTION 4-5 geoid blocks against
+    the two files' confirmed schemas.
+  09/08/2026 Wendy Wang: WSI snow-hazard component closed out -- 06 now builds
+    days_snow_depth_18in (Kohn's threshold) plus 12in/8in sensitivity variants,
+    SECTION 2 carries them through as OPTIONAL columns, and SECTION 7 populates
+    wsi_snow_days and the indices. Upstream, days_extremely_cold moved from
+    tmin < 0F to tmin <= 0F to match Kohn's "0F or below". REQUIRES a rerun of
+    06 before this script picks any of it up.
+  09/09/2026 Wendy Wang: merge diagnostics now distinguish EXPECTED gaps
+    (outside a source's coverage window) from genuine ones (inside it) -- each
+    panel captures its own min/max year, and SECTION 8 exports
+    unmatched_<src>_in_window.csv alongside the existing by-county file.
+  09/09/2026 Wendy Wang: SECTION 3 now reads
+    population_county_year_1981_2025.dta, so min_year_population should read
+    1981, not 1990 -- if it doesn't, the wrong file is being picked up.
+  09/17/2026 Wendy Wang: SECTION 7 merges 06c's winter_severity_county_year.csv
+    instead of building the index, so a Phase 4 exhibit no longer depends on a
+    Phase 6 output. Definition ported unchanged and verified county-by-county
+    against this script's prior output. mean_winter_temp and warm_winter_1sd/2sd
+    stay here. merge_winter_severity is deliberately not in SECTION 8's loop:
+    the panel's first year has no prior December and would list every county.
 ==============================================================*/
 
-* Inputs:
-*   $path/dataCSV/PRISM/prism_derived_weather_vars.csv
-*       (county-year-month; reshaped wide by month in SECTION 1)
-*   $path/dataCSV/ERA5/era5_derived_weather_vars.csv
-*   $path/dataCSV/Weather/winter_severity_county_year.csv
-*       (county-year-month; only its snow columns are used, SECTION 2)
-*   $path/dataCSV/Population/population_county_year_1981_2025.dta
-*       (full 1981-2025 panel, replacing the earlier 1990-2025-only file --
-*       see 09/09/2026 changelog entry)
-*   $path/dataRAW/Collisions/collisions_CONUS_county_year_1985_2020.dta
-*       (pre-2020 snapshot Eyal placed here 9/1/26; Charvi's updates since
-*       then -- 2019/2020 for some states, more for others -- are not yet
-*       in this snapshot)
-*   $path/dataSTATA/US_deer_harvest_county_year_04sep2026.dta
-*       (Nicole's harmonized wildlife panel, added 9/4/26. Filename is
-*       date-stamped -- update this path when she ships a newer version)
+* Inputs (all under $path):
+*   dataCSV/PRISM/prism_derived_weather_vars.csv    (reshaped wide, SECTION 1)
+*   dataCSV/ERA5/era5_derived_weather_vars.csv      (snow columns, SECTION 2)
+*   dataCSV/Weather/winter_severity_county_year.csv (06c, SECTION 7)
+*   dataCSV/Population/population_county_year_1981_2025.dta
+*   dataRAW/Collisions/collisions_CONUS_county_year_1985_2020.dta
+*       (pre-2020 snapshot; Charvi's 2019/2020 updates are not in it yet)
+*   dataSTATA/US_deer_harvest_county_year_04sep2026.dta
+*       (Nicole's wildlife panel, date-stamped -- update when she ships a newer one)
 *
 * Output:
 *   $path/dataSTATA/main_data_county_year.dta
 *
-* Open items -- flagged rather than assumed, per CLAUDE.md:
-*   1. RESOLVED 9/8/26 (was: WSI snow-hazard component set to missing).
-*      days_snow_depth_18in now exists upstream and SECTION 7 uses it.
-*      What remains is an INTERPRETATION caveat, not a missing variable:
-*      Kohn's 18in threshold was calibrated on point station/snow-course
-*      observations, whereas snow_depth here is an ERA5-Land grid-box
-*      average averaged again over a whole county, and that spatial
-*      averaging strips out the local maxima the cutoff is meant to
-*      catch. Measured on the 1981 extract (winter 1980-81): Wisconsin
-*      recorded 8 county-days at >=18in statewide (all Vilas County) and
-*      Minnesota, Iowa, Illinois and Pennsylvania recorded none, while
-*      most CONUS >=18in county-days sat in WY/WA/ID/MT mountain
-*      counties rather than the Great Lakes deer range. So
-*      winter_severity_index will be driven almost entirely by
-*      wsi_cold_days across most of the study area. The
-*      winter_severity_index_snow12 / _snow8 variants in SECTION 7 exist
-*      to make that visible in a robustness table -- raise with Eyal and
-*      Jen before the WSI is used as a headline regressor.
-*      Related: county 25019 (Nantucket, MA) has no ERA5-Land snow
-*      readings at all, so its snow-day counts come through as 0 rather
-*      than missing (same convention as the temperature day counts).
-*   2. Wildlife's `year` is "season start year" (Nicole's convention),
-*      which may not align one-to-one with the calendar year used by
-*      weather/collisions/population -- e.g. a hunting season labeled
-*      "2000" could span into early 2001. Not adjusted here; confirm with
-*      Nicole before this feeds a harvest~weather regression with lags.
-*   3. Known FIPS drift (Broomfield 2001, CT planning regions 2022,
-*      Yellowstone/Gallatin-Park 1997, etc. -- see
-*      dataCSV/Population/fips_crosswalk_1980_2025.csv) is NOT applied to
-*      collisions/wildlife here. Eyal was explicit (9/1/26) that isn't
-*      worth fixing yet; SECTION 8 tracks and documents it instead.
-*   4. Known collisions data-quality issue, not fixed here per Eyal
-*      (9/4/26): a handful of rows (~17, St. Louis, 2004-2020) have an
-*      unresolved FIPS in the source data. SECTION 4 now builds geoid
-*      from state_fips+county_fips rather than the numeric `fips` column
-*      (which is system-missing for these rows and was producing the
-*      literal string "." that Wendy flagged), and reports a count of any
-*      still-malformed geoid so the issue stays visible without blocking.
+* Open items -- flagged rather than assumed:
+*   1. WSI INTERPRETATION (snow component itself resolved 9/8/26). Kohn's 18in
+*      threshold was calibrated on point observations; county-averaged
+*      ERA5-Land snow depth rarely reaches it outside mountain counties, so
+*      winter_severity_index is effectively wsi_cold_days across most of the
+*      study area. The _snow12/_snow8 variants exist to show that in a
+*      robustness table -- raise before the WSI is a headline regressor.
+*      Nantucket (25019) has no ERA5-Land snow readings, so its counts are 0.
+*   2. Wildlife `year` is season start year, which may not align with the
+*      calendar year used elsewhere. Not adjusted here; confirm with Nicole
+*      before this feeds a harvest~weather regression with lags.
+*   3. Known FIPS drift is NOT applied to collisions/wildlife (settled
+*      9/1/26); SECTION 8 tracks and documents it instead.
+*   4. ~17 collisions rows (St. Louis, 2004-2020) have an unresolved FIPS.
+*      SECTION 4 builds geoid from state_fips+county_fips and reports any
+*      still-malformed geoid, so the issue stays visible without blocking.
 
 *---------------------------------------------------------------
 * SECTION 0: SETUP
@@ -262,13 +183,10 @@ else {
         * REQUIRED: the two ERA5 snow variables 06 has always produced.
         local era5_snow_required mean_snow_depth total_snowfall_mm
 
-        * OPTIONAL: the snow-depth day COUNTS added to
-        * 06_build_derived_weather_vars.py on 9/8/26 (18in is Kohn's
-        * literature threshold; 12in/8in are sensitivity variants -- see
-        * SECTION 7). Optional rather than required so this script still
-        * runs against an ERA5 derived-vars CSV built before that change,
-        * in which case SECTION 7 falls back to a missing snow component
-        * exactly as it did before.
+        * OPTIONAL: the snow-depth day COUNTS added to 06 on 9/8/26 (18in is
+        * Kohn's threshold; 12in/8in are sensitivity variants -- see SECTION 7).
+        * Optional so this still runs against an ERA5 CSV built before that
+        * change, in which case SECTION 7 falls back to a missing snow component.
         local era5_snow_optional days_snow_depth_18in ///
                                  days_snow_depth_12in ///
                                  days_snow_depth_8in
@@ -350,13 +268,10 @@ preserve
     save `population_panel'
 restore
 
-* Per Eyal (9/1/26): keep every county-year row on both sides -- do NOT
-* `assert _merge==3` or drop unmatched observations here, which departs
-* from the style guide's default merge convention (Section 10). Population
-* now covers 1981-2025 (09/09/2026 -- previously 1990-2025 only, see
-* changelog), so there is no longer an expected 1980s population gap.
-* SECTION 8 still tracks and documents any mismatches instead of
-* asserting them away.
+* Settled 9/1/26: keep every county-year row on both sides -- do NOT
+* `assert _merge==3` or drop unmatched rows here, departing from the style
+* guide's merge convention (Section 10). Population covers 1981-2025, so there
+* is no expected 1980s gap; SECTION 8 documents any mismatches instead.
 merge 1:1 geoid year using `population_panel'
 rename _merge merge_population
 
@@ -369,7 +284,7 @@ local file_name = "$dataRAW/Collisions/collisions_CONUS_county_year_1985_2020.dt
 capture confirm file "`file_name'"
 if _rc {
     di as error "Collisions file not found at `file_name' -- skipping this merge."
-    di as error "Eyal said (9/1/26) he placed a snapshot there; check the path if this fires."
+    di as error "A snapshot was placed there 9/1/26; check the path if this fires."
     gen byte merge_collisions = .
 }
 else {
@@ -404,23 +319,19 @@ else {
             }
         }
 
-        * Known issue, not fixed per Eyal (9/4/26) -- report it, don't
+        * Known issue, not fixed (settled 9/4/26) -- report it, don't
         * block on it. A malformed geoid here (not exactly 5 characters)
         * will show up as its own nonsense "county" in SECTION 8's
         * diagnostics rather than merging correctly.
         quietly count if strlen(geoid) != 5
         if r(N) > 0 {
-            di as text "NOTE: `r(N)' collisions rows have a malformed geoid (not 5 characters) -- known issue (e.g. St. Louis), Eyal said not urgent to fix (9/4/26)."
+            di as text "NOTE: `r(N)' collisions rows have a malformed geoid (not 5 characters) -- known issue (e.g. St. Louis), not urgent to fix (9/4/26)."
         }
 
-        * missok: the ~17 known-missing-geoid rows (open item 4, above)
-        * would otherwise fail isid on their own, even with no actual
-        * duplicate geoid-year pairs -- isid errors on ANY missing id
-        * value by default, separate from its duplicates check. Confirmed
-        * via `duplicates tag geoid year` (9/5/26) that no true duplicates
-        * exist; missok lets the already-reported malformed-geoid rows
-        * through without blocking, per Eyal's "report, don't block"
-        * guidance on this issue.
+        * missok: the ~17 known-missing-geoid rows (open item 4) would fail
+        * isid on their own, since isid errors on ANY missing id value
+        * separately from its duplicates check. Confirmed 9/5/26 that no true
+        * duplicates exist, so missok lets those already-reported rows through.
         capture isid geoid year, missok
         if _rc {
             di as error "collisions_CONUS_county_year_1985_2020.dta is not unique on geoid-year -- check for duplicate state/year vintages (e.g. overlapping snapshots) before merging, and collapse/dedupe as appropriate."
@@ -504,7 +415,7 @@ else {
 *---------------------------------------------------------------
 * SECTION 6: NUMERIC FIPS AND PANEL DECLARATION
 *---------------------------------------------------------------
-* Eyal (9/5/26): keep geoid as the string merge key throughout, but also
+* Settled 9/5/26: keep geoid as the string merge key throughout, but also
 * add a numeric FIPS ("fips_num", per the style guide's own convention)
 * since reghdfe absorbs fixed effects much faster on a numeric identifier
 * than a string one. fips_num doubles as the panel (i) variable for the
@@ -519,8 +430,8 @@ xtset fips_num year
 *---------------------------------------------------------------
 * SECTION 7: WINTER WEATHER VARIABLES
 *---------------------------------------------------------------
-* Four candidate right-hand-side winter measures, per Eyal (9/1 and 9/5
-* calls) -- built here, not in the estimation .do files, so every
+* Four candidate right-hand-side winter measures, per the 9/1 and 9/5
+* calls -- built here, not in the estimation .do files, so every
 * downstream script uses the identical construction. All four rely on
 * the xtset from SECTION 6 to pull December from the PRIOR year via L1.
 
@@ -531,8 +442,8 @@ label variable mean_winter_temp "Mean of Dec(t-1)/Jan(t)/Feb(t) PRISM monthly me
 * --- (2)-(3) Warm-winter dummies: mean_winter_temp relative to the ---
 * --- county's own 1-sigma/2-sigma local climatology (full sample) ---
 * "Local climatology" = this county's own mean/SD of mean_winter_temp
-* across the full panel, per Eyal's "relative to your local long run
-* '81 to 2025 climatology" (9/5). One-directional (warm side only).
+* across the full panel, relative to that county's own '81-2025 record
+* (settled 9/5). One-directional (warm side only).
 bysort fips_num: egen double temp_v = mean(mean_winter_temp)   // county's own climatological mean winter temp
 bysort fips_num: egen double temp_b = sd(mean_winter_temp)     // county's own climatological SD of winter temp
 
@@ -544,21 +455,16 @@ label variable warm_winter_2sd "1 if mean_winter_temp > county's own full-sample
 drop temp_v temp_b
 
 * --- (4) Winter Severity Index: merged in, not built here ---------
-* Moved to codePYTHON/06c_build_winter_severity.py on 09/17/2026. The index
-* is pure weather (PRISM cold days + ERA5 snow days), so building it in the
-* merge and then having 09b_descriptive_weather_tier2.py read it back out of
-* main_data_county_year.dta pointed the dependency the wrong way: a Phase 4
-* exhibit ended up needing a Phase 6 output. 06c now owns the definition,
-* both this file and 09b read its CSV, and a clean end-to-end run no longer
-* has to run the merge before the descriptives.
+* Moved to codePYTHON/06c_build_winter_severity.py on 09/17/2026. The index is
+* pure weather, so building it here and having 09b read it back out of
+* main_data_county_year.dta made a Phase 4 exhibit depend on a Phase 6 output.
+* Both this file and 09b now read 06c's CSV.
 *
-* The construction was ported unchanged -- Kohn (1975) / WI DNR, the
-* Dec 1-Apr 30 window (wider than the DJF window mean_winter_temp uses
-* above), the day COUNT rather than an approximation from mean_snow_depth,
-* the 12in/8in sensitivity variants, and missing-propagation so a season
-* with any month absent is missing rather than a partial sum. Verified
-* county-by-county against this script's own prior output before the
-* switch; see 06c's docstring.
+* Ported unchanged: Kohn (1975) / WI DNR, the Dec 1-Apr 30 window (wider than
+* the DJF window mean_winter_temp uses above), a day COUNT rather than an
+* approximation from mean_snow_depth, the 12in/8in variants, and
+* missing-propagation. Verified county-by-county against this script's own
+* prior output before the switch.
 
 local file_name = "$dataCSV/Weather/winter_severity_county_year.csv"
 
@@ -602,16 +508,11 @@ label variable wsi_snow_days "WSI snow-hazard component: # days Dec 1-Apr 30 wit
 label variable winter_severity_index "Winter Severity Index (Kohn 1975 / WI DNR): wsi_cold_days + wsi_snow_days. Categories: <50 mild, 50-80 moderate, 80-100 moderately severe, >100 very severe"
 
 * --- (4b) Sensitivity variants of the snow-hazard component ---
-* NOT alternative definitions of the Kohn index -- robustness only.
-* Kohn's 18in cutoff was calibrated on point station/snow-course
-* observations. snow_depth here is an ERA5-Land grid-box average averaged
-* again over an entire county, and that spatial averaging removes exactly
-* the local maxima an 18in cutoff is meant to catch, so wsi_snow_days is
-* near-zero across most of the eastern/midwestern deer range and
-* winter_severity_index there is effectively wsi_cold_days alone (see
-* open item 1 in the header for the measured 1980-81 numbers). These
-* lower-threshold indices let that be shown in a robustness table rather
-* than asserted. Report winter_severity_index as the headline measure.
+* Robustness only, NOT alternative definitions of the Kohn index. County
+* averaging of ERA5-Land snow depth removes the local maxima an 18in cutoff is
+* meant to catch, so wsi_snow_days is near-zero across most of the eastern deer
+* range and the index there is effectively wsi_cold_days (open item 1). These
+* let that be shown rather than asserted; report winter_severity_index.
 foreach thr in 12 8 {
     label variable wsi_snow_days_`thr'in "SENSITIVITY (not Kohn): # days Dec 1-Apr 30 with ERA5 county-mean snow depth >=`thr'in"
     label variable winter_severity_index_snow`thr' "SENSITIVITY WSI: wsi_cold_days + wsi_snow_days_`thr'in (>=`thr'in snow instead of Kohn's >=18in)"
@@ -620,7 +521,7 @@ foreach thr in 12 8 {
 *---------------------------------------------------------------
 * SECTION 8: MERGE DIAGNOSTICS
 *---------------------------------------------------------------
-* Per Eyal (9/1/26): don't fix FIPS mismatches now, just track how many
+* Settled 9/1/26: don't fix FIPS mismatches now, just track how many
 * there are and which counties are affected -- county by county rather
 * than row by row (a whole-decade coverage gap in one source, e.g., would
 * otherwise dump thousands of expected-unmatched rows into the export).
@@ -631,7 +532,7 @@ foreach src in era5_snow population collisions wildlife {
         di as text _newline "--- merge_`src' ---"
         tab merge_`src', missing
 
-        * Eyal (9/8/26 call): a year tab of the unmatched rows tells you
+        * Decided 9/8/26: a year tab of the unmatched rows tells you
         * whether the gaps are the EXPECTED kind (before/after this
         * source's own coverage window) or a genuine glitch (a gap
         * *inside* the window where the source should have a record).
@@ -663,16 +564,11 @@ foreach src in era5_snow population collisions wildlife {
                 replace
         restore
 
-        * NEW: isolate the subset of unmatched rows that fall INSIDE this
-        * source's own known coverage window (min_year_`src' to
-        * max_year_`src'', captured when its panel was built) -- those are
-        * the ones Eyal said he'd actually worry about (e.g. "a county in
-        * 2000 that's not getting a weather record"), as opposed to rows
-        * unmatched only because the master panel extends before/after
-        * this source's coverage, which is expected and not exported here.
-        * If the source's min/max year wasn't captured (e.g. its input
-        * file was missing), every unmatched row is written instead, since
-        * there's no window to filter against.
+        * Isolate unmatched rows INSIDE this source's own coverage window
+        * (min_year_`src' to max_year_`src'') -- the ones that actually matter,
+        * as opposed to rows unmatched only because the master panel extends
+        * past the source's coverage. If the window wasn't captured (missing
+        * input file), every unmatched row is written instead.
         preserve
             keep if merge_`src' != 3
             if "`min_year_`src''" != "" & "`max_year_`src''" != "" {

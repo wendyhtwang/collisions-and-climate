@@ -13,9 +13,7 @@ CHANGELOG:
   09/15/2026 Wendy Wang: added the population scripts (08a, 08b) and
     build_main_data_county_year.do to SECTION 2; filled in SECTIONS 4 and 5.
     Earth Engine extracts and the two sibling-repo appends left commented.
-  09/17/2026 Wendy Wang: cut the commentary down to one or two lines per
-    step; the context it carried is in the child scripts' own headers, and
-    the open items are tracked separately.
+
   09/17/2026 Wendy Wang: wired in the remaining two pipelines and the WSI --
     - SECTION 2.2 runs 06c_build_winter_severity.py, so SECTION 3 no longer
       depends on the merge in 2.5.

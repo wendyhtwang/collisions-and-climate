@@ -1,23 +1,14 @@
 """
-Aggregates downloaded NOAA station daily CSVs to station-year-month, in
-the same style as the production PRISM aggregation, so they can be
-compared to PRISM's county-month values.
+Aggregates downloaded NOAA station daily CSVs to station-year-month, in the
+same style as the production PRISM aggregation, so the two can be compared.
 
-- Derives station/year/month from the DATE column itself rather than
-  trusting filenames, so input files can cover any date range. Each file
-  must contain exactly one station.
-- Matches production's aggregation convention
-  (05_aggregate_daily_to_monthly.py): ppt is a monthly total, temperature
-  variables are monthly means; tmean is computed per day as
-  (tmax+tmin)/2 before averaging, matching PRISM's own documented method.
-- A missing daily reading is excluded from that variable's sum/mean (not
-  treated as zero), and each variable's missing-day count is reported in
-  its own column rather than silently dropped.
-- Flags station-months whose day count doesn't match the calendar, same
-  completeness check as production (imported from aggregation_utils.py,
-  not reimplemented here).
-- No Earth Engine calls, no dependency on this repo's PRISM scripts --
-  this is real station data, not a re-derivation of PRISM.
+- Derives station/year/month from the DATE column rather than the filename;
+  each file must contain exactly one station.
+- Matches 05's convention: ppt totalled, temperatures averaged, tmean taken
+  per day as (tmax+tmin)/2 before averaging, as PRISM documents.
+- Missing daily readings are excluded from the sum/mean (not zero-filled) and
+  each variable's missing-day count is reported in its own column.
+- Completeness check is imported from aggregation_utils.py, not reimplemented.
 """
 
 from pathlib import Path

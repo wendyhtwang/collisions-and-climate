@@ -1,22 +1,14 @@
 """
-Compares the independent GEE panel from 07a_export_prism_monthly_spotcheck.py
-against the production prism_county_month.csv, county-month by
-county-month, within a numeric tolerance.
+Compares 07a's independent GEE panel against the production
+prism_county_month.csv, county-month by county-month, within a numeric
+tolerance. Exits non-zero if any sampled county-month fails.
 
-- Reads the GEE export from dataCSV/PRISM/ (where the synced Drive file
-  actually lands), and the production panel from
-  dataCSV/PRISM/prism_county_month.csv. No Earth Engine calls, no
-  aggregation -- pure comparison of two already-monthly panels.
-- Left-joins the small GEE sample onto production (not an outer join), so
-  the comparison only touches the ~480 sampled rows, not all ~1.7M
-  production rows.
-- A row passes only if its day count matches the calendar AND every
-  variable is within tolerance (absolute or relative, whichever is
-  looser) of production.
-- Requires exactly one spot-check export file to be present, to avoid
-  silently comparing against a stale prior run.
-- Exits with a non-zero status if any sampled county-month fails, rather
-  than just printing a warning.
+- Left-joins the small GEE sample onto production, so the comparison touches
+  only the ~480 sampled rows rather than all ~1.7M.
+- A row passes only if its day count matches the calendar AND every variable
+  is within tolerance (absolute or relative, whichever is looser).
+- Requires exactly one spot-check export file present, so it can't silently
+  compare against a stale prior run.
 
 Output: comparison/summary/failed CSVs under
 dataCSV/PRISM/spot_check/monthly_gee/results/.
@@ -159,12 +151,10 @@ def compare_panels(
     spot: pd.DataFrame,
     production: pd.DataFrame,
 ) -> pd.DataFrame:
-    """
-    Left-join the small GEE spot-check panel onto production (spot as the
-    driving table) and calculate variable-by-variable differences. Keeps
-    just the ~480 sampled rows instead of all ~1.7M production rows, while
-    still catching a sampled county-month missing from production via
-    `_merge == "left_only"`.
+    """Left-join the GEE spot-check panel onto production and diff each variable.
+
+    Keeps just the ~480 sampled rows, while still catching a sampled
+    county-month missing from production via `_merge == "left_only"`.
     """
     production_cols = KEY_COLS + VALUE_COLS
     spot_cols = KEY_COLS + ["n_days", "dataset_types", "expected_days",

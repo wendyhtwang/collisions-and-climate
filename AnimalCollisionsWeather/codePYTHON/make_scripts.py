@@ -1,12 +1,9 @@
 """Generate the Tier 1 / Tier 2 .py scripts from the notebook.
 
-Eyal, 8/28: "at some point, when working with data of some ... size and
-complexity, [notebooks] just are not a good vehicle ... you're just better off
-with just like a .py script", and "having the main file that orchestrates all of
-the other files, in terms of like: you press go once, it runs through everything
-and produces all the outputs." He also asked for Tier 1 and Tier 2 to be
-"definitely separated" but each kept in ONE file for now -- per-figure scripts
-come later, when the replication package is assembled.
+Decided 8/28: past a certain size/complexity, a notebook is not a good vehicle
+for the pipeline -- a .py script that a user runs once to produce every output is
+better. Tier 1 and Tier 2 stay separated but each kept in ONE file for now --
+per-figure scripts come later, when the replication package is assembled.
 
 Generated from the notebook rather than retyped, so the scripts cannot drift from
 the cells they came from. Re-run this after any notebook change.
@@ -141,11 +138,9 @@ _BUILT = False
 def build_panel():
     """Read the weather CSVs and build the county-winter panel.
 
-    Importing this module does no I/O -- it only defines things. This function is
-    where the work happens, so a script (or a test, or an interactive session)
-    decides when to pay for it. Idempotent: calling it twice does the work once.
-
-    Returns a dict of the objects both tiers need, for the caller to bind:
+    Importing this module does no I/O; this function is where the work happens,
+    so the caller decides when to pay for it. Idempotent. Returns a dict of the
+    objects both tiers need, for the caller to bind:
 
         globals().update(build_panel())
     """

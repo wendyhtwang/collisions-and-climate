@@ -1,28 +1,17 @@
 """
-Shared library of Earth Engine extraction mechanics (auth, county geometry, 
-daily reduction, Drive export, progress monitoring, resumability) 
-used by both the PRISM and ERA5 extraction scripts, 
-so that dataset-specific scripts only need to supply their own configuration.
+Shared library of Earth Engine extraction mechanics (auth, county geometry,
+daily reduction, Drive export, progress monitoring, resumability) used by both
+the PRISM and ERA5 extraction scripts.
 
-- Deliberately dataset-agnostic: PRISM-/ERA5-specific logic (unit
-  conversions, band lists) stays in the calling script, not here.
-- CONUS scope (48 states + DC) is defined once here as the shared source
-  of truth other scripts import.
-- Cross-machine paths are resolved via a candidate-list pattern (try each
-  path, use the first that exists) rather than hardcoding one machine's
+- Deliberately dataset-agnostic: unit conversions and band lists stay in the
+  calling script. CONUS scope (48 states + DC) is defined once here.
+- Cross-machine paths resolve from a candidate list rather than one hardcoded
   path.
-- Resumability is a simple local JSON manifest of completed periods,
-  written incrementally as each export task completes (not batched at the
-  end) -- it doesn't check Drive/GCS directly, so the manifest and the
-  actual exported files could in principle drift apart if a Drive file is
-  deleted by hand.
-- When multiple export tasks share one new Drive folder, the first task
-  is submitted alone and the rest wait for it to leave the READY state --
-  works around an observed Earth Engine race that once created two
-  duplicate Drive folders with the same name.
-- Progress monitoring surfaces EECU-seconds (compute time) per task, not
-  just task state, since "RUNNING" alone doesn't show whether a job is
-  stalled or making progress.
+- Resumability is a local JSON manifest written incrementally as each task
+  completes; it doesn't check Drive, so it can drift if a file is deleted by
+  hand.
+- Multiple exports into one new Drive folder are serialised on the first task,
+  working around a race that once created duplicate same-named folders.
 """
 
 import json
@@ -169,14 +158,9 @@ def build_period_collection(
     tile_scale=4,
     extra_property_names=None,
 ):
-    """
-    Build a county-day FeatureCollection from an already date-filtered,
-    already-preprocessed ImageCollection.
-
-    Any unit conversions or derived bands (e.g. ERA5 Kelvin -> Celsius,
-    wind speed from u/v components) should be applied by the caller
-    before passing the collection in here -- this function only knows
-    how to reduce whatever bands it's given.
+    """Build a county-day FeatureCollection from an already date-filtered,
+    already-preprocessed ImageCollection. Unit conversions and derived bands
+    are the caller's job -- this only reduces whatever bands it is given.
     """
     image_collection = image_collection.select(bands)
 
@@ -192,18 +176,12 @@ def build_period_collection(
 
 
 def build_year_image_collection(collection_id, year, bands, raw_bands=None, preprocess_fn=None):
-    """
-    Return one calendar year's band-selected ImageCollection from
+    """Return one calendar year's band-selected ImageCollection from
     `collection_id`.
 
-    If `preprocess_fn` is given (e.g. ERA5's Kelvin->Celsius/derived-band
-    step), the collection is first selected down to `raw_bands` (the bands
-    `preprocess_fn` needs as input), mapped through `preprocess_fn`, and
-    only then selected down to the final `bands`. If `preprocess_fn` is
-    None, `raw_bands` is ignored and the collection is selected straight to
-    `bands` (PRISM's case -- no preprocessing needed). Dataset-specific
-    band lists and preprocessing stay in the calling script/module; this
-    function only knows how to assemble them.
+    With `preprocess_fn` (e.g. ERA5's Kelvin->Celsius step) the collection is
+    selected to `raw_bands`, mapped, then selected to `bands`; without it
+    `raw_bands` is ignored and it selects straight to `bands` (PRISM's case).
     """
     start_date = ee.Date.fromYMD(year, 1, 1)
     end_date = start_date.advance(1, "year")
@@ -258,26 +236,14 @@ def start_exports_to_shared_folder(
     folder_ready_poll_seconds=5,
     folder_ready_timeout_seconds=120,
 ):
-    """
-    Start multiple Drive CSV exports that should all land in ONE shared
-    Drive folder, rather than each creating its own.
+    """Start multiple Drive CSV exports that should all land in ONE shared Drive
+    folder, rather than each creating its own.
 
-    Works around an observed Earth Engine race condition: submitting many
-    export tasks back-to-back with the same new (not-yet-existing)
-    `drive_folder` name can make each task's backend independently decide
-    the folder doesn't exist yet and create its own copy, producing
-    duplicate same-named Drive folders (seen during the 2020/2021 CONUS
-    PRISM run). Mitigation here: submit the first export alone and wait
-    for it to leave the READY state (proxy for "the folder now exists")
-    before submitting the rest. Not a guaranteed fix, and doesn't undo
-    folders that already got duplicated (consolidate those by hand in
-    Drive). For a deterministic guarantee, create the destination folder
-    by hand in Drive before the first run against a new folder name.
-
-    `export_specs` is a list of kwargs dicts for `start_export()`
-    (collection, description, filename, selectors); `drive_folder` is
-    supplied once here since every task shares it. Returns the started
-    Task objects, in the same order as `export_specs`.
+    Works around an Earth Engine race: tasks submitted back-to-back against a
+    not-yet-existing folder name can each create their own copy. The first
+    export is submitted alone and the rest wait for it to leave READY. Not a
+    guarantee -- for that, create the folder by hand in Drive first.
+    `export_specs` is a list of start_export() kwargs; returns Tasks in order.
     """
     if not export_specs:
         return []
@@ -335,19 +301,13 @@ def attach_to_tasks(task_ids):
 def monitor_export_tasks(
     tasks, poll_interval_seconds=15, detail_log_every_n_polls=10, on_task_complete=None
 ):
-    """
-    Poll Earth Engine until all export tasks finish, showing a progress
-    bar and logging state transitions. Surfaces EECU-seconds (cumulative
-    compute time) and running duration per task, since task state alone
-    ("RUNNING") doesn't show whether a long export is stuck or progressing.
+    """Poll Earth Engine until all export tasks finish, showing a progress bar
+    and logging state transitions. Surfaces EECU-seconds and running duration,
+    since "RUNNING" alone doesn't show whether an export is stuck.
 
-    `on_task_complete`, if given, is called with a task's ID the moment
-    that task individually reaches COMPLETED, not after the whole batch
-    finishes -- lets the caller persist progress (e.g. a resumability
-    manifest) incrementally, so an interrupted run doesn't lose the record
-    of tasks that already finished.
-
-    Returns task IDs that did NOT finish COMPLETED.
+    `on_task_complete` is called with a task ID the moment that task reaches
+    COMPLETED, not after the batch, so a caller can persist progress
+    incrementally. Returns task IDs that did NOT finish COMPLETED.
     """
     terminal_states = {"COMPLETED", "FAILED", "CANCELLED"}
     remaining = {task.id: task for task in tasks}

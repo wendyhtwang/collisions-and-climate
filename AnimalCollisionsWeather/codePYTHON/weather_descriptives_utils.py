@@ -30,12 +30,9 @@ from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
 import pandas as pd
 def resolve_repo_root():
-    """Resolve the project checkout on either Kodama or a local Mac.
-
-    Unlike a .py file, a notebook has no reliable __file__. Jupyter's current
-    working directory depends on how the server/editor was launched, so search
-    plausible roots and accept the first directory with this repo's structure.
-    Set COLLISIONS_WEATHER_ROOT to override discovery explicitly.
+    """Resolve the project checkout on either Kodama or a local Mac: a notebook
+    has no reliable __file__, so search plausible roots and take the first with
+    this repo's structure. COLLISIONS_WEATHER_ROOT overrides discovery.
     """
     cwd = Path.cwd().resolve()
     candidates = []
@@ -89,21 +86,17 @@ PRIMARY_TREND_VARS = [
 ]
 SPAGHETTI_VARS = ["mean_temp_c"]
 OUTLIER_Z_THRESHOLD = 5.0
-# The exported report prints on 11 x 8.5in landscape pages. Figures wider than
-# roughly 8.5in are clipped at the right edge and figures taller than roughly
-# 6.5in are split across a page break, so every multi-panel exhibit is sized to
-# fit inside one printed page. Nine panels per page also avoids a single
-# orphaned state on the final page: the sample has 49 states plus DC-equivalents
-# (48 CONUS states + DC), and 49 = 5 pages of 9 + 4.
+# The exported report prints on 11 x 8.5in landscape pages: figures wider than
+# ~8.5in are clipped and taller than ~6.5in are split across a page break, so
+# every multi-panel exhibit is sized to one page. Nine panels per page also
+# avoids an orphaned state on the last page (49 units = 5 pages of 9 + 4).
 FIGURE_WIDTH_IN = 8.0
 STATES_PER_PAGE = 9
 STATE_GRID_COLS = 3
 # The study universe is the contiguous US plus DC: 48 states + DC = 49 units.
-# Alaska (02), Hawaii (15) and the territories (60, 66, 69, 72, 78) are out of
-# scope -- PRISM's AN81m grid does not cover them, and the extraction already
-# filters on gee_extract_utils.CONUS_STATE_FIPS. This dictionary is the same
-# universe, spelled out here because importing gee_extract_utils would pull in
-# the Earth Engine client just to read a constant.
+# AK, HI and the territories are out of scope (PRISM's AN81m grid doesn't cover
+# them) and the extraction already filters on CONUS_STATE_FIPS. Spelled out here
+# because importing gee_extract_utils would pull in the EE client for a constant.
 STATE_FIPS_TO_NAME = {
     "01":"Alabama","04":"Arizona","05":"Arkansas","06":"California",
     "08":"Colorado","09":"Connecticut","10":"Delaware","11":"District of Columbia",
@@ -174,11 +167,9 @@ ERA5_CONFIG = DatasetConfig(
 def variable_label(variable):
     return VARIABLE_LABELS.get(variable, variable.replace("_", " ").title())
 def source_note(text, width=105):
-    """Wrap a source or caveat note to a fixed character width.
-
-    Matplotlib grows the saved bounding box to enclose any artist that extends
-    past the axes, so a long single-line note silently widens the exported PDF
-    until it runs off the page edge. Wrapping keeps the note inside the figure.
+    """Wrap a source or caveat note to a fixed character width: matplotlib grows
+    the saved bounding box to enclose any artist past the axes, so an unwrapped
+    note silently widens the exported PDF until it runs off the page.
     """
     return textwrap.fill(" ".join(text.split()), width=width)
 def state_label(fips):
@@ -199,11 +190,9 @@ def save_figure_pdf(fig, filename):
     print(f"Saved {path}")
     return path
 def _format_table_values(table, decimals=3):
-    """Format each numeric column consistently.
-
-    Formatting cell by cell produced ragged columns, because a value that
-    happened to be integral printed with no decimals while its neighbours
-    printed three. Decide once per column instead.
+    """Format each numeric column consistently -- per column, not per cell, which
+    produced ragged columns whenever an integral value printed without decimals
+    next to neighbours printing three.
     """
     formatted_table = table.copy()
     for col in formatted_table.select_dtypes(include="number"):
@@ -444,19 +433,17 @@ def load_county_geometry():
     print(f"County geometry source: {source}")
     geometry = gpd.read_file(source)
     geometry["geoid"] = geometry["GEOID"].astype(str).str.zfill(5)
-    # ALAND is land area in square metres. It is kept because Eyal asked (8/28)
-    # for area-weighted companions to the national exhibits: counties in the
-    # west are far larger than counties in the east, so an unweighted county
-    # mean is not the same estimand as an area-weighted one. Land area, not
-    # ALAND + AWATER: open water should not carry temperature weight.
+    # ALAND is land area in square metres, kept for area-weighted companions
+    # to the national exhibits (decided 8/28): counties in the west are far
+    # larger than counties in the east, so an unweighted county mean is not
+    # the same estimand as an area-weighted one. Land area, not ALAND +
+    # AWATER: open water should not carry temperature weight.
     geometry["land_area_km2"] = geometry["ALAND"] / 1e6
 
-    # The Census cartographic file covers Alaska, Hawaii, Puerto Rico and the
-    # territories. They never carry weather data -- every choropleth merge is an
-    # inner join against the panel -- but state_geometry below is dissolved from
-    # THIS frame, and in an Albers CONUS projection Alaska sits far to the
-    # north-west. Left in, drawing state borders expands each map's axes to
-    # enclose it and shrinks the lower 48 to roughly half size in the frame.
+    # The Census cartographic file covers AK, HI, PR and the territories. They
+    # never carry weather data, but state_geometry below is dissolved from THIS
+    # frame, and in an Albers CONUS projection Alaska sits far to the north-west:
+    # left in, it expands every map's axes and halves the lower 48 in the frame.
     outside = sorted(set(geometry["geoid"].str[:2]) - CONUS_STATE_FIPS)
     if outside:
         geometry = geometry[geometry["geoid"].str[:2].isin(CONUS_STATE_FIPS)].copy()
@@ -466,12 +453,9 @@ def draw_state_borders(ax, linewidth=0.45, color="black"):
     """Overlay state outlines on a county choropleth."""
     state_geometry.boundary.plot(ax=ax, linewidth=linewidth, color=color, zorder=5)
 def merge_county_geometry(frame, exhibit, columns=None):
-    """Attach county polygons and verify that every county in `frame` matched.
-
-    An inner join drops counties whose GEOIDs are absent from the shapefile
-    vintage without any visible symptom: the map simply renders without them.
-    Connecticut's 2022 replacement of counties by planning regions is the
-    realistic failure mode here, so the match is asserted rather than assumed.
+    """Attach county polygons, asserting every county in `frame` matched: an
+    inner join would drop GEOIDs absent from the shapefile vintage with no
+    visible symptom, CT's 2022 planning regions being the realistic case.
     """
     payload = frame if columns is None else frame[columns]
     merged = county_geometry.merge(payload, on="geoid", how="inner", validate="one_to_one")
@@ -549,11 +533,9 @@ _BUILT = False
 def build_panel():
     """Read the weather CSVs and build the county-winter panel.
 
-    Importing this module does no I/O -- it only defines things. This function is
-    where the work happens, so a script (or a test, or an interactive session)
-    decides when to pay for it. Idempotent: calling it twice does the work once.
-
-    Returns a dict of the objects both tiers need, for the caller to bind:
+    Importing this module does no I/O; this function is where the work happens,
+    so the caller decides when to pay for it. Idempotent. Returns a dict of the
+    objects both tiers need, for the caller to bind:
 
         globals().update(build_panel())
     """
@@ -579,8 +561,8 @@ def build_panel():
     display(county_winter.head())
     county_geometry = load_county_geometry()
     # State outlines, dissolved from the same county vintage so the two layers cannot
-    # disagree. Eyal (8/28): keep county borders invisible -- "getting ink to a minimum
-    # ... totally the correct call" -- but add state borders in black.
+    # disagree. Decided 8/28: keep county borders invisible, minimizing ink, but add
+    # state borders in black.
     state_geometry = (
         county_geometry.assign(state_fips=county_geometry["geoid"].str[:2])
         .dissolve(by="state_fips")[["geometry"]]
