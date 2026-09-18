@@ -17,30 +17,91 @@ below is either called by it or run standalone for a one-off check.
 ## Master file
 
 ### `_project_main.do`
-Lists every stage of the pipeline in the order it has to run. Design
-decisions live in the child scripts, not here -- this file was deliberately
-cut down (09/17/26) to one or two lines per step.
-- Six sections: 0 Setup, 1 User-written packages, 2 Preparing data,
-  3 Descriptive data analysis, 4 Regression estimation, 5 Main analysis
-  tables & figures, 6 Robustness checks. Section headers use the style
-  guide's `* SECTION n:` rule-line form so `grep "SECTION"` jumps around
-  the whole repo, not just one file.
+Lists every production stage of the pipeline in the order it has to run.
+Design decisions live in the child scripts, not here. Cut down 09/17/26 to
+one or two lines per step, and again 09/18/26 to production calls only --
+package installs, validators and diagnostics were moved into this file.
+- Sections: 0 Setup, 1 User-written packages (a pointer, see below),
+  2 Preparing data, 3 Descriptive data analysis, 4 Regression estimation,
+  5 Main analysis tables & figures. Section headers use the style guide's
+  `* SECTION n:` rule-line form so `grep "SECTION"` jumps around the whole
+  repo, not just one file.
 - SECTION 2 order: 2.1 weather extraction (Earth Engine, commented out --
-  one-time multi-hour jobs, re-enable by hand) -> 2.3 population -> 2.4
-  the two sibling RAs' upstream panels (Nicole's deer-harvest append,
-  Charvi's collisions append -- gated behind a `run_upstream` flag,
-  SECTION 0, default 0, since neither RA's output path is confirmed live
-  yet) -> 2.5 `build_main_data_county_year.do`. 2.5 runs
-  `06c_build_winter_severity.py` before the merge, so the merge no longer
-  builds the Winter Severity Index itself.
-- SECTION 4 runs `estimates_generate_collisions_weather.do` (4.1, this
-  cleanup's scope) and Nicole's three `regression_*.do` harvest files
-  (4.2, hers). SECTION 5 runs only
-  `estimates_tables_collisions_weather.do` -- Nicole's three files write
-  their own `.tex` directly, so they have nothing in SECTION 5.
+  one-time multi-hour jobs, re-enable by hand) -> 2.2 aggregation and
+  derived variables (05, 06, 06c) -> 2.3 population (08a, 08b) ->
+  2.4 provenance only -> 2.5 `build_main_data_county_year.do`. 2.2 runs
+  `06c_build_winter_severity.py`, so neither the merge nor the Phase 4
+  exhibits build the Winter Severity Index themselves.
+- SECTION 2.4 is a comment, not a step (settled 9/18/26). The ungulate and
+  collisions repos each produce a ready-to-merge county-year panel that is
+  copied into this project; this file runs nothing in either repo, and 2.5
+  merges the copies on geoid-year without further cleaning.
+- SECTION 4 runs `estimates_generate_collisions_weather.do` and the three
+  `regression_*.do` harvest files. SECTION 5 runs only
+  `estimates_tables_collisions_weather.do` -- the three harvest files write
+  their own `.tex` directly, so they have nothing in SECTION 5. The three
+  set `global root` themselves; `$path` set in SECTION 0 does not reach
+  them. Same tree on Kodama, so it runs. Flagged 9/15/26 for review.
 - `$path` resolution tries the Dropbox root first, then `C:/`/`D:/`, then
   errors if none exist -- matches the style guide's header template
   exactly so every child `.do` can be run standalone with the same guard.
+
+#### Not called by the master file
+Run these by hand; none produce pipeline output.
+- `06b_validate_ppt_total.py` -- gate: 05 and 06 compute monthly
+  precipitation totals independently and must agree exactly. Exits non-zero
+  on mismatch. `--dataset ERA5` for ERA5. Worth running after any change to
+  05 or 06.
+- `check_animal_deer_backfill.do` -- diagnostic on the merged panel, writes
+  `$tables/checks/animal_deer_backfill_violations.csv`.
+- `07a`-`07h` -- ground-truth chain, PRISM and ERA5 against NOAA stations.
+- PRISM/ERA5 comparison exhibits, produced inside SECTION 3.
+- `02b`/`04b` WMA-level extraction, pending WMA shapefiles.
+
+#### User-written packages (SECTION 1)
+Installed once per machine, not per run. The estimation and report scripts
+re-check what they need and install what is missing.
+
+```stata
+ssc install coefplot
+ssc install estout
+ssc install confirmdir
+ssc install unique
+ssc install egenmore
+ssc install freqindex
+ssc install matchit
+ssc install clustse
+ssc install parmest
+ssc install tmpdir
+ssc install sutex
+ssc install synth
+ssc install binscatter
+ssc install _gwtmean
+ssc install spmap
+ssc install shp2dta
+ssc install geoinpoly
+ssc install geo2xy
+ssc install mif2dta
+ssc install ftools
+ssc install moremata
+ssc install ivreg2
+ssc install reghdfe
+ssc install ppmlhdfe
+ssc install require
+ssc install texdoc
+ssc install acreg
+
+mata: mata mlib index
+
+net install rscript, from("https://raw.githubusercontent.com/reifjulian/rscript/master") replace
+```
+
+Python packages are pinned in `codePYTHON/requirements.txt`. To pin the
+interpreter used by every `python script` call:
+
+```stata
+python set exec "$path/.venv/bin/python", permanently
+```
 
 ## Preparing data
 
