@@ -6,24 +6,30 @@ CURRENT LEAD:  Wendy Wang
 PURPOSE:  Phase 3 descriptive exhibits for the 9/1/26 collisions
           snapshot (county-year, 1985-2020). First pass, NOT YET RUN.
 
-OUTPUT ($outDESC):
+OUTPUT ($outDESC), one PDF per exhibit:
   figures/  A1 availability; F1 national trends; F2 severity;
             F3-F5 state small multiples
   maps/     M1-M4 county maps (animal rate, animal share)
   tables/   A1 availability, F1/F2 series, S1 pooled, S2 by state (.csv)
-  Each figure is written as .pdf (Overleaf) and .png (slides).
 
 DECISIONS:
   1. Animal numerator = the regression numerator (any_animal_total,
      then severity components, then deer_total, floored at deer_total),
      so the descriptives describe the estimated outcome. A1 and S2
      report which step each row came from.
-  2. Series problems are shown, not dropped. F4 plots raw
-     any_animal_total against deer_total; NY and WV (flag_states)
-     are drawn in a second color in F3.
+  2. Series problems are shown in the state-level exhibits. F4 plots
+     raw any_animal_total against deer_total; flag_states are drawn
+     in a second color in F3.
   3. National series are ratios of sums over reporting states, plus
      the same ratio over a fixed balanced state set (bal_y0-bal_y1),
-     because states enter the panel in different years.
+     because states enter the panel in different years. National
+     lines are drawn only for years with >= min_states states.
+  3a. A state-year whose animal count sums to zero statewide is
+     treated as not reported (zero coded for missing: AR, IA, NE, NJ
+     throughout, early years of FL, KY, OH, PA and others).
+  3b. NM (excl_states) is left out of the national animal series and
+     the maps: its animal count equals its all-cause count (share =
+     100% on every row). It stays in F3-F5, flagged.
   4. Rates: per 100,000 residents (animal), per 1,000 (all-cause),
      matching WP Table 5 and Section 3.1. Per road-mile is the
      alternative for the PI; road miles are not in the panel.
@@ -35,6 +41,10 @@ DECISIONS:
 
 CHANGELOG:
   10/18/2026: First pass.
+  10/19/2026: After first run. Statewide-zero rule (3a), NM out of
+    national animal series and maps (3b), min_states cut on national
+    lines, one PDF per exhibit (no PNGs, no single-panel copies),
+    axis and legend fixes in A1, F1, F3.
 ==============================================================*/
 
 *---------------------------------------------------------------
@@ -112,6 +122,7 @@ if "$bdazzled_blue" == "" {
     global light_pink    = "255 221 210"
     global slab_gray     = "208 184 172"
     global mute_calm_7   = "192 192 192"
+    global gunmetal      = "41 50 65"
 }
 
 * Windows and flags
@@ -120,17 +131,18 @@ local y_last     = 2020
 local bal_y0     = 2005    // balanced window; check A1 and retune
 local bal_y1     = 2019
 local min_years  = 3       // min observed years for a county mean on a map
-local flag_states "NY WV"
+local min_states = 10      // min reporting states for a national point
+local flag_states "NY WV NM"
+local excl_states "NM"
 
 global gw "graphregion(color(white)) plotregion(color(white))"
 
-* Export helper: vector PDF for Overleaf, PNG for slides
+* Export helper: one PDF per exhibit
 capture program drop gexport
 program define gexport
     args gname fname sub
     quietly graph display `gname'
     graph export "$outDESC/`sub'/`fname'.pdf", name(`gname') replace
-    graph export "$outDESC/`sub'/`fname'.png", name(`gname') replace width(2400)
 end
 
 * Map class breaks pooled across several variables, so every map of
@@ -282,6 +294,22 @@ label define num_source_lbl 1 "native" 2 "component rebuild" ///
 label values num_source num_source_lbl
 tab num_source, missing
 
+* Statewide zero = not reported (DECISION 3a)
+bysort state year: egen double sy_animal = total(any_animal_filled), missing
+gen byte is_zero_sy = sy_animal == 0
+drop sy_animal
+count if is_zero_sy
+di as text "  county-years blanked by the statewide-zero rule: " r(N)
+tab state if is_zero_sy
+replace any_animal_filled = . if is_zero_sy
+replace num_source        = . if is_zero_sy
+
+* Left out of national animal series and maps (DECISION 3b)
+gen byte is_excluded = 0
+foreach s of local excl_states {
+    replace is_excluded = 1 if state == "`s'"
+}
+
 * Defect markers for S2
 gen byte is_inversion = !missing(deer_total, any_animal_total) & deer_total > any_animal_total
 gen byte is_id_gap    = !missing(any_animal_total, comp_total) & any_animal_total != comp_total
@@ -367,9 +395,10 @@ restore
 * Figure: one tile per state-year, colored by the modal row category
 gen byte avail_cat = .
 replace avail_cat = num_source if has_total & !missing(num_source)
-replace avail_cat = 5 if has_total & missing(num_source)
-replace avail_cat = 6 if !has_total & !missing(num_source)
-replace avail_cat = 7 if missing(avail_cat)
+replace avail_cat = 5 if is_zero_sy
+replace avail_cat = 6 if has_total & missing(num_source) & !is_zero_sy
+replace avail_cat = 7 if !has_total & !missing(num_source)
+replace avail_cat = 8 if missing(avail_cat)
 
 bysort state year: egen byte sy_cat = mode(avail_cat), minmode
 bysort state year: keep if _n == 1
@@ -381,26 +410,28 @@ gen double y_hi = year + 0.45
 quietly summarize sid
 local n_states = r(max)
 
-local cat_lab1 "All-animal total, as reported"
-local cat_lab2 "Rebuilt from severity components"
-local cat_lab3 "Deer count standing in"
-local cat_lab4 "Raised to deer count (deer > all-animal)"
-local cat_lab5 "All-cause only, no animal count"
-local cat_lab6 "Animal count, no all-cause total"
-local cat_lab7 "Row present, no counts"
+local cat_lab1 "As reported"
+local cat_lab2 "Rebuilt from severity counts"
+local cat_lab3 "Deer count stand-in"
+local cat_lab4 "Raised to deer count"
+local cat_lab5 "Zero statewide, treated as missing"
+local cat_lab6 "All-cause only"
+local cat_lab7 "Animal count, no all-cause total"
+local cat_lab8 "No counts"
 global cat_col1 "$bdazzled_blue"
 global cat_col2 "$pale_cerulean"
 global cat_col3 "$burnt_sienna"
 global cat_col4 "$cherry_red"
-global cat_col5 "$mute_calm_7"
-global cat_col6 "$light_pink"
-global cat_col7 "$slab_gray"
+global cat_col5 "$gunmetal"
+global cat_col6 "$mute_calm_7"
+global cat_col7 "$light_pink"
+global cat_col8 "$slab_gray"
 
 * Only non-empty categories get a plot and a legend key
 local plots ""
 local order ""
 local k = 0
-forvalues c = 1/7 {
+forvalues c = 1/8 {
     quietly count if sy_cat == `c'
     if r(N) > 0 {
         local ++k
@@ -411,16 +442,16 @@ forvalues c = 1/7 {
 
 twoway `plots', ///
     yscale(reverse) ///
-    ylabel(1(1)`n_states', valuelabel angle(0) labsize(vsmall) nogrid) ///
+    ylabel(1(1)`n_states', valuelabel angle(0) labsize(vsmall) nogrid noticks labgap(small)) ///
     xlabel(1985(5)2020, labsize(small)) ///
     xscale(range(1984.5 2020.5)) ///
     xline(`bal_y0' `bal_y1', lpattern(shortdash) lcolor(gs10)) ///
     ytitle("") ///
     xtitle("") ///
     legend(order(`order') ///
-           cols(2) ///
+           cols(3) ///
            pos(6) ///
-           size(small) ///
+           size(vsmall) ///
            symxsize(*0.5) ///
            region(lcolor(none))) ///
     xsize(9) ///
@@ -461,7 +492,8 @@ collapse (sum) sh_num ///
                an_raw = any_animal_total ///
                dr_raw = deer_total ///
          (count) n_anraw = any_animal_total ///
-                 n_dr = deer_total, ///
+                 n_dr = deer_total ///
+         (max) is_excluded, ///
          by(state sid year)
 
 gen double st_share = 100 * sh_num / sh_den    if n_sh > 0
@@ -470,8 +502,18 @@ gen double st_ran   = 100000 * rn_num / rn_pop if n_rn > 0
 gen double an_k     = an_raw / 1000            if n_anraw > 0
 gen double dr_k     = dr_raw / 1000            if n_dr > 0
 
+* National inputs: excl_states out of the animal series (DECISION 3b)
+foreach v in sh_num sh_den rn_num rn_pop {
+    gen double in_`v' = `v' if !is_excluded
+}
+gen double in_ra_num = ra_num
+gen double in_ra_pop = ra_pop
+gen double rep_sh = st_share if !is_excluded
+gen double rep_ra = st_rall
+gen double rep_rn = st_ran   if !is_excluded
+
 * Balanced state set: a valid share in every year of the window
-gen byte in_win = inrange(year, `bal_y0', `bal_y1') & n_sh > 0
+gen byte in_win = inrange(year, `bal_y0', `bal_y1') & n_sh > 0 & !is_excluded
 bysort state: egen n_win = total(in_win)
 gen byte bal_state = n_win == (`bal_y1' - `bal_y0' + 1)
 levelsof state if bal_state, local(bal_list) clean
@@ -479,25 +521,25 @@ local n_bal : word count `bal_list'
 di as text "  balanced states, `bal_y0'-`bal_y1' (`n_bal'): `bal_list'"
 
 * States reporting a valid share, by year (for retuning the window)
-tab year if n_sh > 0
+tab year if n_sh > 0 & !is_excluded
 
 tempfile sy_raw
 save `sy_raw'
 
-* National: all reporting states
-collapse (sum) sh_num ///
-               sh_den ///
-               ra_num ///
-               ra_pop ///
-               rn_num ///
-               rn_pop ///
-         (count) n_st_sh = st_share ///
-                 n_st_ra = st_rall ///
-                 n_st_rn = st_ran, ///
+* National: all reporting states; years below min_states not drawn
+collapse (sum) a_sh_num = in_sh_num ///
+               a_sh_den = in_sh_den ///
+               a_ra_num = in_ra_num ///
+               a_ra_pop = in_ra_pop ///
+               a_rn_num = in_rn_num ///
+               a_rn_pop = in_rn_pop ///
+         (count) n_st_sh = rep_sh ///
+                 n_st_ra = rep_ra ///
+                 n_st_rn = rep_rn, ///
          by(year)
-gen double nat_share = 100 * sh_num / sh_den    if n_st_sh > 0
-gen double nat_rall  = 1000 * ra_num / ra_pop   if n_st_ra > 0
-gen double nat_ran   = 100000 * rn_num / rn_pop if n_st_rn > 0
+gen double nat_share = 100 * a_sh_num / a_sh_den    if n_st_sh >= `min_states'
+gen double nat_rall  = 1000 * a_ra_num / a_ra_pop   if n_st_ra >= `min_states'
+gen double nat_ran   = 100000 * a_rn_num / a_rn_pop if n_st_rn >= `min_states'
 keep year n_st_* nat_*
 tempfile nat
 save `nat'
@@ -506,16 +548,16 @@ save `nat'
 if `n_bal' > 0 {
     use `sy_raw', clear
     keep if bal_state & inrange(year, `bal_y0', `bal_y1')
-    collapse (sum) sh_num ///
-                   sh_den ///
-                   ra_num ///
-                   ra_pop ///
-                   rn_num ///
-                   rn_pop, ///
+    collapse (sum) b_sh_num = in_sh_num ///
+                   b_sh_den = in_sh_den ///
+                   b_ra_num = in_ra_num ///
+                   b_ra_pop = in_ra_pop ///
+                   b_rn_num = in_rn_num ///
+                   b_rn_pop = in_rn_pop, ///
              by(year)
-    gen double bal_share = 100 * sh_num / sh_den
-    gen double bal_rall  = 1000 * ra_num / ra_pop
-    gen double bal_ran   = 100000 * rn_num / rn_pop
+    gen double bal_share = 100 * b_sh_num / b_sh_den
+    gen double bal_rall  = 1000 * b_ra_num / b_ra_pop
+    gen double bal_ran   = 100000 * b_rn_num / b_rn_pop
     keep year bal_*
     tempfile nat_bal
     save `nat_bal'
@@ -540,6 +582,7 @@ xtset sid year
 tsfill
 bysort sid (state): replace state = state[_N] if state == ""
 bysort sid (bal_state): replace bal_state = bal_state[1]
+bysort sid (is_excluded): replace is_excluded = is_excluded[1]
 
 merge m:1 year using `nat'
 assert _merge != 2
@@ -556,23 +599,24 @@ foreach s of local flag_states {
 tempfile sy
 save `sy'
 
-* F1a-c: thin line per state, bold national line, dashed balanced set
-local ytl_rall  "Collisions per 1,000 residents"
-local ytl_ran   "Animal collisions per 100,000 residents"
-local ytl_share "Animal share of all collisions (%)"
-local sub_rall  "All-cause collision rate"
-local sub_ran   "Animal-related collision rate"
-local sub_share "Animal-related share of all collisions"
+* F1a-c: thin line per state, bold national line, dashed balanced set.
+* Units live in the subtitle so the y-title cannot collide with labels.
+local sub_rall   "All-cause collisions per 1,000 residents"
+local sub_ran    "Animal-related collisions per 100,000 residents"
+local sub_share  "Animal-related share of all collisions (%)"
+local cond_rall  "1"
+local cond_ran   "!is_excluded"
+local cond_share "!is_excluded"
 
 foreach m in rall ran share {
     local balplot ""
     local balleg ""
     if `n_bal' > 0 {
         local balplot `"(line bal_`m' year if yr_tag, sort(year) lcolor("$burnt_sienna") lwidth(medthick) lpattern(dash))"'
-        local balleg `"3 "Balanced states, `bal_y0'–`bal_y1' (n = `n_bal')""'
+        local balleg `"3 "Balanced set""'
     }
 
-    twoway (line st_`m' year, ///
+    twoway (line st_`m' year if `cond_`m'', ///
                 connect(L) ///
                 cmissing(n) ///
                 lcolor("$pale_cerulean") ///
@@ -582,41 +626,44 @@ foreach m in rall ran share {
                 lcolor("$bdazzled_blue") ///
                 lwidth(thick)) ///
            `balplot', ///
-        ytitle("`ytl_`m''", size(medsmall)) ///
+        ytitle("") ///
         xtitle("") ///
-        ylabel(, angle(0) glcolor(gs15)) ///
-        xlabel(1985(5)2020) ///
-        legend(order(2 "All reporting states" `balleg' 1 "Individual states") ///
+        ylabel(, angle(0) labsize(small) glcolor(gs15)) ///
+        xlabel(1985(5)2020, labsize(small)) ///
+        legend(order(2 "All states" `balleg' 1 "Single states") ///
                rows(1) ///
                pos(6) ///
                size(small) ///
+               symxsize(*0.5) ///
                region(lcolor(none))) ///
         subtitle("`sub_`m''", pos(11) size(medsmall)) ///
         $gw ///
         name(f1_`m', replace) ///
         nodraw
-    gexport f1_`m' F1_national_`m' figures
 }
 
-* F1d: states reporting a valid animal share
+* F1d: states reporting a valid animal share; dashed line = min_states
 twoway bar n_st_sh year if yr_tag, ///
     barwidth(0.8) ///
     color(gs10) ///
-    ytitle("States", size(medsmall)) ///
+    yline(`min_states', lpattern(dash) lcolor(gs6)) ///
+    ytitle("") ///
     xtitle("") ///
-    ylabel(, angle(0) glcolor(gs15)) ///
-    xlabel(1985(5)2020) ///
+    ylabel(, angle(0) labsize(small) glcolor(gs15)) ///
+    xlabel(1985(5)2020, labsize(small)) ///
     subtitle("States reporting animal and all-cause counts", pos(11) size(medsmall)) ///
     $gw ///
     name(f1_nst, replace) ///
     nodraw
-gexport f1_nst F1_national_states_reporting figures
 
 graph combine f1_rall f1_ran f1_share f1_nst, ///
     cols(2) ///
     imargin(small) ///
     xsize(11) ///
     ysize(7.5) ///
+    note("National lines: years with at least `min_states' reporting states. Balanced set: the `n_bal' states reporting every year `bal_y0'–`bal_y1'." ///
+         "`excl_states' left out of the animal series (animal count equals all-cause count).", ///
+         size(vsmall)) ///
     $gw ///
     name(f1, replace)
 gexport f1 F1_national_trends figures
@@ -626,66 +673,78 @@ gexport f1 F1_national_trends figures
 *---------------------------------------------------------------
 
 * Severity components are used as reported (no fill), so the set of
-* reporting states differs by severity and from F1.
+* reporting states differs by severity and from F1. Statewide-zero
+* and excluded state-years are out (DECISIONS 3a, 3b); for injury and
+* PDO the statewide-zero rule is also applied to the component itself.
 use `panel', clear
 foreach s in fatal injury pdo {
-    gen byte   vs_`s' = !missing(total_`s', any_animal_`s') & total_`s' > 0
-    gen double sn_`s' = any_animal_`s' if vs_`s'
+    gen double an_`s' = any_animal_`s' if !is_zero_sy & !is_excluded
+    gen byte   vs_`s' = !missing(total_`s', an_`s') & total_`s' > 0
+    gen double sn_`s' = an_`s'         if vs_`s'
     gen double sd_`s' = total_`s'      if vs_`s'
     gen byte   vr_`s' = !missing(total_`s') & has_pop
     gen double rr_`s' = total_`s'      if vr_`s'
     gen double rp_`s' = population     if vr_`s'
 }
-collapse (sum) sn_* sd_* rr_* rp_* vs_* vr_*, by(year)
-foreach s in fatal injury pdo {
-    gen double sh_`s' = 100 * sn_`s' / sd_`s'  if vs_`s' > 0
-    gen double rt_`s' = 1000 * rr_`s' / rp_`s' if vr_`s' > 0
+collapse (sum) sn_* sd_* rr_* rp_* vs_* vr_*, by(state year)
+
+foreach s in injury pdo {
+    replace sd_`s' = 0 if sn_`s' == 0
+    replace vs_`s' = 0 if sn_`s' == 0
 }
-keep year sh_* rt_* vs_* vr_*
+foreach s in fatal injury pdo {
+    gen byte st_vs_`s' = vs_`s' > 0
+    gen byte st_vr_`s' = vr_`s' > 0
+}
+collapse (sum) sn_* sd_* rr_* rp_* st_vs_* st_vr_*, by(year)
+foreach s in fatal injury pdo {
+    gen double sh_`s' = 100 * sn_`s' / sd_`s'  if st_vs_`s' >= `min_states'
+    gen double rt_`s' = 1000 * rr_`s' / rp_`s' if st_vr_`s' >= `min_states'
+}
+keep year sh_* rt_* st_vs_* st_vr_*
 export delimited using "$outDESC/tables/F2_national_severity_series.csv", replace
 
 twoway (line rt_fatal year, lcolor("$bdazzled_blue") lwidth(medthick)) ///
        (line rt_injury year, lcolor("$burnt_sienna") lwidth(medthick)) ///
        (line rt_pdo year, lcolor("$dark_green") lwidth(medthick)), ///
     yscale(log) ///
-    ylabel(0.01 0.1 1 10 100, angle(0) glcolor(gs15)) ///
-    ytitle("Collisions per 1,000 residents (log scale)", size(medsmall)) ///
+    ylabel(0.01 0.1 1 10 100, angle(0) labsize(small) glcolor(gs15)) ///
+    ytitle("") ///
     xtitle("") ///
-    xlabel(1985(5)2020) ///
+    xlabel(1985(5)2020, labsize(small)) ///
     legend(order(1 "Fatal" 2 "Injury" 3 "Property damage only") ///
            rows(1) ///
            pos(6) ///
            size(small) ///
            region(lcolor(none))) ///
-    subtitle("All-cause collision rate, by severity", pos(11) size(medsmall)) ///
+    subtitle("All-cause collisions per 1,000 residents (log scale)", pos(11) size(medsmall)) ///
     $gw ///
     name(f2_rate, replace) ///
     nodraw
-gexport f2_rate F2_severity_allcause_rate figures
 
 twoway (line sh_fatal year, lcolor("$bdazzled_blue") lwidth(medthick)) ///
        (line sh_injury year, lcolor("$burnt_sienna") lwidth(medthick)) ///
        (line sh_pdo year, lcolor("$dark_green") lwidth(medthick)), ///
-    ytitle("Animal share of collisions (%)", size(medsmall)) ///
+    ytitle("") ///
     xtitle("") ///
-    ylabel(, angle(0) glcolor(gs15)) ///
-    xlabel(1985(5)2020) ///
+    ylabel(, angle(0) labsize(small) glcolor(gs15)) ///
+    xlabel(1985(5)2020, labsize(small)) ///
     legend(order(1 "Fatal" 2 "Injury" 3 "Property damage only") ///
            rows(1) ///
            pos(6) ///
            size(small) ///
            region(lcolor(none))) ///
-    subtitle("Animal-related share, by severity", pos(11) size(medsmall)) ///
+    subtitle("Animal-related share of collisions (%)", pos(11) size(medsmall)) ///
     $gw ///
     name(f2_share, replace) ///
     nodraw
-gexport f2_share F2_severity_animal_share figures
 
 graph combine f2_rate f2_share, ///
     cols(2) ///
     imargin(small) ///
     xsize(11) ///
     ysize(4.5) ///
+    note("Years with at least `min_states' reporting states. `excl_states' left out of the animal share.", size(vsmall)) ///
     $gw ///
     name(f2, replace)
 gexport f2 F2_severity figures
@@ -701,7 +760,9 @@ bysort sid: egen n_any_dr = count(dr_k)
 bysort sid: egen n_any_ra = count(st_rall)
 sort sid year
 
-* F3: animal share, common y-axis; flagged series in a second color
+* F3: animal share, own y-axis per state (shows within-state
+* variation; NM at 100% would otherwise flatten every panel);
+* flagged series in a second color
 twoway (line st_share year if !flagged & n_any_sh > 0, ///
             lcolor("$bdazzled_blue") ///
             cmissing(n)) ///
@@ -709,16 +770,18 @@ twoway (line st_share year if !flagged & n_any_sh > 0, ///
             lcolor("$burnt_sienna") ///
             cmissing(n)), ///
     by(state, ///
+       yrescale ///
        cols(6) ///
        note("") ///
        imargin(small) ///
        legend(pos(6)) ///
        graphregion(color(white))) ///
-    ylabel(, angle(0) labsize(small) glcolor(gs15)) ///
+    yscale(range(0)) ///
+    ylabel(#3, angle(0) labsize(small) glcolor(gs15)) ///
     xlabel(1985(10)2015, labsize(small)) ///
     ytitle("Animal share of all collisions (%)", size(medsmall)) ///
     xtitle("") ///
-    legend(order(1 "Animal share" 2 "Animal share, series flagged for review") ///
+    legend(order(1 "Animal share" 2 "Flagged: NY, WV (deer > all-animal); NM (animal = all-cause)") ///
            rows(1) ///
            size(small) ///
            region(lcolor(none))) ///
@@ -788,8 +851,9 @@ gexport f5 F5_state_allcause_rate figures
 use `panel', clear
 keep if !missing(_ID)
 
-gen double r_val = rate_animal_100k
-gen double s_val = share_animal
+* excl_states draw as "No data" (DECISION 3b)
+gen double r_val = rate_animal_100k if !is_excluded
+gen double s_val = share_animal     if !is_excluded
 
 local tags     full bal d1990 d2000 d2010
 local win_full  "`y_first' `y_last'"
@@ -866,7 +930,6 @@ foreach v in r s {
             subtitle("`lab_`t''", size(medsmall)) ///
             name(map_`v'_`t', replace) ///
             nodraw
-        gexport map_`v'_`t' map_`fig_`v''_`t' maps
 
         if inlist("`t'", "full", "bal") local g_a "`g_a' map_`v'_`t'"
         else local g_b "`g_b' map_`v'_`t'"
@@ -960,6 +1023,7 @@ foreach lvl in state pooled {
                     pct_component = src2 ///
                     pct_deer_standin = src3 ///
                     pct_deer_floor = src4 ///
+                    pct_zero_statewide = is_zero_sy ///
                     mean_total = total_total ///
                     mean_animal = any_animal_filled ///
                     mean_deer = deer_total ///
