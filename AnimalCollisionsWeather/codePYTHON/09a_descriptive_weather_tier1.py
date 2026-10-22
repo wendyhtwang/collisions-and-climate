@@ -197,7 +197,9 @@ def plot_national_winter_trend(frame, variable):
                 label=f"Linear trend {trend.slope:+.3f} per year "
                       f"(SE {trend.stderr:.3f}; R² {trend.r2:.2f}; n={trend.n})")
     ax.set(title=f"{config.name}: {variable_label(variable)}",
-           xlabel="Winter year (December–February)", ylabel=variable_label(variable))
+           xlabel=("Winter year (December–April)" if variable in DEC_APR_VARS
+                   else "Winter year (December–February)"),
+           ylabel=variable_label(variable))
     ax.grid(alpha=0.2)
     ax.legend(frameon=False, fontsize=8)
     ax.text(0, -0.18, source_note(

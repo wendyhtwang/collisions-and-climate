@@ -78,9 +78,12 @@ FIGURES_DIR = REPO_ROOT / "figures" / "weather" / "tier1"
 ID_COLS = ["geoid", "state_fips", "county_fips", "county_name"]
 WINTER_MONTHS = (12, 1, 2)
 EXPECTED_YEARS = set(range(1981, 2026))
+# Dec 1-Apr 30 cold-day count from 06c (the Panel C regressor); all else is DJF.
+WSI_PATH = DATA_DIR / "Weather" / "winter_severity_county_year.csv"
+DEC_APR_VARS = {"wsi_cold_days"}
 PRIMARY_TREND_VARS = [
     "mean_temp_c",
-    "days_extremely_cold",
+    "wsi_cold_days",
     "days_below_freezing_32f",
     "freeze_thaw_days",
 ]
@@ -114,7 +117,8 @@ STATE_FIPS_TO_NAME = {
 CONUS_STATE_FIPS = frozenset(STATE_FIPS_TO_NAME)
 VARIABLE_LABELS = {
     "mean_temp_c": "Mean winter temperature (°C)",
-    "days_extremely_cold": "Extreme-cold days per winter (TMIN < 0°F)",
+    "days_extremely_cold": "Extreme-cold days per winter, Dec–Feb (TMIN ≤ 0°F)",
+    "wsi_cold_days": "Extreme-cold days per winter, Dec–Apr (TMIN ≤ 0°F)",
     "days_below_freezing_32f": "Freezing days per winter (TMIN < 32°F)",
     "freeze_thaw_days": "Freeze–thaw days per winter",
     "days_precip_above_10mm": "Days with precipitation > 10 mm",
@@ -135,6 +139,7 @@ VARIABLE_UNITS = {
     "vpdmin_mean": "hPa",
     "vpdmax_mean": "hPa",
     "days_extremely_cold": "days",
+    "wsi_cold_days": "days",
     "days_below_freezing_32f": "days",
     "freeze_thaw_days": "days",
     "days_precip_above_10mm": "days",
@@ -539,7 +544,7 @@ def build_panel():
 
         globals().update(build_panel())
     """
-    global _BUILT, config, county_geometry, county_variability, county_winter, df, load_diagnostics, missing_area, state_geometry, winter_completeness, winter_diagnostics
+    global _BUILT, cold_days, config, county_geometry, county_variability, county_winter, df, load_diagnostics, missing_area, state_geometry, winter_completeness, winter_diagnostics
     if _BUILT:
         return _panel()
     matplotlib.use("Agg")
@@ -557,6 +562,13 @@ def build_panel():
     display(pd.DataFrame([load_diagnostics]))
     display(df.head())
     county_winter, winter_completeness, winter_diagnostics = construct_county_winter_panel(df)
+    assert WSI_PATH.exists(), f"{WSI_PATH} not found -- run 06c_build_winter_severity.py first."
+    cold_days = (pd.read_csv(WSI_PATH, dtype={"geoid": str},
+                             usecols=["geoid", "year", "wsi_cold_days"])
+                 .rename(columns={"year": "winter_year"}))
+    cold_days["geoid"] = cold_days["geoid"].str.zfill(5)
+    county_winter = county_winter.merge(cold_days, on=["geoid", "winter_year"], how="left",
+                                        validate="one_to_one")
     display(pd.DataFrame([winter_diagnostics]))
     display(county_winter.head())
     county_geometry = load_county_geometry()

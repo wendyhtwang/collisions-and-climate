@@ -560,10 +560,11 @@ mean_temp_map_path = save_tier2_figure(
 )
 
 
+# Dec 1-Apr 30 count (wsi_cold_days), so the maps match the Panel C regressor.
 extreme_cold = (
     county_winter.groupby("geoid", as_index=False)
-    .agg(mean_extreme_cold_days=("days_extremely_cold", "mean"),
-         n_winters=("days_extremely_cold", "count"))
+    .agg(mean_extreme_cold_days=("wsi_cold_days", "mean"),
+         n_winters=("wsi_cold_days", "count"))
 )
 extreme_cold.to_csv(
     TIER2_TABLES_DIR / f"{config.name.lower()}_county_extreme_cold_days.csv", index=False
@@ -583,18 +584,19 @@ ax.axis("off")
 fig.tight_layout()
 extreme_cold_map_path = save_tier2_figure(
     fig, f"{config.name.lower()}_extreme_cold_day_count.pdf",
-    note=(f"Source: {config.name}; days with a daily minimum below 0°F, averaged over complete "
-          f"DJF winters. The 0°F threshold follows the metabolic-stress cutoff in the wildlife "
+    note=(f"Source: {config.name}; days from 1 December to 30 April with a daily minimum at or "
+          f"below 0°F, averaged over complete winters (wsi_cold_days from 06c, the Panel C "
+          f"regressor). The 0°F threshold follows the metabolic-stress cutoff in the wildlife "
           f"literature, not the 32°F road-conditions threshold used elsewhere in the panel. "
-          f"This is NOT the Winter Severity Index: the WSI adds a snow-depth hazard component "
-          f"and runs December through April. See the Winter Severity Index exhibit for that."),
+          f"This is the cold component of the Winter Severity Index, without its snow-depth "
+          f"component; see the Winter Severity Index exhibit for the full index."),
 )
 
 
 # Decided 8/28: build the extreme-cold map the same way as the temperature-change
 # map -- early period, recent period, and the difference.
-early_cold = period_mean(county_winter, "days_extremely_cold", EARLY_PERIOD, "early_cold_days")
-recent_cold = period_mean(county_winter, "days_extremely_cold", RECENT_PERIOD, "recent_cold_days")
+early_cold = period_mean(county_winter, "wsi_cold_days", EARLY_PERIOD, "early_cold_days")
+recent_cold = period_mean(county_winter, "wsi_cold_days", RECENT_PERIOD, "recent_cold_days")
 cold_periods = early_cold.merge(
     recent_cold, on="geoid", suffixes=("_early", "_recent"), validate="one_to_one"
 )
@@ -640,9 +642,9 @@ ax_change_cold.axis("off")
 
 extreme_cold_triptych_path = save_tier2_figure(
     fig, f"{config.name.lower()}_extreme_cold_early_recent_change.pdf", panel_titles_ok=True,
-    note=(f"Source: {config.name}; days with a daily minimum below 0°F, averaged over the "
-          f"complete DJF winters in each period. Top panels share one scale. In the bottom "
-          f"panel RED marks counties that now get FEWER extreme-cold days — the colour scale is "
+    note=(f"Source: {config.name}; days from 1 December to 30 April with a daily minimum at or "
+          f"below 0°F, averaged over the complete winters in each period. Top panels share one "
+          f"scale. In the bottom panel RED marks counties that now get FEWER extreme-cold days — the colour scale is "
           f"deliberately reversed relative to the temperature-change map, because for a count of "
           f"cold days a decrease is the warming signal. {PERIOD_NOTE}"),
 )
@@ -1073,7 +1075,6 @@ print(f"ERA5 minus PRISM national winter temperature: mean {mean_offset:+.3f}°C
 # definition in Python is the failure the anomaly section already had. Since
 # 9/17/26 it comes from 06c_build_winter_severity.py rather than the merged
 # panel, so this Phase 4 exhibit no longer depends on a Phase 6 output.
-WSI_PATH = REPO_ROOT / "dataCSV" / "Weather" / "winter_severity_county_year.csv"
 wsi_map_path = None
 wsi_sensitivity_path = None
 

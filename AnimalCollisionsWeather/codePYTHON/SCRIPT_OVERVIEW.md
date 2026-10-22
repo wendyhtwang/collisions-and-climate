@@ -582,6 +582,10 @@ knits into the dated PI report. Written to `tables/weather/tier2/` and
 - Since 2026-09-17 it no longer reads the merged `.dta`: the two Winter
   Severity Index exhibits read `06c`'s CSV. That removed the one place where a
   Phase 4 output depended on a Phase 6 input.
+- Since 2026-10-22 extreme-cold exhibits in both tiers (Tier 1 trends, Tier 2
+  maps) use `wsi_cold_days` (Dec 1-Apr 30, merged into `county_winter` from
+  `06c`'s CSV), not DJF `days_extremely_cold`, matching the Panel C regressor.
+  `09a` and `09b` now both require `06c` to have run.
 - Renamed 2026-09-17 to `tier2_decisions_log` / `*_tier2_decisions_log.csv`
   (previously carried the PI's first name in a shipped filename);
   `10_generate_weather_report.do` SECTION 6 updated to match.
