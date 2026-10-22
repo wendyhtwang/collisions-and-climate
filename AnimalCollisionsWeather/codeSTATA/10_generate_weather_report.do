@@ -373,10 +373,10 @@ exhibitblock "prism_winter_temperature_change.pdf" ///
 tex \section{Winter cold extremes}
 
 exhibitblock "prism_extreme_cold_day_count.pdf" ///
-    "Mean count of winter days with a daily minimum below 0\textdegree F."
+    "Mean count of days from 1 December to 30 April with a daily minimum at or below 0\textdegree F."
 
 exhibitblock "prism_extreme_cold_early_recent_change.pdf" ///
-    "Extreme-cold days in the early and recent decades, and the change between them."
+    "Extreme-cold days (1 December to 30 April) in the early and recent decades, and the change between them."
 
 if `have_wsi' {
     tex \section{Winter Severity Index}
