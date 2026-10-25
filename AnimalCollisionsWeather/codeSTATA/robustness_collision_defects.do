@@ -8,13 +8,30 @@ PURPOSE:    Column (1) collisions-weather coefficients under sample cuts
   - Output: $estimates/collisions_weather/robustness_collision_defects.csv
 ==============================================================================*/
 
+* State-years whose animal count sums to zero statewide (zero coded for missing)
+bysort state_fips_num year: egen double _sy = total(cond(est_sample, any_animal_filled, .)), missing
+gen byte is_zero_sy = (_sy == 0)
+drop _sy
+
 * Sample cuts: 0 baseline; 1 drop WV 2013 (deer = carcass count);
-* 2 drop share > 100; 3 drop NY and WV; 4 drop deer-floored rows
+* 2 drop share > 100; 3 drop NY and WV; 4 drop deer-floored rows;
+* 5 drop statewide-zero state-years; 6 drop NM (animal = all-cause)
 gen byte cut0 = est_sample
 gen byte cut1 = est_sample & !(state_fips_num == 54 & year == 2013)
 gen byte cut2 = est_sample & !(animal_share > 100 & !missing(animal_share))
 gen byte cut3 = est_sample & !inlist(state_fips_num, 36, 54)
 gen byte cut4 = est_sample & num_source != 4
+gen byte cut5 = est_sample & !is_zero_sy
+gen byte cut6 = est_sample & state_fips_num != 35
+
+forvalues k = 0/6 {
+    qui count if cut`k'
+    di as text "  cut`k' rows: " r(N)
+}
+qui count if est_sample & animal_share == 0
+di as text "  est_sample rows with share == 0: " r(N)
+qui count if est_sample & animal_share == 0 & is_zero_sy
+di as text "    of which in statewide-zero state-years: " r(N)
 
 tempname R
 tempfile res
@@ -28,7 +45,7 @@ foreach y in animal_share animal_rate_100k {
         cap drop _w
         gen double _w = ${rhs`p'}
 
-        forvalues k = 0/4 {
+        forvalues k = 0/6 {
             qui reghdfe `y' _w if cut`k' `wt', absorb($FE) vce($SE)
             local b  = _b[_w]
             local se = _se[_w]
@@ -41,12 +58,13 @@ foreach y in animal_share animal_rate_100k {
     }
 }
 postclose `R'
-drop _w cut0-cut4
+drop _w cut0-cut6
 
 preserve
     use `res', clear
     label define cut_lbl 0 "baseline" 1 "no WV 2013" 2 "no share>100" ///
-                         3 "no NY, WV" 4 "no deer floor", replace
+                         3 "no NY, WV" 4 "no deer floor" 5 "no sw-zero" ///
+                         6 "no NM", replace
     label values cut cut_lbl
     gen double t           = b / se
     gen double pct_of_mean = 100 * (p75 - p25) * b / ymean
