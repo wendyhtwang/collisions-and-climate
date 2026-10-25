@@ -1,9 +1,9 @@
-------------------------------------------------------------------------------------
+----------------------------------------------------------------------------------
       name:  <unnamed>
-       log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/estimate
-> s_tables_collisions_weather.log
+       log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/logs/e
+> stimates_tables_collisions_weather.log
   log type:  text
- opened on:  10 Sep 2026, 19:06:58
+ opened on:  18 Sep 2026, 16:14:50
 
 . 
 . cap which estout
@@ -21,7 +21,7 @@
 . 
 . * Which warm-winter anomaly threshold goes in Panel B: 1 or 2.
 . * The estimation script estimates both and prints them side by side in
-. * its SECTION 7. If both are precise and point
+. * its SECTION 7. Tie-break rule (9/8/26): if both are precise and point
 . * the same way, keep 1SD, because a 1SD winter is far more common and the
 . * estimate therefore has more support. Set this once, here, after looking
 . * at that comparison.
@@ -109,44 +109,45 @@
 
 . 
 . if `have_comp' {
-.     local n_num_all = `set_n_numerator_native' + `set_n_numerator_component_fill' 
-> ///
+.     local n_num_all = `set_n_numerator_native' + `set_n_numerator_component_fill
+> ' ///
 >                     + `set_n_numerator_deer_fill' + `set_n_numerator_deer_floor'
-.     local pc_native : di %2.0f 100 * `set_n_numerator_native'          / `n_num_al
-> l'
-.     local pc_comp   : di %2.0f 100 * `set_n_numerator_component_fill'  / `n_num_al
-> l'
-.     local pc_deer   : di %2.0f 100 * `set_n_numerator_deer_fill'       / `n_num_al
-> l'
-.     local numnote   = "the all-animal count: " + trim("`pc_native'") + "\% as repo
-> rted, " ///
->                     + trim("`pc_comp'") + "\% rebuilt from the fatal, injury and "
->  ///
->                     + "property-damage components where the reported total is miss
-> ing, and " ///
->                     + trim("`pc_deer'") + "\% standing in from the deer-only count
->  where " ///
->                     + "neither is available. A further " + trim("`set_n_numerator_
-> deer_floor'") ///
->                     + " county-years report more deer collisions than all-animal c
-> ollisions, " ///
->                     + "which cannot happen by construction; those are raised to th
-> e deer count " ///
+.     local pc_native : di %2.0f 100 * `set_n_numerator_native'          / `n_num_
+> all'
+.     local pc_comp   : di %2.0f 100 * `set_n_numerator_component_fill'  / `n_num_
+> all'
+.     local pc_deer   : di %2.0f 100 * `set_n_numerator_deer_fill'       / `n_num_
+> all'
+.     local numnote   = "the all-animal count: " + trim("`pc_native'") + "\% as re
+> ported, " ///
+>                     + trim("`pc_comp'") + "\% rebuilt from the fatal, injury and
+>  " ///
+>                     + "property-damage components where the reported total is mi
+> ssing, and " ///
+>                     + trim("`pc_deer'") + "\% standing in from the deer-only cou
+> nt where " ///
+>                     + "neither is available. A further " + trim("`set_n_numerato
+> r_deer_floor'") ///
+>                     + " county-years report more deer collisions than all-animal
+>  collisions, " ///
+>                     + "which cannot happen by construction; those are raised to 
+> the deer count " ///
 >                     + "and are flagged to the data provider."
 .     di as text "Numerator composition read from _run_settings.txt:"
 Numerator composition read from _run_settings.txt:
-.     di as text "  native `set_n_numerator_native', component `set_n_numerator_comp
-> onent_fill', " ///
->                "deer `set_n_numerator_deer_fill', floored `set_n_numerator_deer_fl
-> oor'"
+.     di as text "  native `set_n_numerator_native', component `set_n_numerator_co
+> mponent_fill', " ///
+>                "deer `set_n_numerator_deer_fill', floored `set_n_numerator_deer_
+> floor'"
   native 42049, component 267, deer 10219, floored 4243
 . }
 
 . else {
-.     local numnote = "the all-animal count, backfilled from the severity components
->  and from " ///
+.     local numnote = "the all-animal count, backfilled from the severity componen
+> ts and from " ///
 >                   + "the deer-only count where it is missing"
-.     di as text "NOTE: _run_settings.txt carries no numerator-composition counts."
+.     di as text "NOTE: _run_settings.txt carries no numerator-composition counts.
+> "
 .     di as text "  Rerun estimates_generate_collisions_weather.do to get them"
 .     di as text "  into the table notes."
 . }
@@ -161,8 +162,8 @@ Share outcome scale: 100 (100 = percentage points)
 . local share_wt = ""
 
 . foreach w in none pop {
-  2.     capture confirm file "$estimates/collisions_weather/animal_share_pA_c1_W`w'
-> .ster"
+  2.     capture confirm file "$estimates/collisions_weather/animal_share_pA_c1_W`
+> w'.ster"
   3.     if !_rc local share_wt = "`w'"
   4. }
 
@@ -180,7 +181,8 @@ Share-table weighting detected: none
 . * Detect the Q1 lag choice from the estimates themselves rather than
 . * trusting a second copy of the switch: under Q1 == 1 the regressor
 . * entered as L1. and Stata named the coefficient L.mean_winter_temp.
-. estimates use "$estimates/collisions_weather/animal_share_pA_c1_W`share_wt'.ster"
+. estimates use "$estimates/collisions_weather/animal_share_pA_c1_W`share_wt'.ster
+> "
 
 . local temp_names : colnames e(b)
 
@@ -227,8 +229,8 @@ Panel B threshold on display: 1SD
   7.     }
   8. 
 .     forvalues c = 1/4 {
-  9.         local ster = "$estimates/collisions_weather/`y'_p`psrc'_c`c'_W`wt'.ster
-> "
+  9.         local ster = "$estimates/collisions_weather/`y'_p`psrc'_c`c'_W`wt'.st
+> er"
  10.         capture confirm file "`ster'"
  11.         if _rc {
  12.             di as error "MISSING: `ster'"
@@ -254,7 +256,8 @@ Panel B threshold on display: 1SD
 . }
 
 . 
-. * Outcome mean goes in the column header.
+. * The outcome mean goes in the column header, per the mockup and the
+. * project's table convention.
 . estimates use "$estimates/collisions_weather/`y'_pA_c1_W`wt'.ster"
 
 . if `share_scale' == 100 {
@@ -280,8 +283,8 @@ delimiter now ;
 >        p_A_c_2
 >        p_A_c_3
 >        p_A_c_4
->        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_A.te
-> x",
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_A.
+> tex",
 >        cells(b(fmt(3)) se(par fmt(3)))
 >        label style(tex)
 >        stats(r2
@@ -305,8 +308,8 @@ delimiter now ;
 >          \noalign{\smallskip}
 >        )
 >        replace;
-(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
-> sions_weather/table_collisions_weather_share_panel_A.tex)
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/col
+> lisions_weather/table_collisions_weather_share_panel_A.tex)
 
 . #delimit cr
 delimiter now cr
@@ -315,8 +318,8 @@ delimiter now cr
 . * 2c. Panel B -- warm-winter anomaly
 . *---------------------------------------------------------------
 . * One threshold only. The other was estimated as its own specification
-. * and lives in the .ster folder; it is not in this table, because 
-. * the two dummies overlap by construction.
+. * and lives in the .ster folder; it is not in this table, per the 9/8/26
+. * review, because the two dummies overlap by construction.
 . 
 . #delimit ;
 delimiter now ;
@@ -324,8 +327,8 @@ delimiter now ;
 >        p_B_c_2
 >        p_B_c_3
 >        p_B_c_4
->        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_B.te
-> x",
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_B.
+> tex",
 >        cells(b(fmt(3)) se(par fmt(3)))
 >        label style(tex)
 >        stats(r2
@@ -349,8 +352,8 @@ delimiter now ;
 >          \noalign{\smallskip}
 >        )
 >        replace;
-(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
-> sions_weather/table_collisions_weather_share_panel_B.tex)
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/col
+> lisions_weather/table_collisions_weather_share_panel_B.tex)
 
 . #delimit cr
 delimiter now cr
@@ -365,8 +368,8 @@ delimiter now ;
 >        p_C_c_2
 >        p_C_c_3
 >        p_C_c_4
->        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_C.te
-> x",
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_C.
+> tex",
 >        cells(b(fmt(3)) se(par fmt(3)))
 >        label style(tex)
 >        stats(r2
@@ -390,8 +393,8 @@ delimiter now ;
 >          \noalign{\smallskip}
 >        )
 >        replace;
-(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
-> sions_weather/table_collisions_weather_share_panel_C.tex)
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/col
+> lisions_weather/table_collisions_weather_share_panel_C.tex)
 
 . #delimit cr
 delimiter now cr
@@ -400,9 +403,9 @@ delimiter now cr
 . * 2e. Panel D -- winter severity index
 . *---------------------------------------------------------------
 . * The control X-block is appended to THIS panel's stats() only, so it
-. * prints once, at the foot of the table. One weather row that includes
-. * the monthly temperature controls and the precipitation
-. * quintiles since they always enter together.
+. * prints once, at the foot of the table. One weather row, per the
+. * 9/8/26 review -- the monthly temperature controls and the precipitation
+. * quintiles always enter together, so they never need separate rows.
 . 
 . #delimit ;
 delimiter now ;
@@ -410,8 +413,8 @@ delimiter now ;
 >        p_D_c_2
 >        p_D_c_3
 >        p_D_c_4
->        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_D.te
-> x",
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_D.
+> tex",
 >        cells(b(fmt(3)) se(par fmt(3)))
 >        label style(tex)
 >        stats(r2
@@ -439,8 +442,8 @@ delimiter now ;
 >          \noalign{\smallskip}
 >        )
 >        replace;
-(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
-> sions_weather/table_collisions_weather_share_panel_D.tex)
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/col
+> lisions_weather/table_collisions_weather_share_panel_D.tex)
 
 . #delimit cr
 delimiter now cr
@@ -450,16 +453,18 @@ delimiter now cr
 . *---------------------------------------------------------------
 . 
 . * New table file
-. local file_name = "$tables/collisions_weather/table_collisions_weather_`tag'.tex"
+. local file_name = "$tables/collisions_weather/table_collisions_weather_`tag'.tex
+> "
 
 . texdoc init "`file_name'", replace force
-(texdoc output file is /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/c
-> ollisions_weather/table_collisions_weather_share.tex)
+(texdoc output file is /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables
+> /collisions_weather/table_collisions_weather_share.tex)
 
 . 
 . tex \begin{table}[htpb]
 
-. tex \captionlistentry[table]{Animal-Related Collision Share and Winter Conditions}
+. tex \captionlistentry[table]{Animal-Related Collision Share and Winter Condition
+> s}
 
 . tex \label{table:collisions_weather_share}
 
@@ -481,7 +486,7 @@ delimiter now cr
 
 . tex \noalign{\smallskip}
 
-. tex & \multicolumn{4}{c}{`yhead' (\(\bar{Y}\) = `ybar')} \\
+. tex & \multicolumn{4}{c}{\makebox[0pt]{`yhead' (\(\bar{Y}\) = `ybar')}} \\
 
 . tex \cmidrule(l{5pt}r{5pt}){2-5}
 
@@ -489,29 +494,29 @@ delimiter now cr
 
 . tex \multicolumn{5}{l}{Panel A. Mean winter temperature, Dec--Feb} \\
 
-. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
-> ns_weather_`tag'_panel_A.tex}
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collis
+> ions_weather_`tag'_panel_A.tex}
 
 . tex \tabularnewline
 
 . tex \multicolumn{5}{l}{`b_head'} \\
 
-. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
-> ns_weather_`tag'_panel_B.tex}
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collis
+> ions_weather_`tag'_panel_B.tex}
 
 . tex \tabularnewline
 
 . tex \multicolumn{5}{l}{Panel C. Days below 0\(^{\circ}\)F, Dec--Apr} \\
 
-. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
-> ns_weather_`tag'_panel_C.tex}
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collis
+> ions_weather_`tag'_panel_C.tex}
 
 . tex \tabularnewline
 
 . tex \multicolumn{5}{l}{Panel D. Winter severity index, Dec--Apr} \\
 
-. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
-> ns_weather_`tag'_panel_D.tex}
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collis
+> ions_weather_`tag'_panel_D.tex}
 
 . tex \noalign{\smallskip}
 
@@ -531,44 +536,44 @@ delimiter now cr
 
 . tex \justify
 
-. tex Notes: Estimation results for Equation \eqref{eq:baseline}. The outcome is ani
-> mal-related
+. tex Notes: Estimation results for Equation \eqref{eq:baseline}. The outcome is a
+> nimal-related
 
-. tex collisions as a percentage of all-cause collisions at the county-year level; t
-> he numerator is
+. tex collisions as a percentage of all-cause collisions at the county-year level;
+>  the numerator is
 
-. tex `numnote' Panels differ in the measure of winter conditions and in the window 
-> it spans, as
+. tex `numnote' Panels differ in the measure of winter conditions and in the windo
+> w it spans, as
 
-. tex their headings state; columns differ only in the time-varying controls. Weathe
-> r controls are
+. tex their headings state; columns differ only in the time-varying controls. Weat
+> her controls are
 
-. tex the twelve monthly mean temperatures of year \(t\) and `ppt_note'; age shares 
-> are seventeen of
+. tex the twelve monthly mean temperatures of year \(t\) and `ppt_note'; age share
+> s are seventeen of
 
-. tex the eighteen five-year population age bands, with 0--4 omitted as the base cat
-> egory. All
+. tex the eighteen five-year population age bands, with 0--4 omitted as the base c
+> ategory. All
 
-. tex regressions include county and state-by-year fixed effects; standard errors, i
-> n parentheses,
+. tex regressions include county and state-by-year fixed effects; standard errors,
+>  in parentheses,
 
-. tex are clustered at the county level. Panel B reports the `b_show' threshold; the
->  `b_alt'
+. tex are clustered at the county level. Panel B reports the `b_show' threshold; t
+> he `b_alt'
 
-. tex threshold was estimated separately, since the two indicators overlap by constr
-> uction.
+. tex threshold was estimated separately, since the two indicators overlap by cons
+> truction.
 
-. tex Columns (2) and (4) control for January and February mean temperature, two of 
-> the three months
+. tex Columns (2) and (4) control for January and February mean temperature, two o
+> f the three months
 
-. tex that compose the Panel A regressor, so the Panel A coefficient there is identi
-> fied off December
+. tex that compose the Panel A regressor, so the Panel A coefficient there is iden
+> tified off December
 
-. tex variation alone and is not comparable to column (1). The collisions source is 
-> a county-year
+. tex variation alone and is not comparable to column (1). The collisions source i
+> s a county-year
 
-. tex panel covering 1985--2020; entry is unbalanced, as states begin reporting anim
-> al-involved
+. tex panel covering 1985--2020; entry is unbalanced, as states begin reporting an
+> imal-involved
 
 . tex collisions in different years.
 
@@ -581,13 +586,13 @@ delimiter now cr
 . 
 . * Close table file
 . texdoc close
-(texdoc output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/table
-> s/collisions_weather/table_collisions_weather_share.tex)
+(texdoc output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tab
+> les/collisions_weather/table_collisions_weather_share.tex)
 
 . 
 . di as result "Wrote `file_name'"
-Wrote /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_weather
-> /table_collisions_weather_share.tex
+Wrote /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_weath
+> er/table_collisions_weather_share.tex
 
 . 
 . *---------------------------------------------------------------
@@ -619,8 +624,8 @@ Wrote /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_wea
   7.     }
   8. 
 .     forvalues c = 1/4 {
-  9.         local ster = "$estimates/collisions_weather/`y'_p`psrc'_c`c'_W`wt'.ster
-> "
+  9.         local ster = "$estimates/collisions_weather/`y'_p`psrc'_c`c'_W`wt'.st
+> er"
  10.         capture confirm file "`ster'"
  11.         if _rc {
  12.             di as error "MISSING: `ster'"
@@ -659,8 +664,8 @@ delimiter now ;
 >        r_A_c_2
 >        r_A_c_3
 >        r_A_c_4
->        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_A.te
-> x",
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_A.
+> tex",
 >        cells(b(fmt(3)) se(par fmt(3)))
 >        label style(tex)
 >        stats(r2
@@ -684,8 +689,8 @@ delimiter now ;
 >          \noalign{\smallskip}
 >        )
 >        replace;
-(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
-> sions_weather/table_collisions_weather_rate_panel_A.tex)
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/col
+> lisions_weather/table_collisions_weather_rate_panel_A.tex)
 
 . #delimit cr
 delimiter now cr
@@ -700,8 +705,8 @@ delimiter now ;
 >        r_B_c_2
 >        r_B_c_3
 >        r_B_c_4
->        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_B.te
-> x",
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_B.
+> tex",
 >        cells(b(fmt(3)) se(par fmt(3)))
 >        label style(tex)
 >        stats(r2
@@ -725,8 +730,8 @@ delimiter now ;
 >          \noalign{\smallskip}
 >        )
 >        replace;
-(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
-> sions_weather/table_collisions_weather_rate_panel_B.tex)
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/col
+> lisions_weather/table_collisions_weather_rate_panel_B.tex)
 
 . #delimit cr
 delimiter now cr
@@ -741,8 +746,8 @@ delimiter now ;
 >        r_C_c_2
 >        r_C_c_3
 >        r_C_c_4
->        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_C.te
-> x",
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_C.
+> tex",
 >        cells(b(fmt(3)) se(par fmt(3)))
 >        label style(tex)
 >        stats(r2
@@ -766,8 +771,8 @@ delimiter now ;
 >          \noalign{\smallskip}
 >        )
 >        replace;
-(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
-> sions_weather/table_collisions_weather_rate_panel_C.tex)
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/col
+> lisions_weather/table_collisions_weather_rate_panel_C.tex)
 
 . #delimit cr
 delimiter now cr
@@ -782,8 +787,8 @@ delimiter now ;
 >        r_D_c_2
 >        r_D_c_3
 >        r_D_c_4
->        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_D.te
-> x",
+>        using "$tables/collisions_weather/table_collisions_weather_`tag'_panel_D.
+> tex",
 >        cells(b(fmt(3)) se(par fmt(3)))
 >        label style(tex)
 >        stats(r2
@@ -811,8 +816,8 @@ delimiter now ;
 >          \noalign{\smallskip}
 >        )
 >        replace;
-(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/colli
-> sions_weather/table_collisions_weather_rate_panel_D.tex)
+(output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/col
+> lisions_weather/table_collisions_weather_rate_panel_D.tex)
 
 . #delimit cr
 delimiter now cr
@@ -822,16 +827,18 @@ delimiter now cr
 . *---------------------------------------------------------------
 . 
 . * New table file
-. local file_name = "$tables/collisions_weather/table_collisions_weather_`tag'.tex"
+. local file_name = "$tables/collisions_weather/table_collisions_weather_`tag'.tex
+> "
 
 . texdoc init "`file_name'", replace force
-(texdoc output file is /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/c
-> ollisions_weather/table_collisions_weather_rate.tex)
+(texdoc output file is /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables
+> /collisions_weather/table_collisions_weather_rate.tex)
 
 . 
 . tex \begin{table}[htpb]
 
-. tex \captionlistentry[table]{Animal-Related Collision Rate and Winter Conditions}
+. tex \captionlistentry[table]{Animal-Related Collision Rate and Winter Conditions
+> }
 
 . tex \label{table:collisions_weather_rate}
 
@@ -853,8 +860,8 @@ delimiter now cr
 
 . tex \noalign{\smallskip}
 
-. tex & \multicolumn{4}{c}{Animal collisions per 100,000 residents (\(\bar{Y}\) = `y
-> bar')} \\
+. tex & \multicolumn{4}{c}{\makebox[0pt]{Animal collisions per 100,000 residents (
+> \(\bar{Y}\) = `ybar')}} \\
 
 . tex \cmidrule(l{5pt}r{5pt}){2-5}
 
@@ -862,29 +869,29 @@ delimiter now cr
 
 . tex \multicolumn{5}{l}{Panel A. Mean winter temperature, Dec--Feb} \\
 
-. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
-> ns_weather_`tag'_panel_A.tex}
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collis
+> ions_weather_`tag'_panel_A.tex}
 
 . tex \tabularnewline
 
 . tex \multicolumn{5}{l}{`b_head'} \\
 
-. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
-> ns_weather_`tag'_panel_B.tex}
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collis
+> ions_weather_`tag'_panel_B.tex}
 
 . tex \tabularnewline
 
 . tex \multicolumn{5}{l}{Panel C. Days below 0\(^{\circ}\)F, Dec--Apr} \\
 
-. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
-> ns_weather_`tag'_panel_C.tex}
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collis
+> ions_weather_`tag'_panel_C.tex}
 
 . tex \tabularnewline
 
 . tex \multicolumn{5}{l}{Panel D. Winter severity index, Dec--Apr} \\
 
-. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collisio
-> ns_weather_`tag'_panel_D.tex}
+. tex \ExpandableInput{exhibits_main_text/\tabPath/collisions_weather/table_collis
+> ions_weather_`tag'_panel_D.tex}
 
 . tex \noalign{\smallskip}
 
@@ -904,21 +911,22 @@ delimiter now cr
 
 . tex \justify
 
-. tex Notes: Estimation results for Equation \eqref{eq:baseline}. The outcome is ani
-> mal-related
+. tex Notes: Estimation results for Equation \eqref{eq:baseline}. The outcome is a
+> nimal-related
 
-. tex collisions per 100,000 residents at the county-year level, and all regressions
->  are weighted by
+. tex collisions per 100,000 residents at the county-year level, and all regressio
+> ns are weighted by
 
 . tex county population. This table is a robustness counterpart to Table
 
-. tex \ref{table:collisions_weather_share}, not an independent result. The numerator
-> , panel and
+. tex \ref{table:collisions_weather_share}, not an independent result. The numerat
+> or, panel and
 
-. tex column structure, control definitions, fixed effects, clustering, the anomaly 
-> threshold on
+. tex column structure, control definitions, fixed effects, clustering, the anomal
+> y threshold on
 
-. tex display, the column (2) and (4) caveat, and the sample window are as in Table
+. tex display, the column (2) and (4) caveat, and the sample window are as in Tabl
+> e
 
 . tex \ref{table:collisions_weather_share}.
 
@@ -931,13 +939,13 @@ delimiter now cr
 . 
 . * Close table file
 . texdoc close
-(texdoc output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/table
-> s/collisions_weather/table_collisions_weather_rate.tex)
+(texdoc output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tab
+> les/collisions_weather/table_collisions_weather_rate.tex)
 
 . 
 . di as result "Wrote `file_name'"
-Wrote /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_weather
-> /table_collisions_weather_rate.tex
+Wrote /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_weath
+> er/table_collisions_weather_rate.tex
 
 . 
 . *---------------------------------------------------------------
@@ -951,12 +959,12 @@ Wrote /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_wea
 . *   table_collisions_weather_rate.tex         <- and this one
 . *   table_collisions_weather_rate_panel_A-D.tex
 . * Then reference the two wrappers from the Results section with \input,
-. * naming the wrapper, not the panels.
+. * naming the wrapper, not the panels (settled 9/8/26).
 . 
 . di as result _newline "Upload $tables/collisions_weather/*.tex to Overleaf;"
 
-Upload /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_weathe
-> r/*.tex to Overleaf;
+Upload /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/collisions_weat
+> her/*.tex to Overleaf;
 
 . di as result "input the two wrapper files from the Results section."
 input the two wrapper files from the Results section.
@@ -965,8 +973,8 @@ input the two wrapper files from the Results section.
 . * Wrap Up
 . log close
       name:  <unnamed>
-       log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/estimate
-> s_tables_collisions_weather.log
+       log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/logs/e
+> stimates_tables_collisions_weather.log
   log type:  text
- closed on:  10 Sep 2026, 19:06:59
-------------------------------------------------------------------------------------
+ closed on:  18 Sep 2026, 16:14:50
+----------------------------------------------------------------------------------

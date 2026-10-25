@@ -3,7 +3,7 @@
        log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/logs
 > /regression_harvest_zscore.log
   log type:  text
- opened on:  14 Sep 2026, 19:07:44
+ opened on:  17 Sep 2026, 21:44:12
 
 . 
 . cap mkdir "$tables"
@@ -11,10 +11,20 @@
 . cap mkdir "$tables/wildlife_weather"
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. * ---- fail early if a dependency is missing ---------------------------------
+. * reghdfe needs BOTH ftools and require -- require is a small dependency-
+. * checking utility reghdfe calls on startup, and nothing names it until
+. * reghdfe refuses to run, so it is easy to miss. estout supplies esttab,
+. * eststo and estadd. findfile on the individual ado-files: it names the exact
+. * file it could not locate, and on failure adopath below shows where Stata
+. * actually looked, to separate "not installed" from "installed into a director
+> y
+. * this session does not search." All from SSC:
+. *     ssc install require, replace
+. *     ssc install ftools, replace
+. *     ssc install reghdfe, replace
+. *     ssc install estout, replace
+. *     mata: mata mlib index
 . local _pkgmissing 0
 
 . foreach ado in require.ado ftools.ado reghdfe.ado esttab.ado eststo.ado ///
@@ -49,10 +59,8 @@ end of do-file
   require / ftools / reghdfe / estout all present
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. * ---- fail early if the input panel is not where we expect ------------------
+> -
 . capture confirm file "$dataSTATA/main_data_county_year.dta"
 
 . if _rc {
@@ -67,10 +75,29 @@ end of do-file
   input panel located
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. *=============================================================================
+> =
+. * SECTION 1: LOAD, VERIFY KEY, BUILD IDS AND SAMPLE MACROS
+. *=============================================================================
+> =
+. 
+. /*------------------------------------------------------------------------
+> 
+> THE KEY IS UNIQUE BUT NOT COMPLETE, SO PLAIN isid REFUSES.
+> 
+>    17 rows carry a BLANK geoid -- also blank state_fips, county_fips and
+>    state_name -- with county_name "st louis", state_letter_code "MN", one row
+>    per year 2004 through 2020. They are collision-file records that never
+>    matched a FIPS: merge_collisions == 2 (using-only) against
+>    merge_wildlife == 1. Every non-missing value on them comes from the
+>    collision block; harvest, weather and population are all missing.
+> 
+>    They are St. Louis County, Minnesota (27137), whose crash record failed to
+>    match on "st louis" vs "St. Louis". That is a hole in the collision panel
+>    worth fixing upstream, but it touches nothing here.
+> 
+> ------------------------------------------------------------------------*/
+. 
 . use "$dataSTATA/main_data_county_year.dta", clear
 (County-year main data file: PRISM weather + ERA5 snow (wide by month), winter s
 > e)
@@ -147,10 +174,43 @@ end of do-file
 > orking variable"
 
 . 
-end of do-file
+. * -- state is BLANK on the collision-only rows (108,657 of 151,128 on the
+. *    09/17/2026 vintage: it is populated only on the 42,471 wildlife-panel
+. *    rows), so state_id is missing there. That is harmless only because none
+. *    of those rows can enter a regression -- reghdfe drops a row with a
+. *    missing absorb variable silently, so if one ever did carry harvest it
+. *    would disappear from the table without a word. Asserted, not assumed.
+. assert !missing(state_id) if !missing(harvest_total)
 
-. do "/tmp/SD1954717.000000"
+. assert !missing(county_id)
 
+. 
+. * -- state and state_letter_code agree wherever both are populated (19,809
+. *    rows). state is the one absorb() uses; this stops them drifting apart
+. *    unnoticed and the table absorbing a different thing than the log reports.
+. quietly count if trim(state) != "" & trim(state_letter_code) != "" ///
+>     & trim(state) != trim(state_letter_code)
+
+. assert r(N) == 0
+
+. 
+. *--------------------------------- 1a. SAMPLE --------------------------------
+> -
+. 
+. /*------------------------------------------------------------------------
+> 
+> See decisions 2 and 3. Two samples, both unbalanced:
+> 
+>   $SFULL     every county-year from 1981 on -- 19 states
+>   
+>   $SAGENCY   the same, restricted to agency-direct harvest -- 14 states
+> 
+> Nothing is dropped from memory: the restriction rides on the regressions
+> as an -if- so the QC in Section 6 can still see what was excluded.
+> main_sample and main_sample_agency are deliberately NOT used.
+> 
+> ------------------------------------------------------------------------*/
+. 
 . capture drop agency_direct
 
 . generate byte agency_direct = (trim(source_harvest) == "agency")
@@ -170,10 +230,34 @@ end of do-file
 . assert r(N) == 0
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. *=============================================================================
+> =
+. * SECTION 2: OUTCOME
+. *=============================================================================
+> =
+. 
+. /*------------------------------------------------------------------------
+> 
+> Decision 13: the within-county z-score of harvest, with the county's own
+> 1981+ mean and SD as the moments, computed on every year the county
+> reports a harvest and broadcast to all of its rows.
+> 
+> The moments are built from harvest_total -- the source-reported total from
+> the national append -- NOT from harvest_total_cwd_imputed, which is parked
+> upstream and must stay out of any estimate.
+> 
+> Decision 1: the reported zeros are kept. A harvest of 0 has a perfectly
+> good z-score; it is only the counties with NO variation that drop.
+> 
+> ------------------------------------------------------------------------*/
+. 
+. *--------------------------------- 2a. MOMENTS -------------------------------
+> -
+. 
+. * _hbase carries harvest_total only on the rows the moments are allowed to
+. * see. egen ignores missing, so the three statistics below are taken over
+. * exactly those rows and broadcast to every row of the county -- which is
+. * what makes the outcome one variable with one definition (decision 13).
 . capture drop _hbase
 
 . generate double _hbase = harvest_total if $SFULL & !missing(harvest_total)
@@ -200,10 +284,13 @@ end of do-file
 . label variable h_nyr_c  "Years of reported harvest the moments rest on"
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. * A minimum-years rule for the moments would go here -- one line, see
+. * decision 14. Nothing is imposed on the table as written:
+. *     replace h_sd_c = . if h_nyr_c < 5
+. 
+. *--------------------------------- 2b. THE OUTCOME ---------------------------
+> -
+. 
 . capture drop harvest_z
 
 . generate double harvest_z = (harvest_total - h_mean_c) / h_sd_c ///
@@ -214,10 +301,11 @@ end of do-file
 > + years"
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. * In Stata a missing h_sd_c satisfies "h_sd_c > 0", so without it every 
+. * single-observation county would produce a missing z-score through a path tha
+> t 
+. * reads like success.
+. 
 . * The z-score exists wherever the harvest and a usable SD do, and nowhere else
 > .
 . assert !missing(harvest_z) if $SFULL & !missing(harvest_total) & ///
@@ -228,10 +316,9 @@ end of do-file
 . assert missing(harvest_z) if missing(harvest_total)
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. * Structural: by construction the outcome is mean 0, SD 1 WITHIN each county
+. * over the rows the moments were taken on. If that ever fails, the moments
+. * and the outcome have stopped describing the same set of rows.
 . capture drop _zm _zs
 
 . bysort county_id: egen double _zm = mean(harvest_z)
@@ -247,59 +334,14 @@ end of do-file
 . drop _zm _zs
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
-. capture drop _tg
-
-. quietly egen byte _tg = tag(county_id) if $SFULL & !missing(harvest_total)
-
-. quietly count if _tg == 1 & h_sd_c == 0
-
-. local _nflat = r(N)
-
-. display as text _newline "  counties with zero harvest variation (no z-score):
->  `_nflat'"
-
-  counties with zero harvest variation (no z-score): 1
-
-. if `_nflat' > 0 {
-.     list state geoid county_name h_nyr_c h_mean_c if _tg == 1 & h_sd_c == 0, /
-> //
->         sep(0) noobs
-
-  +----------------------------------------------------+
-  | state   geoid     county_name   h_nyr_c   h_mean_c |
-  |----------------------------------------------------|
-  |    CA   06075   San Francisco        29          0 |
-  +----------------------------------------------------+
-. }
-
-. quietly count if _tg == 1 & h_nyr_c == 1
-
-. local _n1yr = r(N)
-
-. display as text "  counties with a single reported year (no SD): `_n1yr'"
-  counties with a single reported year (no SD): 0
-
-. drop _tg
-
+. *--------------------------------- 2c. WHO HAS NO SD -------------------------
+> -
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
-. if `_nflat' != 1 | `_n1yr' != 0 {
-=1 invalid name
-r(198);
-
-end of do-file
-
-r(198);
-
-. do "/tmp/SD1954717.000000"
-
+. * Decision 13. Counties with zero within-county variation have no z-score and
+. * leave the table. Named rather than counted: this is the one place this
+. * table's sample differs from Table 2's, and the reader should be able to see
+. * whose rows went.
+. 
 . capture drop _tg
 
 . quietly egen byte _tg = tag(county_id) if $SFULL & !missing(harvest_total)
@@ -338,6 +380,9 @@ r(198);
 . * On the current vintage the only flat county is San Francisco (06075),
 . * zero harvest in all 29 years it reports, and there are no
 . * single-year counties.
+. * On the current vintage the only flat county is San Francisco (06075),
+. * zero harvest in all 29 years it reports, and there are no
+. * single-year counties.
 . if `_nflat' != 1 | `_n1yr' != 0 {
 .     display as error "  NOTE: expected exactly 1 zero-variance county and 0" /
 > //
@@ -347,10 +392,46 @@ r(198);
 . }
 
 . 
-end of do-file
+. * And the other end of decision 14: how thin are the moments for the counties
+. * that DO get a z-score? Reported here, where they are built, as well as in 6g
+> ,
+. * where the estimates that rest on them are tested. A county whose moments com
+> e
+. * from two years has a z-score of exactly +/- 1/sqrt(2) on both rows whatever
+. * its harvest is -- the SD divides the magnitude straight back out.
+. capture drop _tgm
 
-. do "/tmp/SD1954717.000000"
+. quietly egen byte _tgm = tag(county_id) if $SFULL & !missing(harvest_total) & 
+> h_sd_c > 0 ///
+>     & !missing(h_sd_c)
 
+. display as text _newline "  years the moments rest on, counties with a z-score
+> :"
+
+  years the moments rest on, counties with a z-score:
+
+. foreach k in 2 3 5 10 {
+  2.     quietly count if _tgm == 1 & h_nyr_c == `k'
+  3.     local _ek = r(N)
+  4.     quietly count if _tgm == 1 & h_nyr_c < `k'
+  5.     display as text "    exactly `k' years: " %5.0f `_ek' "   fewer than `k
+> ': " %5.0f r(N)
+  6. }
+    exactly 2 years:   170   fewer than 2:     0
+    exactly 3 years:    67   fewer than 3:   170
+    exactly 5 years:     0   fewer than 5:   237
+    exactly 10 years:     5   fewer than 10:   398
+
+. drop _tgm
+
+. 
+. *--------------------------------- 2d. THE ZEROS -----------------------------
+> -
+. 
+. * Decision 1. Reported zeros are retained, as in Table 2. Counted and named by
+. * state because they are the only thing separating this table's sample from
+. * Table 1's, exactly as they are for Table 2.
+. 
 . quietly count if $SFULL & harvest_total == 0
 
 . local _nzero = r(N)
@@ -410,10 +491,22 @@ end of do-file
 . global YLAB "within-county harvest z-score"
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. *=============================================================================
+> =
+. * SECTION 3: CONTROL SETS
+. *=============================================================================
+> =
+. 
+. /*------------------------------------------------------------------------
+> 
+> Two control globals, built by loop so the log records exactly what went
+> into the regression and a change to the month range is a one-line edit.
+> See decision 5 (weather) and decision 6 (age shares).
+> 
+> ------------------------------------------------------------------------*/
+. 
+. *--------------------------------- 3a. ---------------------------------------
+. 
 . global pptmode "days"          // "days" | "total" | "both"
 
 . assert inlist("$pptmode", "days", "total", "both")
@@ -433,12 +526,22 @@ end of do-file
   6.     if inlist("$pptmode", "total", "both") {
   7.         global wctrl "$wctrl ppt_total_m`m'"
   8.     }
-  9.     * A snowfall month is included only if it actually varies on THIS sampl
-> e.
+  9.     * A snowfall month is included only if it actually varies on $SFULL.
 .     * On the old 2005-2014 window July and August were identically zero and
-.     * were excluded by name; on the full 1981+ panel they are not. Testing
-.     * rather than hard-coding means the control set follows the sample instead
-.     * of a fact that is no longer true.
+.     * were excluded by name; on the full 1981+ panel they are not (on $SFULL
+.     * July reaches 19.3mm and August 41.2mm; on the estimation sample, 7.4mm
+.     * and 0.18mm -- high-elevation county-years the narrow window never
+.     * contained). Testing rather than hard-coding means the control set
+.     * follows the sample instead of a fact that is no longer true.
+.     *
+.     * $SFULL and not the estimation sample, deliberately: the control list
+.     * must not depend on which panel or which column is running, or the
+.     * columns stop being nested and Section 6a has nothing left to check.
+.     *
+.     * The r(N) > 0 in front of r(max) > 0 is doing real work, not padding:
+.     * if the month were entirely missing, r(max) would be missing, and
+.     * missing > 0 is TRUE in Stata, so the month would be included on the
+.     * strength of having no data at all. Order matters here.
 .     quietly summarize total_snowfall_mm_m`m' if $SFULL
  10.     if r(N) > 0 & r(max) > 0 {
  11.         global wctrl "$wctrl total_snowfall_mm_m`m'"
@@ -473,10 +576,8 @@ end of do-file
 . assert `_nw' == `_nwexp'
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. *--------------------------------- 3b. ---------------------------------------
+. 
 . global agectrl ""
 
 . foreach a in 5_9 10_14 15_19 20_24 25_29 30_34 35_39 40_44 45_49 50_54 ///
@@ -503,10 +604,23 @@ end of do-file
 . drop _agesum
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. *=============================================================================
+> =
+. * SECTION 4: PANEL DEFINITIONS, TABLE SCAFFOLDING, HELPER PROGRAM
+. *=============================================================================
+> =
+. 
+. /*------------------------------------------------------------------------
+> 
+> GLOBALS, not locals: these are set here but consumed in Section 5, and locals
+> do not survive a separate execution. Running the file end to end and running
+> it section by section in the do-editor have to give the same answer.
+> 
+> Labels are the SHORT name only (decision 5). The definitions that used
+> to sit in parentheses after each name now are in the Overleaf notes.
+> 
+> ------------------------------------------------------------------------*/
+. 
 . global pvarA "mean_winter_temp"
 
 . global pvarB "warm_winter_1sd"
@@ -552,10 +666,13 @@ end of do-file
 . global NSPAN = $NCOL + 1
 
 . 
-. * ---- helper: the two scalars esttab cannot get from e() on its own ---------
+. * ---- helper: the three scalars esttab cannot get from e() on its own -------
 . * n_clust comes straight from e(N_clust); n_county has to be counted off
-. * e(sample). Called immediately after each reghdfe, before eststo stores the
-. * estimates, so the added scalars travel with them.
+. * e(sample); n_sing is what reghdfe dropped as singleton groups before it
+. * estimated anything (decision 16), which is the one number that can move the
+. * sample without any variable going missing. Called immediately after each
+. * reghdfe, before eststo stores the estimates, so the added scalars travel
+. * with them and Section 6 can read them back per panel and per column.
 . capture program drop addcounts
 
 . program define addcounts
@@ -564,13 +681,40 @@ end of do-file
   3.     quietly count if `tag' == 1
   4.     estadd scalar n_county = r(N)
   5.     estadd scalar n_clust  = e(N_clust)
-  6. end
+  6.     * cond() because not every reghdfe vintage sets e(num_singletons); a
+.     * missing value here would take the Section 6a comparison down with it.
+.     estadd scalar n_sing = cond(missing(e(num_singletons)), 0, e(num_singleton
+> s))
+  7. end
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. *=============================================================================
+> =
+. * SECTION 5: ESTIMATION AND EXPORT
+. *=============================================================================
+> =
+. 
+. /*------------------------------------------------------------------------
+> 
+> 20 regressions: 4 panels x 5 columns. The five columns are written out
+> explicitly rather than looped, because each carries a different set of
+> estadd locals (the control checkmarks the table prints).
+> 
+> LAYOUT (decision 7, and Eyal 09/11):
+> 
+>    Panel A's prehead writes the provenance comments, the column-number
+>    row and Panel A's own title. Panels B-D append their titles and rows.
+>    AFTER Panel D, a separate block writes the specification rows --
+>    sample, counties, observations, clusters, fixed effects, controls --
+>    at the BOTTOM of the table, once.
+> 
+>    That block reads its scalars off the estimates left in memory by
+>    run_panel D. Every one of those scalars is identical across panels
+>    (all four rest on the same estimation sample -- asserted in Section
+>    6), so which panel it comes from does not matter.
+> 
+> ------------------------------------------------------------------------*/
+. 
 . capture program drop run_panel
 
 . program define run_panel
@@ -692,7 +836,26 @@ end of do-file
 >                      "# of clusters" "# of counties" "# of obs")) ///
 >         starlevels(* 0.10 ** 0.05 *** 0.01) ///
 >         mtitles("(1)" "(2)" "(3)" "(4)" "(5)") nonumbers collabels(none)
- 59. end
+ 59. 
+.     *--- what each column actually estimated on ------------------------------
+> --
+.     * Read back off the stored estimates, not recomputed: e(N) is the sample
+.     * AFTER reghdfe dropped singleton groups, which no -missing()- count can
+.     * reproduce (decision 16). Section 6a compares these across panels.
+.     forvalues j = 1/$NCOL {
+ 60.         quietly estimates restore c`j'
+ 61.         scalar eN_`P'`j' = e(N)
+ 62.         scalar eK_`P'`j' = e(N_clust)
+ 63.         scalar eC_`P'`j' = e(n_county)
+ 64.         scalar eS_`P'`j' = e(n_sing)
+ 65.     }
+ 66. end
+
+. 
+. * Cleared first so that running this file a section at a time in the do-editor
+. * cannot leave a stale scalar from an earlier run for Section 6a to compare
+. * against and quietly pass.
+. capture scalar drop eN_* eK_* eC_* eS_*
 
 . 
 . run_panel A
@@ -706,6 +869,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1577
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -727,6 +893,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1577
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -749,6 +918,9 @@ added scalar:
 added scalar:
             e(n_clust) =  1577
 
+added scalar:
+             e(n_sing) =  0
+
 added macro:
           e(fe_county) : "X"
 
@@ -769,6 +941,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1577
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -791,6 +966,9 @@ added scalar:
 added scalar:
             e(n_clust) =  1082
 
+added scalar:
+             e(n_sing) =  0
+
 added macro:
           e(fe_county) : "X"
 
@@ -805,12 +983,8 @@ added macro:
 
 added macro:
                e(samp) : "Agency-direct"
-(note: file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/wildlife
-> _weather/regression_harvest_zscore.tex not found)
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
 > ildlife_weather/regression_harvest_zscore.tex)
-(note: file /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/wildlife
-> _weather/regression_harvest_zscore.csv not found)
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
 > ildlife_weather/regression_harvest_zscore.csv)
 
@@ -851,6 +1025,9 @@ added scalar:
 added scalar:
             e(n_clust) =  1577
 
+added scalar:
+             e(n_sing) =  0
+
 added macro:
           e(fe_county) : "X"
 
@@ -871,6 +1048,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1577
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -893,6 +1073,9 @@ added scalar:
 added scalar:
             e(n_clust) =  1577
 
+added scalar:
+             e(n_sing) =  0
+
 added macro:
           e(fe_county) : "X"
 
@@ -913,6 +1096,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1577
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -934,6 +1120,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1082
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -991,6 +1180,9 @@ added scalar:
 added scalar:
             e(n_clust) =  1577
 
+added scalar:
+             e(n_sing) =  0
+
 added macro:
           e(fe_county) : "X"
 
@@ -1011,6 +1203,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1577
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -1033,6 +1228,9 @@ added scalar:
 added scalar:
             e(n_clust) =  1577
 
+added scalar:
+             e(n_sing) =  0
+
 added macro:
           e(fe_county) : "X"
 
@@ -1053,6 +1251,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1577
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -1074,6 +1275,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1082
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -1131,6 +1335,9 @@ added scalar:
 added scalar:
             e(n_clust) =  1577
 
+added scalar:
+             e(n_sing) =  0
+
 added macro:
           e(fe_county) : "X"
 
@@ -1151,6 +1358,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1577
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -1173,6 +1383,9 @@ added scalar:
 added scalar:
             e(n_clust) =  1577
 
+added scalar:
+             e(n_sing) =  0
+
 added macro:
           e(fe_county) : "X"
 
@@ -1193,6 +1406,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1577
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -1214,6 +1430,9 @@ added scalar:
 
 added scalar:
             e(n_clust) =  1082
+
+added scalar:
+             e(n_sing) =  0
 
 added macro:
           e(fe_county) : "X"
@@ -1260,10 +1479,15 @@ R-squ.. FE)         0.502           0.503           0.505           0.507
 > ------------
 
 . 
-end of do-file
-
-. do "/tmp/SD1954717.000000"
-
+. *--------------------------------- 5a. ---------------------------------------
+. * THE SPECIFICATION BLOCK, AT THE BOTTOM, ONCE.
+. *
+. * Reads the estimates left in memory by run_panel D. Every scalar below is
+. * identical across the four panels (Section 6 asserts it), so the panel it
+. * comes from is immaterial.
+. *
+. * This is also the last thing written to the fragment, so it has the
+. * "% end of fragment" line -- see decision 12.
 . 
 . esttab c1 c2 c3 c4 c5 using "$tables/wildlife_weather/regression_harvest_zscor
 > e.tex", ///
@@ -1273,7 +1497,6 @@ end of do-file
 >           labels("Sample" "\# of counties" "\# of observations" ///
 >                  "\# of clusters" "County FE" "State x year FE" ///
 >                  "Weather controls" "Age shares")) ///
->     prehead("\midrule") ///
 >     postfoot("% end of fragment")
 (output written to /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/tables/w
 > ildlife_weather/regression_harvest_zscore.tex)
@@ -1292,38 +1515,145 @@ end of do-file
 > ildlife_weather/regression_harvest_zscore.csv)
 
 . 
-end of do-file
+. *=============================================================================
+> =
+. * SECTION 6: QC
+. *=============================================================================
+> =
+. 
+. /*------------------------------------------------------------------------
+> 
+> Five things this table shares with the other two:
+> 
+>   (a) the four panels rest on the same estimation sample, column by column
+>       -- asserted off e(), because if they ever diverge the panels stop
+>       being comparable down a column AND the specification block at the
+>       bottom, which is Panel D's, is silently wrong for A, B and C;
+>       
+>   (b) the estimation samples are the sizes this vintage should give --
+>       a NOTE, not an assert, since these depend on the panel vintage;
+>       
+>   (c) 1981 really does contribute nothing (decision 2);
+>   
+>   (d) how unbalanced the panel actually is, since that is now a feature
+>       of the design rather than something ruled out;
+>       
+>   (h) where the sample sits in time and in provenance (decision 15).
+> 
+> and three it does not:
+> 
+>   (b) also ties the sample to BOTH other tables -- Table 2's less the
+>       zero-variance counties, Table 1's plus the retained zeros;
+>       
+>   (f) the rescaling identity behind decision 14, asserted rather than
+>       asserted-in-a-comment: the z-score regression and the harvest/SD
+>       regression are the same regression;
+>       
+>   (g) what the county weights look like, and whether the estimates
+>       survive restricting them.
+> 
+> ------------------------------------------------------------------------*/
+. 
+. *--------------------------------- 6a. ---------------------------------------
+. 
+. /*------------------------------------------------------------------------
+> 
+> Read off e(), not off a -missing()- proxy.
+> 
+> This check used to count rows on
+> 
+>     !missing($Y, `v', population, pop_share_5_9, mean_temp_c_m3)
+> 
+> -- three of the 44 right-hand-side variables, plus population, which is
+> not a regressor in any column. It could not see the other 24 weather
+> controls or the other 16 age shares, it never looked at column 5, and it
+> could not see singleton dropping (decision 16) under any circumstances,
+> because reghdfe drops those groups AFTER the missing-value test.
+> 
+> It also could not see the thing that is specific to THIS table. A county
+> with no within-county variation has no z-score at all (decision 13), so
+> the sample can move because the OUTCOME changed, with every right-hand-
+> side variable still present on every row. Reading e() catches both at
+> once, which no count over regressors can.
+> 
+> The scalars below come off the 20 regressions that were actually run, so
+> the check now tests the thing it claims to test, in all five columns, on
+> observations, clusters and counties at once.
+> 
+> ------------------------------------------------------------------------*/
+. 
+. display as text _newline "  estimation sample by column, all four panels (e(N)
+> ):"
 
-. do "/tmp/SD1954717.000000"
+  estimation sample by column, all four panels (e(N)):
 
-. display as text _newline "  estimation-sample size by winter measure (col 4 sp
-> ec):"
+. display as text "    col           A          B          C          D   single
+> tons"
+    col           A          B          C          D   singletons
 
-  estimation-sample size by winter measure (col 4 spec):
+. local _sampbad 0
 
-. local _prev = -1
+. forvalues j = 1/$NCOL {
+  2.     display as text "    `j'   " _continue
+  3.     foreach P in A B C D {
+  4.         display as text %10.0fc scalar(eN_`P'`j') _continue
+  5.     }
+  6.     display as text "   " %8.0fc scalar(eS_A`j')
+  7.     foreach P in B C D {
+  8.         if scalar(eN_`P'`j') != scalar(eN_A`j') ///
+>          | scalar(eK_`P'`j') != scalar(eK_A`j') ///
+>          | scalar(eC_`P'`j') != scalar(eC_A`j') {
+  9.             display as error "    column `j': panel `P' is not on panel A's
+>  sample"
+ 10.             local _sampbad = 1
+ 11.         }
+ 12.     }
+ 13. }
+    1       30,342    30,342    30,342    30,342          0
+    2       30,342    30,342    30,342    30,342          0
+    3       30,342    30,342    30,342    30,342          0
+    4       30,342    30,342    30,342    30,342          0
+    5       26,867    26,867    26,867    26,867          0
 
-. foreach v in mean_winter_temp warm_winter_1sd wsi_cold_days winter_severity_in
-> dex {
-  2.     quietly count if $SFULL & !missing($Y, `v', population, pop_share_5_9, 
-> mean_temp_c_m3)
-  3.     local _thisn = r(N)
-  4.     display as text "    " %-24s "`v'" %9.0fc `_thisn'
-  5.     if `_prev' != -1 {
-  6.         assert `_thisn' == `_prev'
-  7.     }
-  8.     local _prev = `_thisn'
-  9. }
-    mean_winter_temp           30,342
-    warm_winter_1sd            30,342
-    wsi_cold_days              30,342
-    winter_severity_index      30,342
+. if `_sampbad' {
+.     display as error ""
+.     display as error "  The four panels no longer share an estimation sample."
+.     display as error "  Two things break at once: the coefficients stop being"
+.     display as error "  comparable down a column, and the specification block 
+> at"
+.     display as error "  the bottom of the table -- which is Panel D's -- becom
+> es"
+.     display as error "  wrong for the panels above it. Find which winter measu
+> re"
+.     display as error "  went missing where before using this table."
+. }
 
-. display as text "  all four panels rest on the same estimation sample"
-  all four panels rest on the same estimation sample
+. assert `_sampbad' == 0
+
+. display as text "  all four panels rest on the same estimation sample, column 
+> by column"
+  all four panels rest on the same estimation sample, column by column
 
 . 
 . *--------------------------------- 6b. ---------------------------------------
+. 
+. /*------------------------------------------------------------------------
+> 
+> Two different numbers, and the gap between them is the thing to watch:
+> 
+>     _nf / _cf    county-years and counties with complete data -- what the
+>                  sample would be if reghdfe kept every group;
+>                  
+>     e(N)         what it actually estimated on, after singleton dropping.
+> 
+> [VERIFIED 09/17] They agree on this vintage: refitting the whole table
+> independently lands on 30,342 and 26,867, the same numbers the counts
+> below produce. If they ever come apart, the gap is reghdfe dropping groups
+> (decision 16) and not a hole in the data -- the table is still right,
+> because it reports e(N), but the expected numbers below have stopped
+> meaning what they say.
+> 
+> ------------------------------------------------------------------------*/
 . 
 . quietly {
 
@@ -1395,7 +1725,10 @@ end of do-file
 
 . 
 . * --- tie to Table 1: this sample is Table 1's plus the retained zeros.
-. quietly count if $SFULL & harvest_total > 0 & ///
+. * !missing(harvest_total) is explicit rather than implied: harvest_total > 0
+. * is TRUE on a missing value in Stata, and the !missing() list that follows
+. * is the only reason this count is right today.
+. quietly count if $SFULL & harvest_total > 0 & !missing(harvest_total) & ///
 >     !missing($Y, mean_winter_temp, population, pop_share_5_9, mean_temp_c_m3)
 
 . local _nnozero = r(N)
@@ -1413,6 +1746,37 @@ end of do-file
 >         " regression_log_harvest.do; got `_nnozero'. The tables have diverged"
 >  ///
 >         " for some reason other than the zeros and the missing SDs."
+. }
+
+. 
+. * --- and what the table actually printed, against what the data supports.
+. * Both tie-outs above are hand counts. Neither can see reghdfe dropping a
+. * singleton group, which would leave them passing and the table smaller.
+. display as text _newline "  complete-data rows vs rows estimated (Panel D):"
+
+  complete-data rows vs rows estimated (Panel D):
+
+. display as text "    cols 1-4: " %9.0fc `_nf'  " complete | " %9.0fc scalar(eN
+> _D1) " estimated"
+    cols 1-4:    30,342 complete |    30,342 estimated
+
+. display as text "    col 5:    " %9.0fc `_na2' " complete | " %9.0fc scalar(eN
+> _D5) " estimated"
+    col 5:       26,867 complete |    26,867 estimated
+
+. if scalar(eN_D1) != `_nf' | scalar(eN_D5) != `_na2' {
+.     display as error "  NOTE: reghdfe estimated on fewer rows than have comple
+> te"
+.     display as error "  data. That gap is singleton dropping (decision 16), no
+> t"
+.     display as error "  missing data: some county is now observed once, or som
+> e"
+.     display as error "  state x year cell holds a single county. The counts in
+>  the"
+.     display as error "  table are e(N) and are correct; the tie-outs above are
+>  not,"
+.     display as error "  and the identities they assert no longer describe the 
+> table."
 . }
 
 . 
@@ -1628,7 +1992,27 @@ winter_sev~x |    136,752    11.36244    26.27663          0        208
 . /* What the 1/SD weights actually look like, and whether the estimates
 >    survive restricting them. Decision 14: reported every run, nothing
 >    imposed. The weights are the reason this table is not simply a units
->    change.                                                               */
+>    change.
+> 
+>    Three restrictions, four panels, stars printed. Decision 14's [DECIDE]
+>    asks whether to impose a minimum-years rule or a weight trim, and it
+>    cannot be answered from a block that reports two restrictions on two of
+>    the four panels -- which is what this was until 09/17.              */
+. 
+. capture drop _wcty
+
+. generate double _wcty = 1 / h_sd_c
+(68,949 missing values generated)
+
+. capture drop _tgw
+
+. egen byte _tgw = tag(county_id) if $SFULL & ///
+>     !missing($Y, mean_winter_temp, population, pop_share_5_9, mean_temp_c_m3)
+
+. quietly _pctile _wcty if _tgw == 1, p(99)
+
+. local _w99 = r(r1)
+
 . 
 . preserve
 
@@ -1692,6 +2076,67 @@ winter_sev~x |    136,752    11.36244    26.27663          0        208
   counties whose moments rest on < 10 years: 397  (1504 rows)
 
 . 
+.     * WHERE THE SHORT-MOMENT COUNTIES ARE. On the 09/17/2026 vintage they are
+.     * entirely the CWD gap-fill block -- MN and MI at two years, plus FL below
+.     * five and GA below ten -- which is why column 5 contains none of them and
+.     * is already the estimate with these weights removed (decision 14).
+.     display as text _newline "  states of the counties whose moments rest on <
+>  10 years:"
+
+  states of the counties whose moments rest on < 10 years:
+
+.     tabulate state if _tg == 1 & h_nyr_c < 10
+
+      State |
+     postal |
+abbreviatio |
+          n |      Freq.     Percent        Cum.
+------------+-----------------------------------
+         FL |         67       16.88       16.88
+         GA |        159       40.05       56.93
+         MI |         83       20.91       77.83
+         MN |         87       21.91       99.75
+         VA |          1        0.25      100.00
+------------+-----------------------------------
+      Total |        397      100.00
+
+. 
+.     * THE TWO-YEAR CASE, NAMED. With n = 2 the z-score is algebraically fixed
+.     * at +/- 1/sqrt(2) = 0.7071 on both rows, whatever the harvest is: the SD
+.     * divides the magnitude straight back out and only the sign of the
+.     * year-over-year change survives. These counties are a small share of the
+.     * rows and a much larger share of the weight.
+.     quietly count if _tg == 1 & h_nyr_c == 2
+
+.     local _c2 = r(N)
+
+.     quietly count if h_nyr_c == 2
+
+.     local _r2n = r(N)
+
+.     display as text _newline "  counties whose moments rest on exactly 2 years
+> : `_c2'" ///
+>         "  (`_r2n' rows)"
+
+  counties whose moments rest on exactly 2 years: 170  (340 rows)
+
+.     if `_c2' > 0 {
+.         quietly summarize $Y if h_nyr_c == 2
+.         display as text "    their z-scores run " %8.4f r(min) " to " %8.4f r(
+> max) ///
+>             "  (+/- 1/sqrt(2) by construction -- no magnitude information)"
+    their z-scores run  -0.7071 to   0.7071  (+/- 1/sqrt(2) by construction -- n
+> o magnitude information)
+.         quietly summarize _w if _tg == 1
+.         local _wtot = r(sum)
+.         quietly summarize _w if _tg == 1 & h_nyr_c == 2
+.         display as text "    they carry " %5.1f 100 * r(sum) / `_wtot' ///
+>             "% of the total county weight, on " %5.2f 100 * `_r2n' / _N "% of 
+> the rows"
+    they carry  25.8% of the total county weight, on  1.12% of the rows
+.     }
+
+. 
 .     * one row per county from here on, so -in 1/10- means ten counties
 .     quietly keep if _tg == 1
 
@@ -1722,41 +2167,83 @@ winter_sev~x |    136,752    11.36244    26.27663          0        208
 . restore
 
 . 
-. * Sensitivity, Panel D and Panel A, col 4 spec. Displayed, never asserted:
-. * these are the numbers the [DECIDE] in 14 needs, not a pass/fail.
+. * Sensitivity, ALL FOUR PANELS, col 4 spec, three restrictions. Displayed,
+. * never asserted: these are the numbers the [DECIDE] in 14 needs, not a
+. * pass/fail. Stars are printed because "the marginal stars come and go" is
+. * the claim being tested, and it cannot be read off b and se alone.
 . display as text _newline "  sensitivity of the col-4 estimate to the weighting
 > :"
 
   sensitivity of the col-4 estimate to the weighting:
 
-. foreach P in A D {
-  2.     display as text "    Panel `P' (${pvar`P'}):"
-  3.     quietly reghdfe $Y ${pvar`P'} $wctrl $agectrl if $SFULL, ///
->         absorb(county_id state_id#year) vce(cluster county_id)
-  4.     display as text "      as built           b = " %9.4f _b[${pvar`P'}] //
-> /
->         "  se = " %9.4f _se[${pvar`P'}] "  N = " %9.0fc e(N)
-  5.     foreach k in 5 10 {
-  6.         quietly reghdfe $Y ${pvar`P'} $wctrl $agectrl if $SFULL & h_nyr_c >
-> = `k', ///
+. display as text "    top 1% of counties by weight starts at 1/SD > " %9.5f `_w
+> 99'
+    top 1% of counties by weight starts at 1/SD >   0.24625
+
+. foreach P in A B C D {
+  2.     display as text _newline "    Panel `P' (${pvar`P'}):"
+  3.     forvalues s = 1/4 {
+  4.         if `s' == 1 {
+  5.             local _lab "as built             "
+  6.             local _if  "$SFULL"
+  7.         }
+  8.         if `s' == 2 {
+  9.             local _lab "moments from 5+ yrs  "
+ 10.             local _if  "$SFULL & h_nyr_c >= 5"
+ 11.         }
+ 12.         if `s' == 3 {
+ 13.             local _lab "moments from 10+ yrs "
+ 14.             local _if  "$SFULL & h_nyr_c >= 10"
+ 15.         }
+ 16.         if `s' == 4 {
+ 17.             local _lab "less top 1% by weight"
+ 18.             local _if  "$SFULL & _wcty <= `_w99'"
+ 19.         }
+ 20.         quietly reghdfe $Y ${pvar`P'} $wctrl $agectrl if `_if', ///
 >             absorb(county_id state_id#year) vce(cluster county_id)
-  7.         display as text "      moments from `k'+ yrs  b = " %9.4f _b[${pvar
-> `P'}] ///
->             "  se = " %9.4f _se[${pvar`P'}] "  N = " %9.0fc e(N)
-  8.     }
-  9. }
+ 21.         local _bb = _b[${pvar`P'}]
+ 22.         local _ss = _se[${pvar`P'}]
+ 23.         local _pp = 2 * ttail(e(df_r), abs(`_bb' / `_ss'))
+ 24.         local _st "   "
+ 25.         if `_pp' < 0.10 local _st "*  "
+ 26.         if `_pp' < 0.05 local _st "** "
+ 27.         if `_pp' < 0.01 local _st "***"
+ 28.         display as text "      `_lab' b =" %9.4f `_bb' " (" %7.4f `_ss' ")`
+> _st'" ///
+>             "  N =" %9.0fc e(N)
+ 29.     }
+ 30. }
+
     Panel A (mean_winter_temp):
-      as built           b =    0.0271  se =    0.0169  N =    30,342
-      moments from 5+ yrs  b =    0.0287  se =    0.0170  N =    29,801
-      moments from 10+ yrs  b =    0.0140  se =    0.0171  N =    28,838
+      as built              b =   0.0271 ( 0.0169)     N =   30,342
+      moments from 5+ yrs   b =   0.0287 ( 0.0170)*    N =   29,801
+      moments from 10+ yrs  b =   0.0140 ( 0.0171)     N =   28,838
+      less top 1% by weight b =   0.0262 ( 0.0168)     N =   30,182
+
+    Panel B (warm_winter_1sd):
+      as built              b =  -0.0411 ( 0.0285)     N =   30,342
+      moments from 5+ yrs   b =  -0.0589 ( 0.0286)**   N =   29,801
+      moments from 10+ yrs  b =  -0.0240 ( 0.0284)     N =   28,838
+      less top 1% by weight b =  -0.0407 ( 0.0285)     N =   30,182
+
+    Panel C (wsi_cold_days):
+      as built              b =  -0.0041 ( 0.0021)**   N =   30,342
+      moments from 5+ yrs   b =  -0.0044 ( 0.0021)**   N =   29,801
+      moments from 10+ yrs  b =  -0.0039 ( 0.0021)*    N =   28,838
+      less top 1% by weight b =  -0.0044 ( 0.0021)**   N =   30,182
+
     Panel D (winter_severity_index):
-      as built           b =   -0.0025  se =    0.0006  N =    30,342
-      moments from 5+ yrs  b =   -0.0025  se =    0.0006  N =    29,801
-      moments from 10+ yrs  b =   -0.0024  se =    0.0006  N =    28,838
+      as built              b =  -0.0025 ( 0.0006)***  N =   30,342
+      moments from 5+ yrs   b =  -0.0025 ( 0.0006)***  N =   29,801
+      moments from 10+ yrs  b =  -0.0024 ( 0.0006)***  N =   28,838
+      less top 1% by weight b =  -0.0026 ( 0.0006)***  N =   30,182
+
+. drop _wcty _tgw
 
 . 
 . * And the nesting check decision 10 refers to: the two WSI components entered
-. * jointly, which neither Panel C nor Panel D does.
+. * jointly, which neither Panel C nor Panel D does. p-values printed, because
+. * decision 10's claim is about significance and not about magnitude.
 . display as text _newline "  Panels C and D components entered jointly (col 4 s
 > pec):"
 
@@ -1765,13 +2252,90 @@ winter_sev~x |    136,752    11.36244    26.27663          0        208
 . quietly reghdfe $Y wsi_cold_days wsi_snow_days $wctrl $agectrl if $SFULL, ///
 >     absorb(county_id state_id#year) vce(cluster county_id)
 
-. display as text "    wsi_cold_days  b = " %9.4f _b[wsi_cold_days] ///
->     "  se = " %9.4f _se[wsi_cold_days]
-    wsi_cold_days  b =   -0.0033  se =    0.0021
+. foreach v in wsi_cold_days wsi_snow_days {
+  2.     local _bb = _b[`v']
+  3.     local _ss = _se[`v']
+  4.     local _pp = 2 * ttail(e(df_r), abs(`_bb' / `_ss'))
+  5.     display as text "    " %-16s "`v'" " b =" %9.4f `_bb' "  se =" %9.4f `_
+> ss' ///
+>         "  p =" %8.4f `_pp'
+  6. }
+    wsi_cold_days    b =  -0.0033  se =   0.0021  p =  0.1232
+    wsi_snow_days    b =  -0.0024  se =   0.0007  p =  0.0003
 
-. display as text "    wsi_snow_days  b = " %9.4f _b[wsi_snow_days] ///
->     "  se = " %9.4f _se[wsi_snow_days]
-    wsi_snow_days  b =   -0.0024  se =    0.0007
+. display as text "    Decision 10: cold days lose significance once snow days a
+> re"
+    Decision 10: cold days lose significance once snow days are
+
+. display as text "    held fixed (09/17/2026 vintage: p = 0.12 against p = 0.00
+> 03),"
+    held fixed (09/17/2026 vintage: p = 0.12 against p = 0.0003),
+
+. display as text "    so Panel C's stars are the snow component, not cold stres
+> s."
+    so Panel C's stars are the snow component, not cold stress.
+
+. 
+. *--------------------------------- 6h. ---------------------------------------
+. 
+. * WHERE THE SAMPLE ACTUALLY IS, IN TIME AND IN PROVENANCE. See decision 15.
+. *
+. * 6d lists counties per year, which is the raw material, but 44 rows of counts
+. * do not make the point on their own: on the 09/17/2026 vintage 88.8% of the
+. * estimation sample is 1982-2014, and the 2015+ tail is a different panel
+. * rather than a thinner one -- Georgia (CWD gap-fill, so cols 1-4 only) carrie
+> s
+. * most of 2016-2021, and 2024-2025 is Delaware alone at three counties a year.
+. *
+. * This is the same block the other two tables carry, and here it doubles as
+. * context for 6g: the states that appear only in the tail are the CWD gap-fill
+. * states whose counties have two- and four-year moments, so the era split and
+. * the weight diagnostic are describing the same counties from two directions.
+. * Reported, never asserted: the composition is allowed to move when the panel
+. * is rebuilt. It should just not move unnoticed.
+. 
+. preserve
+
+.     keep if $SFULL & !missing($Y, mean_winter_temp)
+(120,786 observations deleted)
+
+.     generate byte _era = (year >= 2015)
+
+.     label define _eralab 0 "1982-2014" 1 "2015-2025", replace
+
+.     label values _era _eralab
+
+.     display as text _newline "  estimation sample by era and harvest provenanc
+> e:"
+
+  estimation sample by era and harvest provenance:
+
+.     tabulate _era source_harvest, row
+
++----------------+
+| Key            |
+|----------------|
+|   frequency    |
+| row percentage |
++----------------+
+
+           |     Compilation:
+           |     agency-direct
+           |   harmonization or
+           |  Schuler et al. CWD
+           |         panel
+      _era |    agency        cwd |     Total
+-----------+----------------------+----------
+ 1982-2014 |    25,548      1,386 |    26,934 
+           |     94.85       5.15 |    100.00 
+-----------+----------------------+----------
+ 2015-2025 |     1,319      2,089 |     3,408 
+           |     38.70      61.30 |    100.00 
+-----------+----------------------+----------
+     Total |    26,867      3,475 |    30,342 
+           |     88.55      11.45 |    100.00 
+
+. restore
 
 . 
 . display as text _newline "  Table written to:"
@@ -1792,5 +2356,5 @@ winter_sev~x |    136,752    11.36244    26.27663          0        208
        log:  /mnt/data_d/Dropbox/Research/AnimalCollisionsWeather/codeSTATA/logs
 > /regression_harvest_zscore.log
   log type:  text
- closed on:  14 Sep 2026, 19:18:51
+ closed on:  17 Sep 2026, 21:45:01
 --------------------------------------------------------------------------------
