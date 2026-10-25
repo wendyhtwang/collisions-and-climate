@@ -38,6 +38,11 @@ DECISIONS:
   6. total_total <= 0 is treated as missing in every share and rate.
   7. Not built: alcohol-related exhibits (no alcohol variables in
      this snapshot).
+  8. WV deer_total is set to missing: it is a 2013 road-carcass count
+     (DeerCarcass.2013), not crash records, and the deer floor would
+     otherwise replace WV's reported animal crashes with it.
+  9. Shares above 100% are set to missing (denominator is not
+     all-cause on those rows); rates are kept.
 
 CHANGELOG:
   10/18/2026: First pass.
@@ -45,6 +50,7 @@ CHANGELOG:
     national animal series and maps (3b), min_states cut on national
     lines, one PDF per exhibit (no PNGs, no single-panel copies),
     axis and legend fixes in A1, F1, F3.
+  10/25/2026: WV deer_total dropped (8); shares > 100% dropped (9).
 ==============================================================*/
 
 *---------------------------------------------------------------
@@ -276,6 +282,10 @@ isid geoid year, missok
 * Numerator: same three fills and floor as
 * estimates_generate_collisions_weather.do (DECISION 1). num_source is
 * set before each replace because the condition tests the old value.
+
+* WV deer_total is a carcass count, not crashes (DECISION 8)
+replace deer_total = . if state == "WV"
+
 gen double comp_total = any_animal_fatal + any_animal_injury + any_animal_pdo
 gen double any_animal_filled = any_animal_total
 gen byte num_source = 1 if !missing(any_animal_filled)
@@ -321,6 +331,10 @@ gen double share_animal = 100 * any_animal_filled / total_total ///
 gen byte is_share_gt100 = share_animal > 100 & !missing(share_animal)
 count if is_share_gt100
 di as text "  county-years with animal share above 100%: " r(N)
+list state geoid year any_animal_filled total_total share_animal if is_share_gt100, noobs abbrev(16)
+
+* Not usable as shares (DECISION 9)
+replace share_animal = . if is_share_gt100
 
 * Population: prefer the 1981-2025 file, fall back to 1990-2025
 local pop_file = ""
