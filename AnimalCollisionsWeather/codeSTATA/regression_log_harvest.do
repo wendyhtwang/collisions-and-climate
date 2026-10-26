@@ -70,6 +70,11 @@ CHANGELOG:
                      reported once (7); R-squared behaviour and the
                      anomaly threshold verified (8, 9).
 
+10/26/2026 — Wendy: Each column's estimates are also saved as .ster files
+                     to $dataSTATA/estimates/wildlife_weather/, read by
+                     figures_poster_coefplots.do. Regressions and table
+                     output unchanged.
+
 ==============================================================================
 DECISIONS TAKEN IN THIS SCRIPT
 ==============================================================================
@@ -225,6 +230,8 @@ log using "$codeSTATA/logs/regression_log_harvest.log", replace text
 
 cap mkdir "$tables"
 cap mkdir "$tables/wildlife_weather"
+cap mkdir "$dataSTATA/estimates"
+cap mkdir "$dataSTATA/estimates/wildlife_weather"
 
 * ---- fail early if a dependency is missing ---------------------------------
 * reghdfe needs BOTH ftools and require -- require is a small dependency-
@@ -596,6 +603,7 @@ program define run_panel
     estadd local ctrl_age  ""
     estadd local samp      "Full panel"
     eststo c1
+    estimates save "$dataSTATA/estimates/wildlife_weather/${Y}_p`P'_c1_Wnone.ster", replace
 
     *--- col 2: + weather controls -------------------------------------------
     quietly reghdfe $Y `x' $wctrl if $SFULL, ///
@@ -607,6 +615,7 @@ program define run_panel
     estadd local ctrl_age  ""
     estadd local samp      "Full panel"
     eststo c2
+    estimates save "$dataSTATA/estimates/wildlife_weather/${Y}_p`P'_c2_Wnone.ster", replace
 
     *--- col 3: + age shares -------------------------------------------------
     quietly reghdfe $Y `x' $agectrl if $SFULL, ///
@@ -618,6 +627,7 @@ program define run_panel
     estadd local ctrl_age  "X"
     estadd local samp      "Full panel"
     eststo c3
+    estimates save "$dataSTATA/estimates/wildlife_weather/${Y}_p`P'_c3_Wnone.ster", replace
 
     *--- col 4: + weather + age shares ---------------------------------------
     quietly reghdfe $Y `x' $wctrl $agectrl if $SFULL, ///
@@ -629,6 +639,7 @@ program define run_panel
     estadd local ctrl_age  "X"
     estadd local samp      "Full panel"
     eststo c4
+    estimates save "$dataSTATA/estimates/wildlife_weather/${Y}_p`P'_c4_Wnone.ster", replace
 
     *--- col 5: same as col 4, agency-direct harvest only --------------------
     quietly reghdfe $Y `x' $wctrl $agectrl if $SAGENCY, ///
@@ -640,6 +651,7 @@ program define run_panel
     estadd local ctrl_age  "X"
     estadd local samp      "Agency-direct"
     eststo c5
+    estimates save "$dataSTATA/estimates/wildlife_weather/${Y}_p`P'_c5_Wnone.ster", replace
 
     *--- this panel's coefficient rows ---------------------------------------
     * No counts here -- observations, counties and clusters print once in the

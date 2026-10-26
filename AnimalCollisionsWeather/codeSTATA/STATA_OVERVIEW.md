@@ -181,6 +181,27 @@ left as-is, including their existing attribution style.
   resolution doesn't reach them even though the same tree happens to
   exist at both locations. Raise at code review rather than editing
   Nicole's files directly.
+- As of 10/26/26, `regression_log_harvest.do` also saves every column's
+  estimates to `dataSTATA/estimates/wildlife_weather/ln_harvest_p<A-D>_c<1-5>_Wnone.ster`
+  (one `estimates save` after each `eststo`), for
+  `figures_poster_coefplots.do`. The regressions and table are unchanged.
+
+## Figures
+
+### `figures_poster_coefplots.do`
+Coefficient plots for the Climate Frontiers 2026 poster (panels 3 and 4):
+the per-unit effect of each winter measure on log harvest (column 4) and on
+the animal share of crashes (column 1), with 95% CIs.
+- Reads `.ster` files only. Run after `regression_log_harvest.do` and
+  `estimates_generate_collisions_weather.do`.
+- Harvest: 100 x the log coefficient. Crashes: the coefficient divided by
+  the stored outcome mean (`e(dep_var_mean)`), x 100.
+- Each row (winter measure) has its own x-range, shared across the two
+  figures, so harvest and crash bars for the same measure line up.
+- Writes `coefplot_values.csv` next to the PDFs in
+  `figures/poster_climate_frontiers_2026/`. The poster's bar labels should
+  match its `estlab` column.
+- One-off; not called by `_project_main.do`.
 
 ## Report generation
 
