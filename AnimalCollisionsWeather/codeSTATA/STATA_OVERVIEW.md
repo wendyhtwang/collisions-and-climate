@@ -198,9 +198,14 @@ the animal share of crashes (column 1), with 95% CIs.
   the stored outcome mean (`e(dep_var_mean)`), x 100.
 - Each row (winter measure) has its own x-range, shared across the two
   figures, so harvest and crash bars for the same measure line up.
-- Writes `coefplot_values.csv` next to the PDFs in
+- Writes `coefplot_<outcome>.svg` and `.png` (and `.pdf`, if Inkscape is
+  on the machine) plus `coefplot_values.csv` to
   `figures/poster_climate_frontiers_2026/`. The poster's bar labels should
-  match its `estlab` column.
+  match the CSV's `estlab` column.
+- Layout is in inches, copied from the poster's plot block (label column,
+  one zero line, 1.75 in rows, text sizes in pt); colors are the
+  `poster_*` globals in `set_figure_fonts_colors.do`. Sets Arial for the
+  run and restores the project fonts at the end.
 - One-off; not called by `_project_main.do`.
 
 ## Report generation

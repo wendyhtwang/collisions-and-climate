@@ -75,3 +75,12 @@ global pale_cerulean = "152 193 217"
 global light_cyan = "224 251 252"
 global burnt_sienna = "238 108 77"
 global gunmetal = "41 50 65"
+* Climate Frontiers 2026 poster: the Google Slides theme colors, plus the
+* poster's bar, CI and zero-line grays
+global poster_green = "46 125 79"
+global poster_orange = "194 98 45"
+global poster_text = "31 41 51"
+global poster_muted = "91 103 112"
+global poster_bar_gray = "191 191 191"
+global poster_ci = "64 64 64"
+global poster_zero = "127 127 127"
