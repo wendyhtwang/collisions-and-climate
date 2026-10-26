@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- This is a Stata 16.1 generated SVG file (http://www.stata.com) -->
+
+<svg version="1.1" width="10.20in" height="8.40in" viewBox="0 0 7344 6048" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+	<desc>Stata Graph - Graph</desc>
+	<rect x="0" y="0" width="7344" height="6048" style="fill:#FFFFFF;stroke:none"/>
+	<rect x="0.00" y="0.00" width="7343.77" height="6048.00" style="fill:#FFFFFF"/>
+	<rect x="6.05" y="6.05" width="7331.67" height="6035.90" style="fill:none;stroke:#FFFFFF;stroke-width:12.10"/>
+	<rect x="72.52" y="365.15" width="7198.73" height="5137.77" style="fill:#FFFFFF"/>
+	<rect x="78.57" y="371.20" width="7186.63" height="5125.67" style="fill:none;stroke:#FFFFFF;stroke-width:12.10"/>
+	<line x1="5400.14" y1="5392.75" x2="5400.14" y2="475.31" style="stroke:#7F7F7F;stroke-width:18.00"/>
+	<rect x="5400.14" y="801.90" width="614.37" height="411.05" style="fill:#CCCCCC"/>
+	<rect x="5400.14" y="801.90" width="614.37" height="411.05" style="fill:none;stroke:#BFBFBF;stroke-width:0.00"/>
+	<rect x="5062.08" y="2086.23" width="338.05" height="411.05" style="fill:#CCCCCC"/>
+	<rect x="5062.08" y="2086.23" width="338.05" height="411.05" style="fill:none;stroke:#BFBFBF;stroke-width:0.00"/>
+	<rect x="4222.11" y="3370.79" width="1178.02" height="410.82" style="fill:#CCCCCC"/>
+	<rect x="4222.11" y="3370.79" width="1178.02" height="410.82" style="fill:none;stroke:#BFBFBF;stroke-width:0.00"/>
+	<rect x="4310.24" y="4655.11" width="1089.90" height="411.05" style="fill:#CE8157"/>
+	<rect x="4310.24" y="4655.11" width="1089.90" height="411.05" style="fill:none;stroke:#C2622D;stroke-width:0.00"/>
+	<line x1="5569.28" y1="1007.31" x2="6459.51" y2="1007.31" style="stroke:#404040;stroke-width:32.00"/>
+	<line x1="6459.51" y1="1122.30" x2="6459.51" y2="892.33" stroke-linecap="round" style="stroke:#404040;stroke-width:32.00"/>
+	<line x1="5569.28" y1="1122.30" x2="5569.28" y2="892.33" stroke-linecap="round" style="stroke:#404040;stroke-width:32.00"/>
+	<line x1="4456.89" y1="2291.87" x2="5667.27" y2="2291.87" style="stroke:#404040;stroke-width:32.00"/>
+	<line x1="5667.27" y1="2406.85" x2="5667.27" y2="2176.89" stroke-linecap="round" style="stroke:#404040;stroke-width:32.00"/>
+	<line x1="4456.89" y1="2406.85" x2="4456.89" y2="2176.89" stroke-linecap="round" style="stroke:#404040;stroke-width:32.00"/>
+	<line x1="3671.77" y1="3576.20" x2="4772.45" y2="3576.20" style="stroke:#404040;stroke-width:32.00"/>
+	<line x1="4772.45" y1="3691.18" x2="4772.45" y2="3461.21" stroke-linecap="round" style="stroke:#404040;stroke-width:32.00"/>
+	<line x1="3671.77" y1="3691.18" x2="3671.77" y2="3461.21" stroke-linecap="round" style="stroke:#404040;stroke-width:32.00"/>
+	<line x1="3904.48" y1="4860.52" x2="4716.23" y2="4860.52" style="stroke:#404040;stroke-width:32.00"/>
+	<line x1="4716.23" y1="4975.51" x2="4716.23" y2="4745.54" stroke-linecap="round" style="stroke:#404040;stroke-width:32.00"/>
+	<line x1="3904.48" y1="4975.51" x2="3904.48" y2="4745.54" stroke-linecap="round" style="stroke:#404040;stroke-width:32.00"/>
+	<text x="1069.47" y="959.78" style="font-family:'Arial';font-weight:bold;font-size:220.09px;fill:#1F2933" text-anchor="middle">Mean winter temp.</text>
+	<text x="559.06" y="1213.42" style="font-family:'Arial';font-size:190.03px;fill:#5B6770" text-anchor="middle">per +1°C</text>
+	<text x="6840.48" y="1084.40" style="font-family:'Arial';font-size:220.09px;fill:#1F2933" text-anchor="middle">+1.5%</text>
+	<text x="1241.60" y="2244.11" style="font-family:'Arial';font-weight:bold;font-size:220.09px;fill:#1F2933" text-anchor="middle">Warm-winter anomaly</text>
+	<text x="1274.41" y="2497.75" style="font-family:'Arial';font-size:190.03px;fill:#5B6770" text-anchor="middle">≥ 1 SD warmer, vs. not</text>
+	<text x="3927.89" y="2368.96" style="font-family:'Arial';font-size:220.09px;fill:#1F2933" text-anchor="middle">−1.0%</text>
+	<text x="1075.21" y="3528.44" style="font-family:'Arial';font-weight:bold;font-size:220.09px;fill:#1F2933" text-anchor="middle">Extreme-cold days</text>
+	<text x="1119.73" y="3782.31" style="font-family:'Arial';font-size:190.03px;fill:#5B6770" text-anchor="middle">per extra day ≤ 0°F</text>
+	<text x="3080.58" y="3653.29" style="font-family:'Arial';font-size:220.09px;fill:#1F2933" text-anchor="middle">−0.37%</text>
+	<text x="1212.68" y="4812.99" style="font-family:'Arial';font-weight:bold;font-size:220.09px;fill:#1F2933" text-anchor="middle">Winter Severity Index</text>
+	<text x="920.29" y="5066.63" style="font-family:'Arial';font-size:190.03px;fill:#5B6770" text-anchor="middle">per +1 index point</text>
+	<text x="3313.29" y="4937.62" style="font-family:'Arial';font-weight:bold;font-size:220.09px;fill:#1F2933" text-anchor="middle">−0.13%</text>
+	<text x="108.78" y="5679.00" style="font-family:'Arial';font-style:italic;font-size:199.89px;fill:#5B6770">County &amp; state × year FE; 95% CIs, county-clustered SEs; 56,778 county-years,</text>
+	<text x="108.78" y="5879.13" style="font-family:'Arial';font-style:italic;font-size:199.89px;fill:#5B6770">1985–2020. WSI also significant per 100k residents; robust to data checks.</text>
+	<text x="108.78" y="262.74" style="fill:#1F2933">
+		<tspan style="font-family:'Arial';font-weight:bold;font-size:220.09px">Change in animal share of crashes</tspan>
+		<tspan style="font-family:'Arial';font-size:220.09px"> (% of mean per unit)</tspan>
+	</text>
+</svg>
