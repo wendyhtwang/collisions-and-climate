@@ -1,0 +1,200 @@
+/*******************************************************************************
+Program: data_append_state_collisions_files.do
+Current Lead:  Siyue Ouyang
+Major Versions/Revisions:
+07/01/2020 [Siyue Ouyang]: created
+07/08/2020 [Siyue Ouyang]: code style change
+07/13/2020 [Siyue Ouyang]: add more states
+07/15/2020 [Siyue Ouyang]: make every single state data ready-to-use, add more states
+07/26/2020 [Siyue Ouyang]: add data in ~dataRAW, update
+09/01/2020 [Siyue Ouyang]: add summary table, update
+*******************************************************************************/
+/**********************************************************************/
+/*  SECTION 0: root directory
+    Notes: */
+/**********************************************************************/
+cap log close
+clear all
+set more off, permanently
+set matsize 11000
+set maxvar 32767
+set scheme s1mono
+
+confirmdir "D:/Dropbox/Research/"
+if r(confirmdir) == "0" {
+  local rootDir = "D:/Dropbox/Research/"
+}
+
+/*
+confirmdir "F:/GDrive/"
+if r(confirmdir) == "0" {
+  local rootDir = "F:/GDrive/"
+}
+
+confirmdir "F:/GDrive/"
+if r(confirmdir) == "0" {
+  local rootDir = "F:/GDrive/"
+}
+
+confirmdir "E:/GDrive/"
+if r(confirmdir) == "0" {
+  local rootDir = "E:/GDrive/"
+}
+
+confirmdir "G:/My Drive/"
+if r(confirmdir) == "0" {
+  local rootDir = "G:/My Drive/"
+}
+
+confirmdir "/Users/air/Google Drive/"
+if r(confirmdir) == "0" {
+  local rootDir = "/Users/air/Google Drive/"
+}
+
+*/
+
+global path "`rootDir'/WolvesImpacts/"
+
+global working_data "$path/dataSTATA/intermediate/collisions/"
+
+/*-----------------End of SECTION 0: root directory --------------*/
+
+/*-------------------------
+  To Do:
+     - [1] derive dta files for all the states
+     - [2] append dta files
+     - [3] SUMMARY TABLE
+-------------------------*/
+
+/*----------------------------------------------------*/
+      /* [>   2.  append dta files   <] */
+/*----------------------------------------------------*/
+clear
+cd "$working_data/"
+local all_files : dir . files "dvcs_*.dta"
+display `all_files'
+
+tempfile fullfile
+set obs 1
+gen drop_me = 1
+save `fullfile', replace
+
+foreach myfile in `all_files' {
+    use `myfile', replace
+    append using `fullfile'
+    save `fullfile', replace
+}
+
+drop if drop_me == 1
+drop drop_me
+
+foreach type in total animal deer {
+    replace `type'_injuries = `type'_major_injuries + `type'_minor_injuries if `type'_injuries ==.
+    replace `type'_injury = `type'_major_injury + `type'_minor_injury + `type'_possible_injury if `type'_injury ==.
+    replace `type'_total = `type'_fatal + `type'_injury + `type'_pdo +`type'_unknown_severity if `type'_total==.
+}
+drop *major* *minor* *possible* *unknown* *not_reported*
+
+/* [> define any animal to be equal to animal or wild_animal or deer, in that order. <] */
+gen any_animal_fatal = cond(missing(animal_fatal), 0, animal_fatal) 
+replace any_animal_fatal =  cond(missing(wild_animal_fatal), 0, wild_animal_fatal) if missing(animal_fatal)
+replace any_animal_fatal =  cond(missing(deer_fatal), 0, wild_animal_fatal) if missing(animal_fatal)
+
+gen any_animal_injury = cond(missing(animal_injury), 0, animal_injury) 
+replace any_animal_injury =   cond(missing(wild_animal_injury), 0, wild_animal_injury) if missing(animal_injury)
+replace any_animal_injury =   cond(missing(deer_injury), 0, wild_animal_injury) if missing(animal_injury)
+
+gen any_animal_pdo = cond(missing(animal_pdo), 0, animal_pdo)
+replace any_animal_pdo = cond(missing(wild_animal_pdo), 0, wild_animal_pdo) if missing(animal_pdo)
+replace any_animal_pdo = cond(missing(deer_pdo), 0, wild_animal_pdo) if missing(animal_pdo)
+
+gen any_animal_total = cond(missing(animal_total), 0, animal_total)
+replace any_animal_total = cond(missing(wild_animal_total), 0, wild_animal_total) if missing(animal_total)
+replace any_animal_total = cond(missing(deer_total), 0, wild_animal_total) if missing(animal_total)
+
+gen any_animal_fatalities = cond(missing(animal_fatalities), 0, animal_fatalities) 
+replace any_animal_fatalities = cond(missing(wild_animal_fatalities), 0, wild_animal_fatalities) if missing(animal_fatalities) 
+replace any_animal_fatalities = cond(missing(deer_fatalities), 0, wild_animal_fatalities) if missing(animal_fatalities) 
+
+gen any_animal_injuries = cond(missing(animal_injuries), 0, animal_injuries) 
+replace any_animal_injuries = cond(missing(wild_animal_injuries), 0, wild_animal_injuries) if missing(animal_injuries)
+replace any_animal_injuries = cond(missing(deer_injuries), 0, wild_animal_injuries) if missing(animal_injuries)
+
+drop if strpos(county_name, "unknown")
+replace county_name="total" if county_name=="statewide"
+// replace county_name="total" if strpos(county_name, "total")
+drop if county_name == "total"
+drop if year == .
+
+/* [> check sanity <] */
+duplicates tag state_letter_code county_name year, generate(tag)
+browse if tag > 0
+sort state_letter_code state_name county_name year
+drop tag
+
+label var county_name "Name of County"
+label var state_letter_code "Abbreviation of State Name"
+label var fips "Combination of State & County FIPS"
+
+
+order state_letter_code ///
+    state_name ///
+    county_name ///
+    state_fips ///
+    county_fips ///
+    fips year ///
+    total* ///
+    animal* ///
+    deer*
+  
+// ratio of fatalities and pdos to total crashes	
+bysort state_letter_code county_name year: gen total_fatalities_to_crashes = total_fatalities/total_total 
+bysort state_letter_code county_name year: gen animal_fatalities_to_crashes = any_animal_fatalities/any_animal_total
+bysort state_letter_code county_name year: gen deer_fatalities_to_crashes = deer_fatalities/deer_total	
+	
+bysort state_letter_code county_name year: gen total_pdo_to_crashes = total_pdo/total_total 
+bysort state_letter_code county_name year: gen animal_pdo_to_crashes = any_animal_pdo/any_animal_total	
+bysort state_letter_code county_name year: gen deer_pdo_to_crashes = deer_pdo/deer_total
+bysort state_letter_code county_name year: gen deer_pdo_to_fatal = deer_pdo/deer_fatal
+
+// ratio of ratios
+
+bysort state_letter_code county_name year: gen fatalities_to_pdo = total_fatalities_to_crashes/(any_animal_pdo/any_animal_total)
+bysort state_letter_code county_name year: gen totalfatal_to_deerfatal = total_fatalities_to_crashes/deer_fatalities_to_crashes
+
+destring fips , replace
+duplicates list fips year
+ 
+*declare as panel data
+// xtset fips year
+
+*check if balanced
+levelsof state_letter_code, local(statelist)
+foreach state in `statelist' {
+	di "`state'"
+	tab year if state_letter_code == "`state'"
+  }
+
+*flag data issue
+gen flag_data_issue = 0
+replace flag_data_issue = 1 if state_name == "Utah" & county_name == "daggett" 
+replace flag_data_issue = 1 if state_name == "Michigan" & county_name == "sanilac" 
+levelsof county_name if total_total < deer_total & deer_total != . & state_letter_code == "WV", local(counties)
+foreach county in `counties'{
+    replace flag_data_issue = 1 if state_name == "West Virginia" & county_name == "`county'" 
+}
+	
+// save dataset	
+	
+qui summ year
+local T1 = `r(min)'
+local T2 = `r(max)'
+compress
+save "$path/dataSTATA/intermediate/collisions/CONUS/dvcs_CONUS_county_year_`T1'_`T2'.dta" ,replace
+
+
+
+
+
+
+
