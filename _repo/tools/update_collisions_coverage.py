@@ -189,18 +189,27 @@ def inventory_outputs(vcd):
             row["note"] = f"read error: {e}"
             files.append(row)
             continue
-        row.update({"n_rows": len(df), "columns": ";".join(df.columns)})
-        if "year" in df.columns:
-            row.update({"year_min": int(df.year.min()), "year_max": int(df.year.max())})
-        if "fips" in df.columns:
-            row["fips_type"] = "string" if df.fips.dtype == object else "numeric"
-            row["n_counties"] = df.fips.nunique()
-        row["families"] = ";".join(f for f, p in FAMILIES.items() if any(re.match(p, c) for c in df.columns))
+        try:
+            row.update({"n_rows": len(df), "columns": ";".join(df.columns)})
+            if "fips" in df.columns:
+                row["fips_type"] = "numeric" if pd.api.types.is_numeric_dtype(df.fips) else "string"
+                row["n_counties"] = df.fips.nunique()
+            row["families"] = ";".join(f for f, p in FAMILIES.items() if any(re.match(p, c) for c in df.columns))
+            if "year" in df.columns:
+                row["year_type"] = "numeric" if pd.api.types.is_numeric_dtype(df.year) else "string"
+                df["year"] = pd.to_numeric(df["year"], errors="coerce")
+                n_bad = int(df["year"].isna().sum())
+                if n_bad:
+                    row["note"] = f"{n_bad} rows with blank or non-numeric year left out"
+                df = df[df["year"].notna()]
+                if len(df):
+                    row.update({"year_min": int(df.year.min()), "year_max": int(df.year.max())})
+            if len(df) and "year" in df.columns and ("fips" in df.columns or "state_letter_code" in df.columns):
+                df["_st"] = to_state(df)
+                tables.append(family_table(df, "_st", f.name))
+        except Exception as e:  # noqa: BLE001 - record and move on
+            row["note"] = f"summary error: {e!r}"
         files.append(row)
-        if "year" in df.columns and ("fips" in df.columns or "state_letter_code" in df.columns):
-            df["_st"] = to_state(df)
-            t = family_table(df, "_st", f.name)
-            tables.append(t)
     return pd.DataFrame(files), (pd.concat(tables) if tables else pd.DataFrame())
 
 
@@ -209,6 +218,8 @@ def inventory_snapshot(path):
     if not path.is_file():
         return pd.DataFrame(), [f"snapshot not found: {path}"]
     df = pd.read_stata(path, convert_categoricals=False)
+    df["year"] = pd.to_numeric(df["year"], errors="coerce")
+    df = df[df["year"].notna()]
     df["_st"] = to_state(df)
     flags = [c for c in df.columns if c.startswith("imputation_flag")]
     t = family_table(df, "_st", "snapshot")
