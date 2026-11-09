@@ -1,18 +1,41 @@
-/*******************************************************************************
-Program: data_dvcs_county_year.do
-Current Lead:  Siyue Ouyang
-Major Versions/Revisions:
-07/01/2020 [Siyue Ouyang]: created
-07/08/2020 [Siyue Ouyang]: code style change
-07/13/2020 [Siyue Ouyang]: add more states
-07/15/2020 [Siyue Ouyang]: make every single state data ready-to-use, add more states
-07/26/2020 [Siyue Ouyang]: add data in ~dataRAW, update
-11/08/2020 [Owen Shao]: add TVC from dataCSV, update
-*******************************************************************************/
-/**********************************************************************/
-/*  SECTION 0: root directory
-    Notes: */
-/**********************************************************************/
+/*==============================================================
+FILE:         MS.do
+PROJECT:      Weather Changes, Ungulate Populations, & Vehicle Collisions
+CURRENT LEAD: Wendy Wang
+
+PURPOSE:      Builds the Mississippi county-year collision panel from MS crash records and saves it as $working_data/dvcs_MS_county_year_<t1>_<t2>.dta.
+
+SOURCES:
+  2004 to 2 Sep 2019   ReportBeam crash tables, dataRAW/DVCs/MS/ReportBeam-<YYYY>-CrashData
+  3 Sep 2019 to 2024   eCrash public data requests, dataRAW/DVCs/MS (2023-24 marked DRAFT)
+  2005-2016            county deer tables, dataCSV/DVCs/MS (the only deer source)
+  Settled 11/02/26: DRAFT years are used if they cover all 12 months (checked in
+  Section 4); 2024 is the last year of the panel.
+
+KNOWN BREAKS (data_source marks each row's era):
+  - The crash tables read here carry no deer code, so deer is 2005-2016 only;
+    animal_collision covers every year.
+  - Alcohol share is about 1.4 pp higher in eCrash (crash-level flag) than in
+    ReportBeam (built from person records).
+
+CHANGELOG:
+  07/01/2020 [Siyue Ouyang]: created
+  07/08/2020 [Siyue Ouyang]: code style change
+  07/13/2020 [Siyue Ouyang]: add more states
+  07/15/2020 [Siyue Ouyang]: make every single state data ready-to-use, add more states
+  07/26/2020 [Siyue Ouyang]: add data in ~dataRAW, update
+  11/08/2020 [Owen Shao]: add TVC from dataCSV, update
+  11/02/2026 [Wendy Wang]: rebuilt from crash-level records (2004-2024) to the
+    Code Style Guide, with AZ.do/IA.do variable names; county tables kept for
+    deer. DRAFT, not yet run.
+  11/09/2026 [Wendy Wang]: use the 2023-24 DRAFT files; check that every year
+    covers all 12 months; read eCrash text dates; drop crash IDs before stacking.
+==============================================================*/
+
+*---------------------------------------------------------------
+* SECTION 0: SETUP
+*---------------------------------------------------------------
+
 cap log close
 clear all
 set more off, permanently
@@ -20,264 +43,599 @@ set matsize 11000
 set maxvar 32767
 set scheme s1mono
 
-confirmdir "F:/GDrive/"
+* confirmdir is user-written (SSC); install it if missing
+cap which confirmdir
+if _rc != 0 {
+    cap noi ssc install confirmdir
+    cap which confirmdir
+    if _rc != 0 {
+        di as err "confirmdir is not installed and SSC is unreachable."
+        error 111
+    }
+}
+
+confirmdir "/mnt/data_d/Dropbox/Research"
 if r(confirmdir) == "0" {
-  local rootDir = "F:/GDrive/"
+  local rootDir = "/mnt/data_d/Dropbox/Research"
 }
 
-
-confirmdir "E:/GDrive/"
+confirmdir "C:/Dropbox"
 if r(confirmdir) == "0" {
-  local rootDir = "E:/GDrive/"
+  local rootDir = "C:/Dropbox/Research"
 }
-
-
-confirmdir "D:/GoogleDrive/"
+confirmdir "D:/Dropbox"
 if r(confirmdir) == "0" {
-  local rootDir = "D:/GoogleDrive/"
-}
-confirmdir "C:/GoogleDrive/"
-if r(confirmdir) == "0" {
-  local rootDir = "C:/GoogleDrive/"
-}
-confirmdir "/Users/air/Google Drive/"
-if r(confirmdir) == "0" {
-  local rootDir = "/Users/air/Google Drive/"
+  local rootDir = "D:/Dropbox/Research"
 }
 
-
-global path "`rootDir'/WolvesImpacts/"
-
-global working_data "$path/dataSTATA/intermediate/collisions/"
-
-/*-----------------End of SECTION 0: root directory --------------*/
-
-/*-------------------------
-  To Do:
-     - [1] derive dta files for all the states
-     - [2] merge dta files
--------------------------*/
-
-/*----------------------------------------------------*/
-      /* [>   1.  derive dta for 49 states in the folder (~/dataCSV/DVCs/) <] */
-/*----------------------------------------------------*/
-
-*************************MS (all data were kept)
-/*----------------------------------------------------*/
-	 /* [>   1.1  TVC 05-16  <] */
-clear
-local file_name = "$path/dataCSV/DVCs/MS/MS.TVC.2005-2016.County.xlsx"
-import excel using "`file_name'" , describe
-import excel using "`file_name'", allstring sheet(`r(worksheet_1)') cellrange(A1:F85) firstrow case(lower) clear
-
-foreach v of varlist b-f {
-  local lb_var : var label `v'
-  local suffix = `v'[1]
-  rename `v' crashes`lb_var'
+if "`rootDir'" == "" {
+    di as err "No known Dropbox root found; add this machine's root above."
+    error 601
 }
 
-// destring b_2005-f_2009,replace
-// gather b_2005-f_2009, variable(type) value(value)
-// gen str12 year = substr(type, -4, .) 
-// ren value total_total
+* Set unconditionally: _project_main.do sets $path to AnimalCollisionsWeather
+global path "`rootDir'/VehicleCollisionsDataRepo"
+global working_data "$path/dataSTATA"
+global ms_raw "$path/dataRAW/DVCs/MS"
+global ms_csv "$path/dataCSV/DVCs/MS"
+global ms_switch = td(03sep2019) // first eCrash day
+di as txt "Using path: $path"
 
-ren trafficcrashesinmississippi county_name 
+cap mkdir "$path/logs"
+log using "$path/logs/clean_MS.log", replace text
 
-gen id = _n
-reshape long crashes, i(id) j(year)
-drop id
+set excelxlsxlargefile on
 
-ren crashes total_total
-destring total_total , replace 
-sort county_name year, stable
+*---------------------------------------------------------------
+* SECTION 1: REPORTBEAM CRASH RECORDS (2004 TO 2 SEP 2019)
+*---------------------------------------------------------------
+* Source: Mississippi ReportBeam crash export, one folder of five tables per year
+* TODO: add who provided these files and when they were received
+* Each pass joins one year's tables on intcrashid and saves one row per crash:
+* county, worst injury (KABCO), animal and alcohol flags.
+* Names and types checked on the 2018 crash, vehicle and person tables only.
 
-tempfile 05_09_TVC
-save `05_09_TVC', replace
- 
-************************
-import excel using "`file_name'" , describe
-import excel using "`file_name'", allstring sheet(`r(worksheet_2)') cellrange(A1:H86) firstrow case(lower) clear
+tempfile rb_all    ///
+         vehicles  ///
+         occupants ///
+         persons
+local is_first = 1
+forvalues file_year = 2004/2019 {
+    local folder = "$ms_raw/ReportBeam-`file_year'-CrashData/ReportBeam-`file_year'"
+    di as txt _n "ReportBeam `file_year'"
 
-foreach v of varlist b-h {
-  local lb_var : var label `v'
-  local suffix = `v'[1]
-  rename `v' crashes`lb_var'
+    * Animal: any vehicle with sequence-of-events code 14 (Animal)
+    local file_name = "`folder'-CrashVehicleTable.xlsx"
+    import excel using "`file_name'", firstrow case(lower) clear
+    keep intcrashid v20_*
+    gen byte is_animal = 0
+    foreach v of varlist v20_* {
+        cap destring `v', replace force
+        replace is_animal = 1 if `v' == 14
+    }
+    collapse (max) is_animal, ///
+             by(intcrashid)
+    save `vehicles', replace
+
+    * Passengers: injury severity only
+    local file_name = "`folder'-CrashOccupantTable.xlsx"
+    import excel using "`file_name'", firstrow case(lower) allstring clear
+    keep intcrashid ///
+         o13_injury_severity_cd
+    rename o13_injury_severity_cd injury_severity
+    destring intcrashid, replace
+    save `occupants', replace
+
+    * Drivers and non-motorists: injury severity and alcohol
+    local file_name = "`folder'-CrashPersonTable.xlsx"
+    import excel using "`file_name'", firstrow case(lower) allstring clear
+    keep intcrashid             ///
+         p23_injury_severity_cd ///
+         p19_condition_cd       ///
+         p32_alcohol_result
+    rename p23_injury_severity_cd injury_severity
+    destring intcrashid        ///
+             p19_condition_cd, ///
+             replace force
+    gen double bac = real(p32_alcohol_result)
+    * DECISION (pending): alcohol rule. Conditions 4, 5, 7 = drinking; or BAC > 0.
+    * Closest of the rules tested to eCrash's crash-level flag.
+    gen byte is_alcohol = inlist(p19_condition_cd, 4, 5, 7) | (bac > 0 & !missing(bac))
+    append using `occupants'
+    replace is_alcohol = 0 if missing(is_alcohol)
+    * KABCO rank: 5 = K, 4 = A, 3 = B, 2 = C, 1 = D (none), 0 = blank
+    replace injury_severity = strtrim(upper(injury_severity))
+    gen byte sev_rank = 5*(injury_severity == "K") ///
+                      + 4*(injury_severity == "A") ///
+                      + 3*(injury_severity == "B") ///
+                      + 2*(injury_severity == "C") ///
+                      + 1*(injury_severity == "D")
+    collapse (max) sev_rank    ///
+                   is_alcohol, ///
+             by(intcrashid)
+    save `persons', replace
+
+    * Crashes: one row per crash
+    local file_name = "`folder'-CrashTable.xlsx"
+    import excel using "`file_name'", firstrow case(lower) clear
+    keep intcrashid       ///
+         g1_county_nmbr   ///
+         g3_reported_date ///
+         g7_fatal_cnt     ///
+         g8_injury_cnt
+    * g3_reported_date is a date-time in 2018; handle a date-only year too
+    local date_format : format g3_reported_date
+    if substr("`date_format'", 1, 3) == "%tc" gen crash_date = dofc(g3_reported_date)
+    else gen crash_date = g3_reported_date
+    format crash_date %td
+    count if missing(crash_date)
+    di as txt r(N) " crashes with no date (kept in `file_year')"
+    count if year(crash_date) != `file_year'
+    di as txt r(N) " crashes dated outside `file_year' (kept in `file_year')"
+
+    * eCrash covers 2019 from the switch date, so later ReportBeam records are dropped
+    * DECISION (pending): about 1,200 late records, most of them not in eCrash
+    if `file_year' == 2019 {
+        count if crash_date >= $ms_switch & !missing(crash_date)
+        di as txt "Dropping " r(N) " ReportBeam crashes on or after the eCrash switch"
+        drop if crash_date >= $ms_switch & !missing(crash_date)
+    }
+
+    * Vehicle and person rows of dropped crashes have no match and are discarded
+    merge 1:1 intcrashid using `vehicles'
+    drop if _merge == 2
+    drop _merge
+    merge 1:1 intcrashid using `persons'
+    drop if _merge == 2
+    drop _merge
+
+    * Crashes with no vehicle or person rows: no animal, no alcohol, unknown severity
+    foreach v in is_animal is_alcohol sev_rank {
+        replace `v' = 0 if missing(`v')
+    }
+
+    rename g1_county_nmbr county_nmbr
+    rename g7_fatal_cnt total_fatalities
+    rename g8_injury_cnt total_injuries
+    gen int year = `file_year'
+    * Crash IDs are numeric here and text in eCrash, so they are not kept
+    keep county_nmbr      ///
+         year             ///
+         crash_date       ///
+         total_fatalities ///
+         total_injuries   ///
+         sev_rank         ///
+         is_animal        ///
+         is_alcohol
+
+    if !`is_first' append using `rb_all'
+    save `rb_all', replace
+    local is_first = 0
 }
 
-// destring b_2010-h_2016,replace
-// gather b_2010-h_2016, variable(type) value(value)
-// gen str12 year = substr(type, -4, .) 
-// ren value total_total
-// drop type
+*---------------------------------------------------------------
+* SECTION 2: ECRASH CRASH RECORDS (3 SEP 2019 TO 2024)
+*---------------------------------------------------------------
+* Source: Mississippi eCrash public data requests; request date is in each file name
+* TODO: add who provided these files and when they were received
+* Each pass reads one workbook (sheets Crashes, Vehicles, Drivers, Passengers,
+* Non-Motorists), joins on crashid and saves one row per crash.
+* Headers checked on the 2024 file only; 2019-2022 may differ.
 
-ren trafficcrashesinmississippi county_name 
-gen id = _n
-reshape long crashes, i(id) j(year)
-drop id
+local ec_2019 "Public Data Request 21-02-04 1755 (19-01-01 to 19-12-31).xlsx"
+local ec_2020 "Public Data Request 21-01-15 1700 (20-01-01 to 21-01-01).xlsx"
+local ec_2021 "Public Data Request 22-04-12 1535 (21-01-01 to 21-12-31).xlsx"
+local ec_2022 "Public Data Request 24-01-12 1055 (22-01-01 to 22-12-31).xlsx"
+* 2023-24 files are marked DRAFT; Section 4 checks they cover all 12 months
+local ec_2023 "Public Data Request 25-02-27 1725 (23-01-01 to 23-12-31) DRAFT.xlsx"
+local ec_2024 "Public Data Request 25-02-27 1733 (24-01-01 to 24-12-31) DRAFT.xlsx"
 
-ren crashes total_total
-destring total_total , replace 
-sort county_name year, stable
+tempfile ec_all
+local is_first = 1
+forvalues file_year = 2019/2024 {
+    local file_name = "$ms_raw/`ec_`file_year''"
+    di as txt _n "eCrash `file_year'"
 
+    * Animal: any vehicle whose sequence of events is "Collision with animal (live)"
+    import excel using "`file_name'", sheet("Vehicles") firstrow case(lower) allstring clear
+    keep crashid sequenceofevents*
+    gen byte is_animal = 0
+    foreach v of varlist sequenceofevents* {
+        replace is_animal = 1 if strpos(lower(`v'), "collision with animal") > 0
+    }
+    collapse (max) is_animal, ///
+             by(crashid)
+    save `vehicles', replace
 
-tempfile 10_16_TVC
-save `10_16_TVC', replace
+    * Severity: worst injury status across drivers, passengers and non-motorists
+    local is_first_sheet = 1
+    foreach sheet_name in "Drivers" "Passengers" "Non-Motorists" {
+        import excel using "`file_name'", sheet("`sheet_name'") firstrow case(lower) allstring clear
+        keep crashid ///
+             injurystatus
+        if !`is_first_sheet' append using `persons'
+        save `persons', replace
+        local is_first_sheet = 0
+    }
+    * Injury status reads e.g. "(K) Fatal Injury"; character 2 is the KABCO letter
+    gen temp = substr(injurystatus, 2, 1)
+    gen byte sev_rank = 5*(temp == "K") ///
+                      + 4*(temp == "A") ///
+                      + 3*(temp == "B") ///
+                      + 2*(temp == "C") ///
+                      + 1*(temp == "O")
+    drop temp
+    collapse (max) sev_rank, ///
+             by(crashid)
+    save `persons', replace
 
-append using  `05_09_TVC' ,force
+    * Crashes: one row per crash
+    import excel using "`file_name'", sheet("Crashes") firstrow case(lower) clear
+    keep crashid       ///
+         crashdate     ///
+         countyid      ///
+         fatalitycount ///
+         injurycount   ///
+         alcoholinvolvement
+    * Crash Date is text ("2024/01/01") in the 2024 file; handle an Excel date too
+    cap confirm string variable crashdate
+    if _rc == 0 gen crash_date = date(crashdate, "YMD")
+    else gen crash_date = crashdate
+    format crash_date %td
+    * Undated crashes are dropped below; stop if the date format was not read
+    count if missing(crash_date)
+    di as txt r(N) " crashes with no readable date"
+    assert r(N) < 0.01 * _N
+    * 2019 starts at the switch date; the 2020 file runs to 1 Jan 2021
+    if `file_year' == 2019 keep if crash_date >= $ms_switch & year(crash_date) == 2019
+    else keep if year(crash_date) == `file_year'
+    gen byte is_alcohol = alcoholinvolvement == "Yes"
 
-tempfile 05_16_TVC
-save `05_16_TVC', replace
+    merge 1:1 crashid using `vehicles'
+    drop if _merge == 2
+    drop _merge
+    merge 1:1 crashid using `persons'
+    drop if _merge == 2
+    drop _merge
 
-/*----------------------------------------------------*/
-      /* [>   1.2  Deer DVC 05-16   <] */
-/*----------------------------------------------------*/
-clear
-local file_name = "$path/dataCSV/DVCs/MS/MS.DVC.2005-2016.CountySeverity.xlsx"
-import excel using "`file_name'" , describe
-import excel using "`file_name'", allstring sheet(`r(worksheet_1)') cellrange(A1:N86) firstrow case(lower) clear
- 
+    * Crashes with no vehicle or person rows: no animal, unknown severity
+    foreach v in is_animal sev_rank {
+        replace `v' = 0 if missing(`v')
+    }
 
-foreach v of varlist b-n {
-  local lb_var : var label `v'
-  local suffix = `v'[1] 
-  rename `v' crashes`v'_`suffix'_`lb_var'
+    rename countyid county_nmbr
+    rename fatalitycount total_fatalities
+    rename injurycount total_injuries
+    gen int year = `file_year'
+    keep county_nmbr      ///
+         year             ///
+         crash_date       ///
+         total_fatalities ///
+         total_injuries   ///
+         sev_rank         ///
+         is_animal        ///
+         is_alcohol
+
+    if !`is_first' append using `ec_all'
+    save `ec_all', replace
+    local is_first = 0
 }
 
-ren trafficcrashesinmississippii county_name
- 
-drop in 1
-reshape long crashes@, i(county_name) j(type) string 
+*---------------------------------------------------------------
+* SECTION 3: COUNTY TABLES (2005-2016)
+*---------------------------------------------------------------
+* Source: county deer and all-cause tables received in 2020 (originals in
+* dataRAW/DVCs/MS/ARCHIVE). TODO: add who provided them.
+* Deer tables: row 1 = year (first column of each year only), row 2 = severity
+* (K fatal, I injury, O PDO). Blank cells are true zeros. All-cause tables are
+* kept only to check the crash-level totals in Section 4.
 
-sort county_name type
-gen str12 year = substr(type, -4, .) if ustrregexm(type, "([0-9])")==1 
-replace year=year[_n-1] if year==""
-replace type = substr(type,3,1)
+tempfile deer ///
+         all_cause
+local file_name = "$ms_csv/MS.DVC.2005-2016.CountySeverity.xlsx"
+local is_first = 1
+* Each pass reads one sheet; the second word is the sheet's last cell
+foreach sheet_range in "2005-2009 N86" "2010-2013 K87" "2014-2016 J87" {
+    gettoken sheet_name last_cell : sheet_range
+    local last_cell = strtrim("`last_cell'")
+    local last_col = substr("`last_cell'", 1, 1)
+    import excel using "`file_name'", sheet("`sheet_name'") cellrange(A1:`last_cell') allstring clear
+    rename A county_name
 
-reshape wide crashes , i(county_name year) j(type) string
+    * Name each column deer_<severity>_<year>, carrying the year across blank cells
+    local table_year = ""
+    foreach v of varlist B-`last_col' {
+        if strtrim(`v'[1]) != "" local table_year = strtrim(`v'[1])
+        local severity = strtrim(`v'[2])
+        rename `v' deer_`severity'_`table_year'
+    }
+    drop in 1/2
+    replace county_name = lower(strtrim(subinstr(county_name, " County", "", .)))
+    drop if inlist(county_name, "non-officer", "invalid code", "total")
 
-rename crashesI deer_injury
-rename crashesK deer_fatal
-rename crashesO deer_pdo
-destring year-deer_pdo, replace
-
-tempfile 05_09
-save `05_09', replace
-
-************************
-import excel using "`file_name'" , describe
-import excel using "`file_name'", allstring sheet(`r(worksheet_2)') cellrange(A1:K87) firstrow case(lower) clear
-
-foreach v of varlist b-k {
-  local lb_var : var label `v'
-  local suffix = `v'[1]
-  rename `v' crashes`v'_`suffix'_`lb_var'
-} 
-drop in 1/2
-ren trafficcrashesinmississippii county_name
-
-reshape long crashes@, i(county_name) j(type) string 
-
-sort county_name type
-gen str12 year = substr(type, -4, .) if ustrregexm(type, "([0-9])")==1 
-replace year=year[_n-1] if year==""
-replace type = substr(type,3,1)
-
-reshape wide crashes , i(county_name year) j(type) string
-
-rename crashesI deer_injury
-rename crashesK deer_fatal
-rename crashesO deer_pdo
-destring year-deer_pdo, replace
-
-tempfile 10_13
-save `10_13', replace
- 
-************************
-import excel using "`file_name'" , describe
-import excel using "`file_name'", allstring sheet(`r(worksheet_3)') cellrange(A1:J87) firstrow case(lower) clear
-
-foreach v of varlist b-j {
-  local lb_var : var label `v'
-  local suffix = `v'[1]
-  rename `v' crashes`v'_`suffix'_`lb_var'
+    reshape long deer_I_   ///
+                 deer_K_   ///
+                 deer_O_,  ///
+            i(county_name) ///
+            j(year)
+    if !`is_first' append using `deer'
+    save `deer', replace
+    local is_first = 0
 }
-
-drop in 1/2
-ren trafficcrashesinmississippii county_name
-
-reshape long crashes@, i(county_name) j(type) string 
-
-sort county_name type
-gen str12 year = substr(type, -4, .) if ustrregexm(type, "([0-9])")==1 
-replace year=year[_n-1] if year==""
-replace type = substr(type,3,1)
-
-reshape wide crashes , i(county_name year) j(type) string
-
-rename crashesI deer_injury
-rename crashesK deer_fatal
-rename crashesO deer_pdo
-destring year-deer_pdo, replace
-
-append using `10_13' `05_09'  ,force
-
-merge 1:1 county_name year using "`05_16_TVC'", nogenerate 
-assert(1 3)
-
-
-tempfile deer
+destring deer_I_  ///
+         deer_K_  ///
+         deer_O_, ///
+         replace
+foreach v in deer_I_ deer_K_ deer_O_ {
+    replace `v' = 0 if missing(`v')
+}
+rename deer_K_ deer_fatal_collision
+rename deer_I_ deer_injury_collision
+rename deer_O_ deer_pdo_collision
+gen deer_total = deer_fatal_collision  ///
+               + deer_injury_collision ///
+               + deer_pdo_collision
 save `deer', replace
 
-assert  deer_fatal>=0 ///
-    & deer_injury>=0 ///
-    & deer_pdo>=0, fast // sanity check
+local file_name = "$ms_csv/MS.TVC.2005-2016.County.xlsx"
+local is_first = 1
+* Each pass reads one sheet; the second word is the sheet's last cell
+foreach sheet_range in "2005-2009 F85" "2010-2016 H86" {
+    gettoken sheet_name last_cell : sheet_range
+    local last_cell = strtrim("`last_cell'")
+    local last_col = substr("`last_cell'", 1, 1)
+    import excel using "`file_name'", sheet("`sheet_name'") cellrange(A1:`last_cell') allstring clear
+    rename A county_name
+    foreach v of varlist B-`last_col' {
+        local table_year = strtrim(`v'[1])
+        rename `v' table_total_`table_year'
+    }
+    drop in 1
+    replace county_name = lower(strtrim(subinstr(county_name, " County", "", .)))
+    drop if inlist(county_name, "non-officer", "invalid code", "total")
 
-replace county_name = lower(county_name)
-replace county_name = strtrim(county_name)
-replace county_name = ustrtrim(county_name)
-replace county_name = "total" if county_name == "total:"
-replace county_name = "st. francois" if county_name == "st. francios"
-replace county_name = subinstr(county_name, " county", "", .)
-drop if county_name==""
+    reshape long table_total_, ///
+            i(county_name)     ///
+            j(year)
+    if !`is_first' append using `all_cause'
+    save `all_cause', replace
+    local is_first = 0
+}
+destring table_total_, replace
+rename table_total_ table_total
 
-gen state_letter_code  = "MS" // add state abbreviation
-
-
-/*----------------------------------------------------*/
-      /* [>   2.  Merge with state_county_identifiers   <] */
-/*----------------------------------------------------*/
-local state_county_identifiers "$path/dataSTATA/_AUX/state_county_identifiers.dta"
-merge m:1 state_letter_code county_name using "`state_county_identifiers'" ,keep(1 3) 
-br if _merge==1
+merge 1:1 county_name year using `deer'
+assert _merge == 3
 drop _merge
 
-drop if county_name=="invalid code"
-drop if county_name=="non-officer"
-drop if county_name=="total"
+gen state_letter_code = "MS"
+local file_name = "$path/dataSTATA/state_county_identifiers.dta"
+merge m:1 state_letter_code county_name using "`file_name'", keepusing(fips)
+* The identifiers file covers every state; other states' rows are discarded
+drop if _merge == 2
+assert _merge == 3
+drop _merge
 
-order state_letter_code ///
-    state_name ///
-    county_name ///
-    state_fips ///
-    county_fips ///
-    fips year
+keep fips                  ///
+     year                  ///
+     table_total           ///
+     deer_fatal_collision  ///
+     deer_injury_collision ///
+     deer_pdo_collision    ///
+     deer_total
+isid fips year
+save `deer', replace
 
-sort state_letter_code ///
-    state_name ///
-    county_name ///
-    state_fips ///
-    county_fips ///
-    fips year, stable
+*---------------------------------------------------------------
+* SECTION 4: STACK ERAS AND COLLAPSE TO COUNTY-YEAR
+*---------------------------------------------------------------
 
-/* [> imputation <] */
-foreach var of varlist total_total deer_injury deer_fatal deer_pdo  {
-    replace `var'= 0 if `var'==.
+use `rb_all', clear
+append using `ec_all'
+
+* A year is used only if its crash records cover all 12 months
+gen temp = month(crash_date) if year(crash_date) == year
+egen temp_tag = tag(year temp)
+bysort year: egen temp_months = total(temp_tag)
+tab year if temp_months < 12
+assert temp_months == 12
+drop temp      ///
+     temp_tag  ///
+     temp_months
+
+* Both formats number counties 1-82 alphabetically, so county FIPS = 2n - 1
+count if !inrange(county_nmbr, 1, 82)
+di as txt r(N) " crashes without a valid county dropped"
+drop if !inrange(county_nmbr, 1, 82)
+gen fips = "28" + string(2*county_nmbr - 1, "%03.0f")
+
+* Crash severity = worst injury of any person (KABCO); 0 = no person record
+gen byte total_all_cause            = 1
+gen byte fatal_collision            = sev_rank == 5
+gen byte major_injury_collision     = sev_rank == 4
+gen byte minor_injury_collision     = inlist(sev_rank, 2, 3)
+gen byte injury_collision           = inlist(sev_rank, 2, 3, 4)
+gen byte pdo_collision              = sev_rank == 1
+gen byte unknown_severity_collision = sev_rank == 0
+
+count if fatal_collision != (total_fatalities > 0 & !missing(total_fatalities))
+di as txt r(N) " crashes where person severity and the fatality count disagree"
+
+* Each pass builds one cause's severity split. cond() keeps non-cause
+* crashes at 0 even when their injury or fatality count is missing.
+foreach cause in animal alcohol {
+    gen byte `cause'_collision              = is_`cause'
+    gen byte fatal_`cause'_collision        = is_`cause' * fatal_collision
+    gen byte injury_`cause'_collision       = is_`cause' * injury_collision
+    gen byte major_injury_`cause'_collision = is_`cause' * major_injury_collision
+    gen byte minor_injury_`cause'_collision = is_`cause' * minor_injury_collision
+    gen byte pdo_`cause'                    = is_`cause' * pdo_collision
+    gen `cause'_fatalities = cond(is_`cause' == 1, total_fatalities, 0)
+    gen `cause'_injuries   = cond(is_`cause' == 1, total_injuries, 0)
 }
 
-egen deer_total = rowtotal(deer_*)
+collapse (sum) total_all_cause                ///
+               fatal_collision                ///
+               major_injury_collision         ///
+               minor_injury_collision         ///
+               injury_collision               ///
+               pdo_collision                  ///
+               unknown_severity_collision     ///
+               total_fatalities               ///
+               total_injuries                 ///
+               animal_collision               ///
+               fatal_animal_collision         ///
+               injury_animal_collision        ///
+               major_injury_animal_collision  ///
+               minor_injury_animal_collision  ///
+               pdo_animal                     ///
+               animal_fatalities              ///
+               animal_injuries                ///
+               alcohol_collision              ///
+               fatal_alcohol_collision        ///
+               injury_alcohol_collision       ///
+               major_injury_alcohol_collision ///
+               minor_injury_alcohol_collision ///
+               pdo_alcohol                    ///
+               alcohol_fatalities             ///
+               alcohol_injuries,              ///
+               by(fips                        ///
+                  year)
+
+* County-years with no crash records are true zeros
+fillin fips year
+foreach v of varlist total_all_cause-alcohol_injuries {
+    replace `v' = 0 if _fillin == 1
+}
+drop _fillin
+
+gen str20 data_source = cond(year < 2019, "ReportBeam", ///
+                        cond(year == 2019, "ReportBeam + eCrash", "eCrash"))
+
+* Deer and the county-table totals cover 2005-2016 only
+merge 1:1 fips year using `deer'
+assert _merge != 2
+drop _merge
+
+gen pct_gap_vs_table = 100 * (total_all_cause - table_total) / table_total
+di as txt _n "Crash-level total vs county table, % gap by year (2005-2016)"
+tabstat pct_gap_vs_table,        ///
+        by(year)                 ///
+        statistics(mean min max) ///
+        format(%6.1f)
+drop table_total ///
+     pct_gap_vs_table
+
+*---------------------------------------------------------------
+* SECTION 5: MERGE COUNTY IDENTIFIERS
+*---------------------------------------------------------------
+
+local file_name = "$path/dataSTATA/state_county_identifiers.dta"
+merge m:1 fips using "`file_name'"
+* The identifiers file covers every state; other states' rows are discarded
+drop if _merge == 2
+assert _merge == 3
+drop _merge
+
+*---------------------------------------------------------------
+* SECTION 6: CHECKS AND SAVE
+*---------------------------------------------------------------
+
+isid fips year
+qui tab year
+assert r(r) == 21 // every year 2004-2024 present
+bysort year: gen n_counties = _N
+assert n_counties == 82
+drop n_counties
+
+assert fatal_collision  ///
+     + injury_collision ///
+     + pdo_collision    ///
+     + unknown_severity_collision == total_all_cause
+assert major_injury_collision + minor_injury_collision == injury_collision
+assert animal_collision <= total_all_cause
+assert alcohol_collision <= total_all_cause
+foreach v of varlist total_all_cause-alcohol_injuries {
+    assert `v' >= 0 if !missing(`v')
+}
+* Deer comes from a different source than animal, so report rather than assert
+count if deer_total > animal_collision & !missing(deer_total)
+di as txt r(N) " county-years with deer_total > animal_collision"
+
+label var total_all_cause            "All-cause collisions"
+label var unknown_severity_collision "Collisions with no person injury record"
+label var animal_collision           "Animal-related collisions"
+label var alcohol_collision          "Alcohol-related collisions (rule differs by data_source)"
+label var deer_total                 "Deer collisions (county tables, 2005-2016 only)"
+label var data_source                "Crash-record format behind the row"
+
+* TODO: the 2020 append script expects the old names (total_total, animal_total,
+* deer_fatal); update it or rename here
+order state_letter_code              ///
+      state_name                     ///
+      county_name                    ///
+      state_fips                     ///
+      county_fips                    ///
+      fips                           ///
+      year                           ///
+      data_source                    ///
+      total_all_cause                ///
+      fatal_collision                ///
+      major_injury_collision         ///
+      minor_injury_collision         ///
+      injury_collision               ///
+      pdo_collision                  ///
+      unknown_severity_collision     ///
+      total_fatalities               ///
+      total_injuries                 ///
+      animal_collision               ///
+      fatal_animal_collision         ///
+      injury_animal_collision        ///
+      major_injury_animal_collision  ///
+      minor_injury_animal_collision  ///
+      pdo_animal                     ///
+      animal_fatalities              ///
+      animal_injuries                ///
+      deer_fatal_collision           ///
+      deer_injury_collision          ///
+      deer_pdo_collision             ///
+      deer_total                     ///
+      alcohol_collision              ///
+      fatal_alcohol_collision        ///
+      injury_alcohol_collision       ///
+      major_injury_alcohol_collision ///
+      minor_injury_alcohol_collision ///
+      pdo_alcohol                    ///
+      alcohol_fatalities             ///
+      alcohol_injuries
+
+* Statewide shares by year, for spotting breaks between eras
+preserve
+    collapse (sum) total_all_cause    ///
+                   animal_collision   ///
+                   alcohol_collision, ///
+                   by(year            ///
+                      data_source)
+    gen share_animal  = 100 * animal_collision  / total_all_cause
+    gen share_alcohol = 100 * alcohol_collision / total_all_cause
+    list year            ///
+         data_source     ///
+         total_all_cause ///
+         share_animal    ///
+         share_alcohol,  ///
+         sep(0)          ///
+         noobs
+restore
 
 qui summ year
-local T1 = `r(min)'
-local T2 = `r(max)'
+local t1 = r(min)
+local t2 = r(max)
+
+* Final save
+sort fips year // to keep saved files in a predictable order
 compress
-save "$working_data/dvcs_MS_county_year_`T1'_`T2'.dta" ,replace 
+local file_name = "$working_data/dvcs_MS_county_year_`t1'_`t2'.dta"
+save "`file_name'", replace
+
+* Wrap up
+log close
