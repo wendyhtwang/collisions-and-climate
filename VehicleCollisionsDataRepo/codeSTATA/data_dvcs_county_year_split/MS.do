@@ -33,6 +33,8 @@ CHANGELOG:
   11/16/2026 [Wendy Wang]: drop ReportBeam rows with non-numeric crash IDs (run
     stopped in 2006); read text dates in the crash table; sources in source.txt;
     no variable type declarations (compress sets types).
+  11/16/2026 [Wendy Wang]: read crash dates written as text (2012, 2015-2018);
+    stop in Section 1 if a year's dates can't be read.
 ==============================================================*/
 
 *---------------------------------------------------------------
@@ -184,13 +186,16 @@ forvalues file_year = 2004/2019 {
              g7_fatal_cnt   ///
              g8_injury_cnt, ///
              replace force
-    * A date-time in 2018. If broken rows made the column text, parse the text:
-    * an Excel day number, or a written date-time
+    * A date-time in 2018. A split row makes the column text (2012, 2015-2018),
+    * and Stata then writes each date as text; read the date from its first word
     cap confirm string variable g3_reported_date
     if _rc == 0 {
-        gen crash_date = floor(real(g3_reported_date)) + td(30dec1899)
-        replace crash_date = dofc(clock(g3_reported_date, "YMDhms")) if missing(crash_date)
-        replace crash_date = dofc(clock(g3_reported_date, "MDYhms")) if missing(crash_date)
+        gen temp = word(strtrim(g3_reported_date), 1)
+        gen crash_date = date(temp, "MDY")
+        replace crash_date = date(temp, "DMY") if missing(crash_date)
+        replace crash_date = date(temp, "YMD") if missing(crash_date)
+        replace crash_date = floor(real(temp)) + td(30dec1899) if missing(crash_date)
+        drop temp
     }
     else {
         local date_format : format g3_reported_date
@@ -202,6 +207,11 @@ forvalues file_year = 2004/2019 {
     di as txt r(N) " crashes with no date (kept in `file_year')"
     count if year(crash_date) != `file_year'
     di as txt r(N) " crashes dated outside `file_year' (kept in `file_year')"
+    * Stop here, not in Section 4, if the dates were not read
+    if r(N) > 0.01 * _N {
+        list g3_reported_date in 1/5
+        error 459
+    }
 
     * eCrash covers 2019 from the switch date, so later ReportBeam records are dropped
     * DECISION (pending): about 1,200 late records, most of them not in eCrash
