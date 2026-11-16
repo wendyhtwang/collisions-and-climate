@@ -1,0 +1,14 @@
+Mississippi crash data (dataRAW/DVCs/MS)
+
+ReportBeam (2004 to 2 Sep 2019) and eCrash (3 Sep 2019 to 2024)
+  Source:   Mississippi Department of Public Safety, Public Data
+            https://publicdata.dps.ms.gov/Public-CrashData/
+  How:      Crash Data page > ReportBeam/ (2004-2019) and eCrash/ (2019 on).
+            2019 has a file in each folder.
+  Received: logged 07/21/2026 in Data sources and contacts summary.xlsx
+            (Collisions2026 tab). The 2023 and 2024 eCrash files are DRAFTs.
+
+County deer and all-cause tables, 2005-2016 (ARCHIVE/ and dataCSV/DVCs/MS)
+  Source:   Mississippi Department of Public Safety (PSDL), Ron Sennett,
+            in reply to an email to mohs@dps.ms.gov
+  Received: first contact 01/09/2017 (DVC old tab of the same spreadsheet)

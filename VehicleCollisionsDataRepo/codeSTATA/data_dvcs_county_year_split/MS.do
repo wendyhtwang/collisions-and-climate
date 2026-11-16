@@ -30,6 +30,9 @@ CHANGELOG:
     deer. DRAFT, not yet run.
   11/09/2026 [Wendy Wang]: use the 2023-24 DRAFT files; check that every year
     covers all 12 months; read eCrash text dates; drop crash IDs before stacking.
+  11/16/2026 [Wendy Wang]: drop ReportBeam rows with non-numeric crash IDs (run
+    stopped in 2006); read text dates in the crash table; sources in source.txt;
+    no variable type declarations (compress sets types).
 ==============================================================*/
 
 *---------------------------------------------------------------
@@ -86,14 +89,26 @@ log using "$path/logs/clean_MS.log", replace text
 
 set excelxlsxlargefile on
 
+* Some ReportBeam tables hold broken rows (the 2006 vehicle table has crash ID
+* "PRO") that make the ID column text; drop them so every table keys on a number
+cap program drop drop_bad_ids
+program define drop_bad_ids
+    destring intcrashid, replace force
+    count if missing(intcrashid)
+    di as txt r(N) " rows with a non-numeric crash ID dropped"
+    drop if missing(intcrashid)
+end
+
 *---------------------------------------------------------------
 * SECTION 1: REPORTBEAM CRASH RECORDS (2004 TO 2 SEP 2019)
 *---------------------------------------------------------------
 * Source: Mississippi ReportBeam crash export, one folder of five tables per year
-* TODO: add who provided these files and when they were received
+* (site and download date in dataRAW/DVCs/MS/source.txt)
 * Each pass joins one year's tables on intcrashid and saves one row per crash:
 * county, worst injury (KABCO), animal and alcohol flags.
-* Names and types checked on the 2018 crash, vehicle and person tables only.
+* Code values (14 = Animal; conditions 4, 5, 7) are listed in
+* dataRAW/DVCs/MS/ReportBeamCodeValueTable.txt.
+* Column names checked across 2004-2019 (not every table in every year).
 
 tempfile rb_all    ///
          vehicles  ///
@@ -108,7 +123,8 @@ forvalues file_year = 2004/2019 {
     local file_name = "`folder'-CrashVehicleTable.xlsx"
     import excel using "`file_name'", firstrow case(lower) clear
     keep intcrashid v20_*
-    gen byte is_animal = 0
+    drop_bad_ids
+    gen is_animal = 0
     foreach v of varlist v20_* {
         cap destring `v', replace force
         replace is_animal = 1 if `v' == 14
@@ -123,7 +139,7 @@ forvalues file_year = 2004/2019 {
     keep intcrashid ///
          o13_injury_severity_cd
     rename o13_injury_severity_cd injury_severity
-    destring intcrashid, replace
+    drop_bad_ids
     save `occupants', replace
 
     * Drivers and non-motorists: injury severity and alcohol
@@ -134,18 +150,18 @@ forvalues file_year = 2004/2019 {
          p19_condition_cd       ///
          p32_alcohol_result
     rename p23_injury_severity_cd injury_severity
-    destring intcrashid        ///
-             p19_condition_cd, ///
+    drop_bad_ids
+    destring p19_condition_cd, ///
              replace force
-    gen double bac = real(p32_alcohol_result)
+    gen bac = real(p32_alcohol_result)
     * DECISION (pending): alcohol rule. Conditions 4, 5, 7 = drinking; or BAC > 0.
     * Closest of the rules tested to eCrash's crash-level flag.
-    gen byte is_alcohol = inlist(p19_condition_cd, 4, 5, 7) | (bac > 0 & !missing(bac))
+    gen is_alcohol = inlist(p19_condition_cd, 4, 5, 7) | (bac > 0 & !missing(bac))
     append using `occupants'
     replace is_alcohol = 0 if missing(is_alcohol)
     * KABCO rank: 5 = K, 4 = A, 3 = B, 2 = C, 1 = D (none), 0 = blank
     replace injury_severity = strtrim(upper(injury_severity))
-    gen byte sev_rank = 5*(injury_severity == "K") ///
+    gen sev_rank = 5*(injury_severity == "K") ///
                       + 4*(injury_severity == "A") ///
                       + 3*(injury_severity == "B") ///
                       + 2*(injury_severity == "C") ///
@@ -163,10 +179,24 @@ forvalues file_year = 2004/2019 {
          g3_reported_date ///
          g7_fatal_cnt     ///
          g8_injury_cnt
-    * g3_reported_date is a date-time in 2018; handle a date-only year too
-    local date_format : format g3_reported_date
-    if substr("`date_format'", 1, 3) == "%tc" gen crash_date = dofc(g3_reported_date)
-    else gen crash_date = g3_reported_date
+    drop_bad_ids
+    destring g1_county_nmbr ///
+             g7_fatal_cnt   ///
+             g8_injury_cnt, ///
+             replace force
+    * A date-time in 2018. If broken rows made the column text, parse the text:
+    * an Excel day number, or a written date-time
+    cap confirm string variable g3_reported_date
+    if _rc == 0 {
+        gen crash_date = floor(real(g3_reported_date)) + td(30dec1899)
+        replace crash_date = dofc(clock(g3_reported_date, "YMDhms")) if missing(crash_date)
+        replace crash_date = dofc(clock(g3_reported_date, "MDYhms")) if missing(crash_date)
+    }
+    else {
+        local date_format : format g3_reported_date
+        if substr("`date_format'", 1, 3) == "%tc" gen crash_date = dofc(g3_reported_date)
+        else gen crash_date = g3_reported_date
+    }
     format crash_date %td
     count if missing(crash_date)
     di as txt r(N) " crashes with no date (kept in `file_year')"
@@ -197,7 +227,7 @@ forvalues file_year = 2004/2019 {
     rename g1_county_nmbr county_nmbr
     rename g7_fatal_cnt total_fatalities
     rename g8_injury_cnt total_injuries
-    gen int year = `file_year'
+    gen year = `file_year'
     * Crash IDs are numeric here and text in eCrash, so they are not kept
     keep county_nmbr      ///
          year             ///
@@ -217,10 +247,10 @@ forvalues file_year = 2004/2019 {
 * SECTION 2: ECRASH CRASH RECORDS (3 SEP 2019 TO 2024)
 *---------------------------------------------------------------
 * Source: Mississippi eCrash public data requests; request date is in each file name
-* TODO: add who provided these files and when they were received
+* (site and download date in dataRAW/DVCs/MS/source.txt)
 * Each pass reads one workbook (sheets Crashes, Vehicles, Drivers, Passengers,
 * Non-Motorists), joins on crashid and saves one row per crash.
-* Headers checked on the 2024 file only; 2019-2022 may differ.
+* Headers checked in the 2020, 2023 and 2024 files; 2019, 2021, 2022 not checked.
 
 local ec_2019 "Public Data Request 21-02-04 1755 (19-01-01 to 19-12-31).xlsx"
 local ec_2020 "Public Data Request 21-01-15 1700 (20-01-01 to 21-01-01).xlsx"
@@ -239,7 +269,7 @@ forvalues file_year = 2019/2024 {
     * Animal: any vehicle whose sequence of events is "Collision with animal (live)"
     import excel using "`file_name'", sheet("Vehicles") firstrow case(lower) allstring clear
     keep crashid sequenceofevents*
-    gen byte is_animal = 0
+    gen is_animal = 0
     foreach v of varlist sequenceofevents* {
         replace is_animal = 1 if strpos(lower(`v'), "collision with animal") > 0
     }
@@ -259,7 +289,7 @@ forvalues file_year = 2019/2024 {
     }
     * Injury status reads e.g. "(K) Fatal Injury"; character 2 is the KABCO letter
     gen temp = substr(injurystatus, 2, 1)
-    gen byte sev_rank = 5*(temp == "K") ///
+    gen sev_rank = 5*(temp == "K") ///
                       + 4*(temp == "A") ///
                       + 3*(temp == "B") ///
                       + 2*(temp == "C") ///
@@ -289,7 +319,7 @@ forvalues file_year = 2019/2024 {
     * 2019 starts at the switch date; the 2020 file runs to 1 Jan 2021
     if `file_year' == 2019 keep if crash_date >= $ms_switch & year(crash_date) == 2019
     else keep if year(crash_date) == `file_year'
-    gen byte is_alcohol = alcoholinvolvement == "Yes"
+    gen is_alcohol = strtrim(lower(alcoholinvolvement)) == "yes"
 
     merge 1:1 crashid using `vehicles'
     drop if _merge == 2
@@ -306,7 +336,7 @@ forvalues file_year = 2019/2024 {
     rename countyid county_nmbr
     rename fatalitycount total_fatalities
     rename injurycount total_injuries
-    gen int year = `file_year'
+    gen year = `file_year'
     keep county_nmbr      ///
          year             ///
          crash_date       ///
@@ -324,8 +354,8 @@ forvalues file_year = 2019/2024 {
 *---------------------------------------------------------------
 * SECTION 3: COUNTY TABLES (2005-2016)
 *---------------------------------------------------------------
-* Source: county deer and all-cause tables received in 2020 (originals in
-* dataRAW/DVCs/MS/ARCHIVE). TODO: add who provided them.
+* Source: county deer and all-cause tables from MS Public Safety (originals in
+* dataRAW/DVCs/MS/ARCHIVE; sender in source.txt).
 * Deer tables: row 1 = year (first column of each year only), row 2 = severity
 * (K fatal, I injury, O PDO). Blank cells are true zeros. All-cause tables are
 * kept only to check the crash-level totals in Section 4.
@@ -450,13 +480,13 @@ drop if !inrange(county_nmbr, 1, 82)
 gen fips = "28" + string(2*county_nmbr - 1, "%03.0f")
 
 * Crash severity = worst injury of any person (KABCO); 0 = no person record
-gen byte total_all_cause            = 1
-gen byte fatal_collision            = sev_rank == 5
-gen byte major_injury_collision     = sev_rank == 4
-gen byte minor_injury_collision     = inlist(sev_rank, 2, 3)
-gen byte injury_collision           = inlist(sev_rank, 2, 3, 4)
-gen byte pdo_collision              = sev_rank == 1
-gen byte unknown_severity_collision = sev_rank == 0
+gen total_all_cause            = 1
+gen fatal_collision            = sev_rank == 5
+gen major_injury_collision     = sev_rank == 4
+gen minor_injury_collision     = inlist(sev_rank, 2, 3)
+gen injury_collision           = inlist(sev_rank, 2, 3, 4)
+gen pdo_collision              = sev_rank == 1
+gen unknown_severity_collision = sev_rank == 0
 
 count if fatal_collision != (total_fatalities > 0 & !missing(total_fatalities))
 di as txt r(N) " crashes where person severity and the fatality count disagree"
@@ -464,12 +494,12 @@ di as txt r(N) " crashes where person severity and the fatality count disagree"
 * Each pass builds one cause's severity split. cond() keeps non-cause
 * crashes at 0 even when their injury or fatality count is missing.
 foreach cause in animal alcohol {
-    gen byte `cause'_collision              = is_`cause'
-    gen byte fatal_`cause'_collision        = is_`cause' * fatal_collision
-    gen byte injury_`cause'_collision       = is_`cause' * injury_collision
-    gen byte major_injury_`cause'_collision = is_`cause' * major_injury_collision
-    gen byte minor_injury_`cause'_collision = is_`cause' * minor_injury_collision
-    gen byte pdo_`cause'                    = is_`cause' * pdo_collision
+    gen `cause'_collision              = is_`cause'
+    gen fatal_`cause'_collision        = is_`cause' * fatal_collision
+    gen injury_`cause'_collision       = is_`cause' * injury_collision
+    gen major_injury_`cause'_collision = is_`cause' * major_injury_collision
+    gen minor_injury_`cause'_collision = is_`cause' * minor_injury_collision
+    gen pdo_`cause'                    = is_`cause' * pdo_collision
     gen `cause'_fatalities = cond(is_`cause' == 1, total_fatalities, 0)
     gen `cause'_injuries   = cond(is_`cause' == 1, total_injuries, 0)
 }
@@ -509,7 +539,7 @@ foreach v of varlist total_all_cause-alcohol_injuries {
 }
 drop _fillin
 
-gen str20 data_source = cond(year < 2019, "ReportBeam", ///
+gen data_source = cond(year < 2019, "ReportBeam", ///
                         cond(year == 2019, "ReportBeam + eCrash", "eCrash"))
 
 * Deer and the county-table totals cover 2005-2016 only
