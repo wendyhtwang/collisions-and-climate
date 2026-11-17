@@ -3,7 +3,7 @@
        log:  /mnt/data_d/Dropbox/Research/VehicleCollisionsDataRepo/logs/clean_
 > MS.log
   log type:  text
- opened on:  16 Nov 2026, 13:32:10
+ opened on:  16 Nov 2026, 13:41:25
 
 . 
 . set excelxlsxlargefile on
@@ -43,7 +43,7 @@
 
 . local is_first = 1
 
-. forvalues file_year = 2012/2012 {
+. forvalues file_year = 2004/2019 {
   2.     local folder = "$ms_raw/ReportBeam-`file_year'-CrashData/ReportBeam-`f
 > ile_year'"
   3.     di as txt _n "ReportBeam `file_year'"
@@ -192,6 +192,525 @@
  84.     local is_first = 0
  85. }
 
+ReportBeam 2004
+(41 vars, 108,379 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(1,891 real changes made)
+(43 real changes made)
+(5 real changes made)
+(3 real changes made)
+(note: file /tmp/St2220158.000002 not found)
+file /tmp/St2220158.000002 saved
+(17 vars, 49,064 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(note: file /tmp/St2220158.000003 not found)
+file /tmp/St2220158.000003 saved
+(27 vars, 104,835 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(12,498 missing values generated)
+(49,064 real changes made)
+(0 real changes made)
+(note: file /tmp/St2220158.000004 not found)
+file /tmp/St2220158.000004 saved
+(23 vars, 60,513 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+  0
+0 crashes with no date (kept in 2004)
+  0
+0 crashes dated outside 2004 (kept in 2004)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           300
+        from master                       300  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            60,213  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           885
+        from master                       885  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            59,628  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(300 real changes made)
+(885 real changes made)
+(885 real changes made)
+(note: file /tmp/St2220158.000001 not found)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2005
+(41 vars, 139,358 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(2,620 real changes made)
+(99 real changes made)
+(5 real changes made)
+(6 real changes made)
+file /tmp/St2220158.000002 saved
+(17 vars, 57,269 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 134,936 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(15,030 missing values generated)
+(57,269 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 77,833 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+  0
+0 crashes with no date (kept in 2005)
+  0
+0 crashes dated outside 2005 (kept in 2005)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           465
+        from master                       465  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            77,368  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                         1,156
+        from master                     1,156  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            76,677  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(465 real changes made)
+(1,156 real changes made)
+(1,156 real changes made)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2006
+(41 vars, 139,877 obs)
+intcrashid: contains nonnumeric characters; replaced as long
+(1 missing value generated)
+  1
+1 rows with a non-numeric crash ID dropped
+(1 observation deleted)
+(2,891 real changes made)
+(179 real changes made)
+(9 real changes made)
+(1 real change made)
+file /tmp/St2220158.000002 saved
+(17 vars, 58,527 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 134,949 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(13,925 missing values generated)
+(58,527 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 77,863 obs)
+intcrashid: contains nonnumeric characters; replaced as long
+(1 missing value generated)
+  1
+1 rows with a non-numeric crash ID dropped
+(1 observation deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+  0
+0 crashes with no date (kept in 2006)
+  0
+0 crashes dated outside 2006 (kept in 2006)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           400
+        from master                       400  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            77,462  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           844
+        from master                       844  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            77,018  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(400 real changes made)
+(844 real changes made)
+(844 real changes made)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2007
+(41 vars, 137,198 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(3,309 real changes made)
+(201 real changes made)
+(5 real changes made)
+(2 real changes made)
+file /tmp/St2220158.000002 saved
+(17 vars, 56,488 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 132,594 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(13,663 missing values generated)
+(56,488 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 76,650 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+  0
+0 crashes with no date (kept in 2007)
+  0
+0 crashes dated outside 2007 (kept in 2007)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           610
+        from master                       609  (_merge==1)
+        from using                          1  (_merge==2)
+
+    matched                            76,041  (_merge==3)
+    -----------------------------------------
+(1 observation deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           822
+        from master                       822  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            75,828  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(609 real changes made)
+(822 real changes made)
+(822 real changes made)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2008
+(41 vars, 128,974 obs)
+intcrashid: contains nonnumeric characters; replaced as long
+(1 missing value generated)
+  1
+1 rows with a non-numeric crash ID dropped
+(1 observation deleted)
+(3,383 real changes made)
+(216 real changes made)
+(10 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000002 saved
+(17 vars, 51,756 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 124,205 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(56,219 missing values generated)
+(51,756 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 72,588 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+  0
+0 crashes with no date (kept in 2008)
+  0
+0 crashes dated outside 2008 (kept in 2008)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           445
+        from master                       445  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            72,143  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           799
+        from master                       799  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            71,789  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(445 real changes made)
+(799 real changes made)
+(799 real changes made)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2009
+(41 vars, 118,247 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(3,324 real changes made)
+(211 real changes made)
+(10 real changes made)
+(3 real changes made)
+file /tmp/St2220158.000002 saved
+(17 vars, 49,061 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 113,923 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(112,634 missing values generated)
+(49,061 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 68,256 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+  0
+0 crashes with no date (kept in 2009)
+  0
+0 crashes dated outside 2009 (kept in 2009)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                         2,165
+        from master                     2,164  (_merge==1)
+        from using                          1  (_merge==2)
+
+    matched                            66,092  (_merge==3)
+    -----------------------------------------
+(1 observation deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                         2,532
+        from master                     2,532  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            65,724  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(2,164 real changes made)
+(2,532 real changes made)
+(2,532 real changes made)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2010
+(41 vars, 122,132 obs)
+intcrashid already numeric; no replace
+  1
+1 rows with a non-numeric crash ID dropped
+(1 observation deleted)
+(3,435 real changes made)
+(192 real changes made)
+(8 real changes made)
+(3 real changes made)
+file /tmp/St2220158.000002 saved
+(17 vars, 48,395 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 117,855 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(116,684 missing values generated)
+(48,395 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 68,214 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+  0
+0 crashes with no date (kept in 2010)
+  0
+0 crashes dated outside 2010 (kept in 2010)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                            21
+        from master                        21  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            68,193  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           352
+        from master                       352  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            67,862  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(21 real changes made)
+(352 real changes made)
+(352 real changes made)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2011
+(41 vars, 118,928 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(3,114 real changes made)
+(110 real changes made)
+(3 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000002 saved
+(17 vars, 46,437 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 114,652 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(113,480 missing values generated)
+(46,437 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 66,758 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+  0
+0 crashes with no date (kept in 2011)
+  0
+0 crashes dated outside 2011 (kept in 2011)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             2
+        from master                         2  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            66,756  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           292
+        from master                       292  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            66,466  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(2 real changes made)
+(292 real changes made)
+(292 real changes made)
+file /tmp/St2220158.000001 saved
+
 ReportBeam 2012
 (41 vars, 119,163 obs)
 intcrashid already numeric; no replace
@@ -202,14 +721,12 @@ intcrashid already numeric; no replace
 (109 real changes made)
 (7 real changes made)
 (3 real changes made)
-(note: file /tmp/St2220158.000002 not found)
 file /tmp/St2220158.000002 saved
 (17 vars, 46,871 obs)
 intcrashid: all characters numeric; replaced as long
   0
 0 rows with a non-numeric crash ID dropped
 (0 observations deleted)
-(note: file /tmp/St2220158.000003 not found)
 file /tmp/St2220158.000003 saved
 (27 vars, 114,590 obs)
 intcrashid: all characters numeric; replaced as long
@@ -220,7 +737,6 @@ p19_condition_cd: all characters numeric; replaced as byte
 (113,395 missing values generated)
 (46,871 real changes made)
 (0 real changes made)
-(note: file /tmp/St2220158.000004 not found)
 file /tmp/St2220158.000004 saved
 (23 vars, 66,731 obs)
 intcrashid: contains nonnumeric characters; replaced as long
@@ -266,9 +782,1568 @@ g8_injury_cnt: all characters numeric; replaced as byte
 (1 real change made)
 (338 real changes made)
 (338 real changes made)
-(note: file /tmp/St2220158.000001 not found)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2013
+(41 vars, 124,425 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(3,219 real changes made)
+(105 real changes made)
+(2 real changes made)
+(1 real change made)
+file /tmp/St2220158.000002 saved
+(17 vars, 47,448 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 119,727 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(118,506 missing values generated)
+(47,448 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 69,705 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+  0
+0 crashes with no date (kept in 2013)
+  0
+0 crashes dated outside 2013 (kept in 2013)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             3
+        from master                         3  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            69,702  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           349
+        from master                       349  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            69,356  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(3 real changes made)
+(349 real changes made)
+(349 real changes made)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2014
+(41 vars, 127,319 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(3,135 real changes made)
+(109 real changes made)
+(4 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000002 saved
+(17 vars, 47,589 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 122,382 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(121,221 missing values generated)
+(47,589 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 71,004 obs)
+intcrashid: contains nonnumeric characters; replaced as long
+(1 missing value generated)
+  1
+1 rows with a non-numeric crash ID dropped
+(1 observation deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+  0
+0 crashes with no date (kept in 2014)
+  0
+0 crashes dated outside 2014 (kept in 2014)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                            13
+        from master                        13  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            70,990  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           337
+        from master                       337  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            70,666  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(13 real changes made)
+(337 real changes made)
+(337 real changes made)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2015
+(41 vars, 136,954 obs)
+intcrashid: contains nonnumeric characters; replaced as long
+(1 missing value generated)
+  1
+1 rows with a non-numeric crash ID dropped
+(1 observation deleted)
+(3,333 real changes made)
+(94 real changes made)
+(0 real changes made)
+(1 real change made)
+file /tmp/St2220158.000002 saved
+(17 vars, 50,510 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 131,861 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(130,702 missing values generated)
+(50,510 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 76,567 obs)
+intcrashid: contains nonnumeric characters; replaced as long
+(1 missing value generated)
+  1
+1 rows with a non-numeric crash ID dropped
+(1 observation deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+  0
+0 crashes with no date (kept in 2015)
+  0
+0 crashes dated outside 2015 (kept in 2015)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                            19
+        from master                        19  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            76,547  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           319
+        from master                       319  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            76,247  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(19 real changes made)
+(319 real changes made)
+(319 real changes made)
+(note: variable total_injuries was byte, now int to accommodate using data's
+       values)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2016
+(41 vars, 146,796 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(3,552 real changes made)
+(91 real changes made)
+(2 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000002 saved
+(17 vars, 51,723 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 141,526 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(140,365 missing values generated)
+(51,723 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 81,319 obs)
+intcrashid: contains nonnumeric characters; replaced as long
+(1 missing value generated)
+  1
+1 rows with a non-numeric crash ID dropped
+(1 observation deleted)
+g1_county_nmbr: all characters numeric; replaced as byte
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt: all characters numeric; replaced as byte
+(1 missing value generated)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+  0
+0 crashes with no date (kept in 2016)
+  0
+0 crashes dated outside 2016 (kept in 2016)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           481
+        from master                       230  (_merge==1)
+        from using                        251  (_merge==2)
+
+    matched                            81,088  (_merge==3)
+    -----------------------------------------
+(251 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           786
+        from master                       536  (_merge==1)
+        from using                        250  (_merge==2)
+
+    matched                            80,782  (_merge==3)
+    -----------------------------------------
+(250 observations deleted)
+(230 real changes made)
+(536 real changes made)
+(536 real changes made)
+(note: variable total_injuries was byte, now int to accommodate using data's
+       values)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2017
+(41 vars, 138,935 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(3,190 real changes made)
+(61 real changes made)
+(3 real changes made)
+(1 real change made)
+file /tmp/St2220158.000002 saved
+(17 vars, 50,044 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 134,114 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(133,135 missing values generated)
+(50,044 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 76,959 obs)
+intcrashid: contains nonnumeric characters; replaced as long
+(1 missing value generated)
+  1
+1 rows with a non-numeric crash ID dropped
+(1 observation deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+  0
+0 crashes with no date (kept in 2017)
+  0
+0 crashes dated outside 2017 (kept in 2017)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                            39
+        from master                        39  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            76,919  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           286
+        from master                       286  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            76,672  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(39 real changes made)
+(286 real changes made)
+(286 real changes made)
+(note: variable total_injuries was byte, now int to accommodate using data's
+       values)
+(note: variable total_fatalities was byte, now int to accommodate using
+       data's values)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2018
+(41 vars, 138,744 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(3,473 real changes made)
+(77 real changes made)
+(6 real changes made)
+(2 real changes made)
+file /tmp/St2220158.000002 saved
+(17 vars, 48,679 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 134,018 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(132,981 missing values generated)
+(48,679 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 77,347 obs)
+intcrashid: contains nonnumeric characters; replaced as long
+(1 missing value generated)
+  1
+1 rows with a non-numeric crash ID dropped
+(1 observation deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+  0
+0 crashes with no date (kept in 2018)
+  0
+0 crashes dated outside 2018 (kept in 2018)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                            38
+        from master                        38  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            77,308  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           275
+        from master                       275  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            77,071  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(38 real changes made)
+(275 real changes made)
+(275 real changes made)
+(note: variable total_injuries was byte, now int to accommodate using data's
+       values)
+(note: variable total_fatalities was byte, now int to accommodate using
+       data's values)
+file /tmp/St2220158.000001 saved
+
+ReportBeam 2019
+(41 vars, 91,497 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+(2,060 real changes made)
+(47 real changes made)
+(3 real changes made)
+(3 real changes made)
+file /tmp/St2220158.000002 saved
+(17 vars, 31,844 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+file /tmp/St2220158.000003 saved
+(27 vars, 88,298 obs)
+intcrashid: all characters numeric; replaced as long
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+p19_condition_cd: all characters numeric; replaced as byte
+(87,572 missing values generated)
+(31,844 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000004 saved
+(23 vars, 50,677 obs)
+intcrashid already numeric; no replace
+  0
+0 rows with a non-numeric crash ID dropped
+(0 observations deleted)
+g1_county_nmbr already numeric; no replace
+g7_fatal_cnt already numeric; no replace
+g8_injury_cnt already numeric; no replace
+  0
+0 crashes with no date (kept in 2019)
+  0
+0 crashes dated outside 2019 (kept in 2019)
+  1,271
+Dropping 1271 ReportBeam crashes on or after the eCrash switch
+(1,271 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                         1,309
+        from master                        39  (_merge==1)
+        from using                      1,270  (_merge==2)
+
+    matched                            49,367  (_merge==3)
+    -----------------------------------------
+(1,270 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                         1,453
+        from master                       188  (_merge==1)
+        from using                      1,265  (_merge==2)
+
+    matched                            49,218  (_merge==3)
+    -----------------------------------------
+(1,265 observations deleted)
+(39 real changes made)
+(188 real changes made)
+(188 real changes made)
+(note: variable total_injuries was byte, now int to accommodate using data's
+       values)
+(note: variable total_fatalities was byte, now int to accommodate using
+       data's values)
 file /tmp/St2220158.000001 saved
 
 . 
-end of do-file
+. *---------------------------------------------------------------
+. * SECTION 2: ECRASH CRASH RECORDS (3 SEP 2019 TO 2024)
+. *---------------------------------------------------------------
+. * Source: Mississippi eCrash public data requests; request date is in each fi
+> le name
+. * (site and download date in dataRAW/DVCs/MS/source.txt)
+. * Each pass reads one workbook (sheets Crashes, Vehicles, Drivers, Passengers
+> ,
+. * Non-Motorists), joins on crashid and saves one row per crash.
+. * Headers checked in the 2020, 2023 and 2024 files; 2019, 2021, 2022 not chec
+> ked.
+. 
+. local ec_2019 "Public Data Request 21-02-04 1755 (19-01-01 to 19-12-31).xlsx"
 
+. local ec_2020 "Public Data Request 21-01-15 1700 (20-01-01 to 21-01-01).xlsx"
+
+. local ec_2021 "Public Data Request 22-04-12 1535 (21-01-01 to 21-12-31).xlsx"
+
+. local ec_2022 "Public Data Request 24-01-12 1055 (22-01-01 to 22-12-31).xlsx"
+
+. * 2023-24 files are marked DRAFT; Section 4 checks they cover all 12 months
+. local ec_2023 "Public Data Request 25-02-27 1725 (23-01-01 to 23-12-31) DRAFT
+> .xlsx"
+
+. local ec_2024 "Public Data Request 25-02-27 1733 (24-01-01 to 24-12-31) DRAFT
+> .xlsx"
+
+. 
+. tempfile ec_all
+
+. local is_first = 1
+
+. forvalues file_year = 2019/2024 {
+  2.     local file_name = "$ms_raw/`ec_`file_year''"
+  3.     di as txt _n "eCrash `file_year'"
+  4. 
+.     * Animal: any vehicle whose sequence of events is "Collision with animal 
+> (live)"
+.     import excel using "`file_name'", sheet("Vehicles") firstrow case(lower) 
+> allstring clear
+  5.     keep crashid sequenceofevents*
+  6.     gen is_animal = 0
+  7.     foreach v of varlist sequenceofevents* {
+  8.         replace is_animal = 1 if strpos(lower(`v'), "collision with animal
+> ") > 0
+  9.     }
+ 10.     collapse (max) is_animal, ///
+>              by(crashid)
+ 11.     save `vehicles', replace
+ 12. 
+.     * Severity: worst injury status across drivers, passengers and non-motori
+> sts
+.     local is_first_sheet = 1
+ 13.     foreach sheet_name in "Drivers" "Passengers" "Non-Motorists" {
+ 14.         import excel using "`file_name'", sheet("`sheet_name'") firstrow c
+> ase(lower) allstring clear
+ 15.         keep crashid ///
+>              injurystatus
+ 16.         if !`is_first_sheet' append using `persons'
+ 17.         save `persons', replace
+ 18.         local is_first_sheet = 0
+ 19.     }
+ 20.     * Injury status reads e.g. "(K) Fatal Injury"; character 2 is the KABC
+> O letter
+.     gen temp = substr(injurystatus, 2, 1)
+ 21.     gen sev_rank = 5*(temp == "K") ///
+>                       + 4*(temp == "A") ///
+>                       + 3*(temp == "B") ///
+>                       + 2*(temp == "C") ///
+>                       + 1*(temp == "O")
+ 22.     drop temp
+ 23.     collapse (max) sev_rank, ///
+>              by(crashid)
+ 24.     save `persons', replace
+ 25. 
+.     * Crashes: one row per crash
+.     import excel using "`file_name'", sheet("Crashes") firstrow case(lower) c
+> lear
+ 26.     keep crashid       ///
+>          crashdate     ///
+>          countyid      ///
+>          fatalitycount ///
+>          injurycount   ///
+>          alcoholinvolvement
+ 27.     * Crash Date is text ("2024/01/01") in the 2024 file; handle an Excel 
+> date too
+.     cap confirm string variable crashdate
+ 28.     if _rc == 0 gen crash_date = date(crashdate, "YMD")
+ 29.     else gen crash_date = crashdate
+ 30.     format crash_date %td
+ 31.     * Undated crashes are dropped below; stop if the date format was not r
+> ead
+.     count if missing(crash_date)
+ 32.     di as txt r(N) " crashes with no readable date"
+ 33.     assert r(N) < 0.01 * _N
+ 34.     * 2019 starts at the switch date; the 2020 file runs to 1 Jan 2021
+.     if `file_year' == 2019 keep if crash_date >= $ms_switch & year(crash_date
+> ) == 2019
+ 35.     else keep if year(crash_date) == `file_year'
+ 36.     gen is_alcohol = strtrim(lower(alcoholinvolvement)) == "yes"
+ 37. 
+.     merge 1:1 crashid using `vehicles'
+ 38.     drop if _merge == 2
+ 39.     drop _merge
+ 40.     merge 1:1 crashid using `persons'
+ 41.     drop if _merge == 2
+ 42.     drop _merge
+ 43. 
+.     * Crashes with no vehicle or person rows: no animal, unknown severity
+.     foreach v in is_animal sev_rank {
+ 44.         replace `v' = 0 if missing(`v')
+ 45.     }
+ 46. 
+.     rename countyid county_nmbr
+ 47.     rename fatalitycount total_fatalities
+ 48.     rename injurycount total_injuries
+ 49.     gen year = `file_year'
+ 50.     keep county_nmbr      ///
+>          year             ///
+>          crash_date       ///
+>          total_fatalities ///
+>          total_injuries   ///
+>          sev_rank         ///
+>          is_animal        ///
+>          is_alcohol
+ 51. 
+.     if !`is_first' append using `ec_all'
+ 52.     save `ec_all', replace
+ 53.     local is_first = 0
+ 54. }
+
+eCrash 2019
+(60 vars, 47,561 obs)
+(2,111 real changes made)
+(19 real changes made)
+(3 real changes made)
+(0 real changes made)
+file /tmp/St2220158.000002 saved
+(41 vars, 46,168 obs)
+file /tmp/St2220158.000004 saved
+(19 vars, 10,722 obs)
+file /tmp/St2220158.000004 saved
+(31 vars, 467 obs)
+file /tmp/St2220158.000004 saved
+file /tmp/St2220158.000004 saved
+(53 vars, 26,465 obs)
+  0
+0 crashes with no readable date
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                            26,465  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           183
+        from master                       183  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            26,282  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(0 real changes made)
+(183 real changes made)
+(note: file /tmp/St2220158.000005 not found)
+file /tmp/St2220158.000005 saved
+
+eCrash 2020
+(60 vars, 132,162 obs)
+(4,413 real changes made)
+(34 real changes made)
+(6 real changes made)
+(3 real changes made)
+file /tmp/St2220158.000002 saved
+(41 vars, 128,608 obs)
+file /tmp/St2220158.000004 saved
+(19 vars, 29,655 obs)
+file /tmp/St2220158.000004 saved
+(31 vars, 1,127 obs)
+file /tmp/St2220158.000004 saved
+file /tmp/St2220158.000004 saved
+(53 vars, 74,618 obs)
+  0
+0 crashes with no readable date
+(153 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           153
+        from master                         0  (_merge==1)
+        from using                        153  (_merge==2)
+
+    matched                            74,465  (_merge==3)
+    -----------------------------------------
+(153 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           254
+        from master                       218  (_merge==1)
+        from using                         36  (_merge==2)
+
+    matched                            74,247  (_merge==3)
+    -----------------------------------------
+(36 observations deleted)
+(0 real changes made)
+(218 real changes made)
+file /tmp/St2220158.000005 saved
+
+eCrash 2021
+(60 vars, 149,326 obs)
+(4,547 real changes made)
+(31 real changes made)
+(6 real changes made)
+(1 real change made)
+file /tmp/St2220158.000002 saved
+(41 vars, 145,273 obs)
+file /tmp/St2220158.000004 saved
+(19 vars, 33,114 obs)
+file /tmp/St2220158.000004 saved
+(31 vars, 1,074 obs)
+file /tmp/St2220158.000004 saved
+file /tmp/St2220158.000004 saved
+(53 vars, 83,319 obs)
+  0
+0 crashes with no readable date
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                            83,319  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           400
+        from master                       400  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            82,919  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(0 real changes made)
+(400 real changes made)
+file /tmp/St2220158.000005 saved
+
+eCrash 2022
+(61 vars, 140,931 obs)
+(4,621 real changes made)
+(22 real changes made)
+(3 real changes made)
+(1 real change made)
+file /tmp/St2220158.000002 saved
+(41 vars, 137,295 obs)
+file /tmp/St2220158.000004 saved
+(19 vars, 30,016 obs)
+file /tmp/St2220158.000004 saved
+(31 vars, 1,031 obs)
+file /tmp/St2220158.000004 saved
+file /tmp/St2220158.000004 saved
+(53 vars, 78,736 obs)
+  0
+0 crashes with no readable date
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                            78,736  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           361
+        from master                       361  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            78,375  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(0 real changes made)
+(361 real changes made)
+file /tmp/St2220158.000005 saved
+
+eCrash 2023
+(61 vars, 136,942 obs)
+(5,017 real changes made)
+(27 real changes made)
+(2 real changes made)
+(1 real change made)
+file /tmp/St2220158.000002 saved
+(41 vars, 133,543 obs)
+file /tmp/St2220158.000004 saved
+(19 vars, 28,300 obs)
+file /tmp/St2220158.000004 saved
+(31 vars, 984 obs)
+file /tmp/St2220158.000004 saved
+file /tmp/St2220158.000004 saved
+(53 vars, 76,512 obs)
+  0
+0 crashes with no readable date
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                            76,512  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           370
+        from master                       370  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            76,142  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(0 real changes made)
+(370 real changes made)
+file /tmp/St2220158.000005 saved
+
+eCrash 2024
+(61 vars, 133,477 obs)
+(4,538 real changes made)
+(27 real changes made)
+(4 real changes made)
+(5 real changes made)
+file /tmp/St2220158.000002 saved
+(41 vars, 130,147 obs)
+file /tmp/St2220158.000004 saved
+(19 vars, 27,499 obs)
+file /tmp/St2220158.000004 saved
+(31 vars, 975 obs)
+file /tmp/St2220158.000004 saved
+file /tmp/St2220158.000004 saved
+(53 vars, 74,736 obs)
+  0
+0 crashes with no readable date
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                            74,736  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           336
+        from master                       336  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                            74,400  (_merge==3)
+    -----------------------------------------
+(0 observations deleted)
+(0 real changes made)
+(336 real changes made)
+file /tmp/St2220158.000005 saved
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 3: COUNTY TABLES (2005-2016)
+. *---------------------------------------------------------------
+. * Source: county deer and all-cause tables from MS Public Safety (originals i
+> n
+. * dataRAW/DVCs/MS/ARCHIVE; sender in source.txt).
+. * Deer tables: row 1 = year (first column of each year only), row 2 = severit
+> y
+. * (K fatal, I injury, O PDO). Blank cells are true zeros. All-cause tables ar
+> e
+. * kept only to check the crash-level totals in Section 4.
+. 
+. tempfile deer ///
+>          all_cause
+
+. local file_name = "$ms_csv/MS.DVC.2005-2016.CountySeverity.xlsx"
+
+. local is_first = 1
+
+. * Each pass reads one sheet; the second word is the sheet's last cell
+. foreach sheet_range in "2005-2009 N86" "2010-2013 K87" "2014-2016 J87" {
+  2.     gettoken sheet_name last_cell : sheet_range
+  3.     local last_cell = strtrim("`last_cell'")
+  4.     local last_col = substr("`last_cell'", 1, 1)
+  5.     import excel using "`file_name'", sheet("`sheet_name'") cellrange(A1:`
+> last_cell') allstring clear
+  6.     rename A county_name
+  7. 
+.     * Name each column deer_<severity>_<year>, carrying the year across blank
+>  cells
+.     local table_year = ""
+  8.     foreach v of varlist B-`last_col' {
+  9.         if strtrim(`v'[1]) != "" local table_year = strtrim(`v'[1])
+ 10.         local severity = strtrim(`v'[2])
+ 11.         rename `v' deer_`severity'_`table_year'
+ 12.     }
+ 13.     drop in 1/2
+ 14.     replace county_name = lower(strtrim(subinstr(county_name, " County", "
+> ", .)))
+ 15.     drop if inlist(county_name, "non-officer", "invalid code", "total")
+ 16. 
+.     reshape long deer_I_   ///
+>                  deer_K_   ///
+>                  deer_O_,  ///
+>             i(county_name) ///
+>             j(year)
+ 17.     if !`is_first' append using `deer'
+ 18.     save `deer', replace
+ 19.     local is_first = 0
+ 20. }
+(14 vars, 86 obs)
+(2 observations deleted)
+(84 real changes made)
+(2 observations deleted)
+(note: j = 2005 2006 2007 2008 2009)
+(note: deer_K_2005 not found)
+(note: deer_K_2008 not found)
+
+Data                               wide   ->   long
+-----------------------------------------------------------------------------
+Number of obs.                       82   ->     410
+Number of variables                  14   ->       5
+j variable (5 values)                     ->   year
+xij variables:
+deer_I_2005 deer_I_2006 ... deer_I_2009   ->   deer_I_
+deer_K_2005 deer_K_2006 ... deer_K_2009   ->   deer_K_
+deer_O_2005 deer_O_2006 ... deer_O_2009   ->   deer_O_
+-----------------------------------------------------------------------------
+(note: file /tmp/St2220158.000006 not found)
+file /tmp/St2220158.000006 saved
+(11 vars, 87 obs)
+(2 observations deleted)
+(85 real changes made)
+(3 observations deleted)
+(note: j = 2010 2011 2012 2013)
+(note: deer_K_2010 not found)
+(note: deer_K_2011 not found)
+
+Data                               wide   ->   long
+-----------------------------------------------------------------------------
+Number of obs.                       82   ->     328
+Number of variables                  11   ->       5
+j variable (4 values)                     ->   year
+xij variables:
+deer_I_2010 deer_I_2011 ... deer_I_2013   ->   deer_I_
+deer_K_2010 deer_K_2011 ... deer_K_2013   ->   deer_K_
+deer_O_2010 deer_O_2011 ... deer_O_2013   ->   deer_O_
+-----------------------------------------------------------------------------
+file /tmp/St2220158.000006 saved
+(10 vars, 87 obs)
+(2 observations deleted)
+(85 real changes made)
+(3 observations deleted)
+(note: j = 2014 2015 2016)
+
+Data                               wide   ->   long
+-----------------------------------------------------------------------------
+Number of obs.                       82   ->     246
+Number of variables                  10   ->       5
+j variable (3 values)                     ->   year
+xij variables:
+    deer_I_2014 deer_I_2015 deer_I_2016   ->   deer_I_
+    deer_K_2014 deer_K_2015 deer_K_2016   ->   deer_K_
+    deer_O_2014 deer_O_2015 deer_O_2016   ->   deer_O_
+-----------------------------------------------------------------------------
+file /tmp/St2220158.000006 saved
+
+. destring deer_I_  ///
+>          deer_K_  ///
+>          deer_O_, ///
+>          replace
+deer_I_: all characters numeric; replaced as byte
+(250 missing values generated)
+deer_K_: all characters numeric; replaced as byte
+(975 missing values generated)
+deer_O_: all characters numeric; replaced as int
+(9 missing values generated)
+
+. foreach v in deer_I_ deer_K_ deer_O_ {
+  2.     replace `v' = 0 if missing(`v')
+  3. }
+(250 real changes made)
+(975 real changes made)
+(9 real changes made)
+
+. rename deer_K_ deer_fatal_collision
+
+. rename deer_I_ deer_injury_collision
+
+. rename deer_O_ deer_pdo_collision
+
+. gen deer_total = deer_fatal_collision  ///
+>                + deer_injury_collision ///
+>                + deer_pdo_collision
+
+. save `deer', replace
+file /tmp/St2220158.000006 saved
+
+. 
+. local file_name = "$ms_csv/MS.TVC.2005-2016.County.xlsx"
+
+. local is_first = 1
+
+. * Each pass reads one sheet; the second word is the sheet's last cell
+. foreach sheet_range in "2005-2009 F85" "2010-2016 H86" {
+  2.     gettoken sheet_name last_cell : sheet_range
+  3.     local last_cell = strtrim("`last_cell'")
+  4.     local last_col = substr("`last_cell'", 1, 1)
+  5.     import excel using "`file_name'", sheet("`sheet_name'") cellrange(A1:`
+> last_cell') allstring clear
+  6.     rename A county_name
+  7.     foreach v of varlist B-`last_col' {
+  8.         local table_year = strtrim(`v'[1])
+  9.         rename `v' table_total_`table_year'
+ 10.     }
+ 11.     drop in 1
+ 12.     replace county_name = lower(strtrim(subinstr(county_name, " County", "
+> ", .)))
+ 13.     drop if inlist(county_name, "non-officer", "invalid code", "total")
+ 14. 
+.     reshape long table_total_, ///
+>             i(county_name)     ///
+>             j(year)
+ 15.     if !`is_first' append using `all_cause'
+ 16.     save `all_cause', replace
+ 17.     local is_first = 0
+ 18. }
+(6 vars, 85 obs)
+(1 observation deleted)
+(84 real changes made)
+(2 observations deleted)
+(note: j = 2005 2006 2007 2008 2009)
+
+Data                               wide   ->   long
+-----------------------------------------------------------------------------
+Number of obs.                       82   ->     410
+Number of variables                   6   ->       3
+j variable (5 values)                     ->   year
+xij variables:
+table_total_2005 table_total_2006 ... table_total_2009->table_total_
+-----------------------------------------------------------------------------
+(note: file /tmp/St2220158.000007 not found)
+file /tmp/St2220158.000007 saved
+(8 vars, 86 obs)
+(1 observation deleted)
+(85 real changes made)
+(3 observations deleted)
+(note: j = 2010 2011 2012 2013 2014 2015 2016)
+
+Data                               wide   ->   long
+-----------------------------------------------------------------------------
+Number of obs.                       82   ->     574
+Number of variables                   8   ->       3
+j variable (7 values)                     ->   year
+xij variables:
+table_total_2010 table_total_2011 ... table_total_2016->table_total_
+-----------------------------------------------------------------------------
+file /tmp/St2220158.000007 saved
+
+. destring table_total_, replace
+table_total_: all characters numeric; replaced as int
+
+. rename table_total_ table_total
+
+. 
+. merge 1:1 county_name year using `deer'
+(note: variable county_name was str31, now str72 to accommodate using data's
+       values)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                             0
+    matched                               984  (_merge==3)
+    -----------------------------------------
+
+. assert _merge == 3
+
+. drop _merge
+
+. 
+. gen state_letter_code = "MS"
+
+. local file_name = "$path/dataSTATA/state_county_identifiers.dta"
+
+. merge m:1 state_letter_code county_name using "`file_name'", keepusing(fips)
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                         3,069
+        from master                         0  (_merge==1)
+        from using                      3,069  (_merge==2)
+
+    matched                               984  (_merge==3)
+    -----------------------------------------
+
+. * The identifiers file covers every state; other states' rows are discarded
+. drop if _merge == 2
+(3,069 observations deleted)
+
+. assert _merge == 3
+
+. drop _merge
+
+. 
+. keep fips                  ///
+>      year                  ///
+>      table_total           ///
+>      deer_fatal_collision  ///
+>      deer_injury_collision ///
+>      deer_pdo_collision    ///
+>      deer_total
+
+. isid fips year
+
+. save `deer', replace
+file /tmp/St2220158.000006 saved
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 4: STACK ERAS AND COLLAPSE TO COUNTY-YEAR
+. *---------------------------------------------------------------
+. 
+. use `rb_all', clear
+
+. append using `ec_all'
+
+. 
+. * A year is used only if its crash records cover all 12 months
+. gen temp = month(crash_date) if year(crash_date) == year
+(1 missing value generated)
+
+. egen temp_tag = tag(year temp)
+
+. bysort year: egen temp_months = total(temp_tag)
+
+. tab year if temp_months < 12
+no observations
+
+. assert temp_months == 12
+
+. drop temp      ///
+>      temp_tag  ///
+>      temp_months
+
+. 
+. * Both formats number counties 1-82 alphabetically, so county FIPS = 2n - 1
+. count if !inrange(county_nmbr, 1, 82)
+  1
+
+. di as txt r(N) " crashes without a valid county dropped"
+1 crashes without a valid county dropped
+
+. drop if !inrange(county_nmbr, 1, 82)
+(1 observation deleted)
+
+. gen fips = "28" + string(2*county_nmbr - 1, "%03.0f")
+
+. 
+. * Crash severity = worst injury of any person (KABCO); 0 = no person record
+. gen total_all_cause            = 1
+
+. gen fatal_collision            = sev_rank == 5
+
+. gen major_injury_collision     = sev_rank == 4
+
+. gen minor_injury_collision     = inlist(sev_rank, 2, 3)
+
+. gen injury_collision           = inlist(sev_rank, 2, 3, 4)
+
+. gen pdo_collision              = sev_rank == 1
+
+. gen unknown_severity_collision = sev_rank == 0
+
+. 
+. count if fatal_collision != (total_fatalities > 0 & !missing(total_fatalities
+> ))
+  99
+
+. di as txt r(N) " crashes where person severity and the fatality count disagre
+> e"
+99 crashes where person severity and the fatality count disagree
+
+. 
+. * Each pass builds one cause's severity split. cond() keeps non-cause
+. * crashes at 0 even when their injury or fatality count is missing.
+. foreach cause in animal alcohol {
+  2.     gen `cause'_collision              = is_`cause'
+  3.     gen fatal_`cause'_collision        = is_`cause' * fatal_collision
+  4.     gen injury_`cause'_collision       = is_`cause' * injury_collision
+  5.     gen major_injury_`cause'_collision = is_`cause' * major_injury_collisi
+> on
+  6.     gen minor_injury_`cause'_collision = is_`cause' * minor_injury_collisi
+> on
+  7.     gen pdo_`cause'                    = is_`cause' * pdo_collision
+  8.     gen `cause'_fatalities = cond(is_`cause' == 1, total_fatalities, 0)
+  9.     gen `cause'_injuries   = cond(is_`cause' == 1, total_injuries, 0)
+ 10. }
+(1 missing value generated)
+(1 missing value generated)
+
+. 
+. collapse (sum) total_all_cause                ///
+>                fatal_collision                ///
+>                major_injury_collision         ///
+>                minor_injury_collision         ///
+>                injury_collision               ///
+>                pdo_collision                  ///
+>                unknown_severity_collision     ///
+>                total_fatalities               ///
+>                total_injuries                 ///
+>                animal_collision               ///
+>                fatal_animal_collision         ///
+>                injury_animal_collision        ///
+>                major_injury_animal_collision  ///
+>                minor_injury_animal_collision  ///
+>                pdo_animal                     ///
+>                animal_fatalities              ///
+>                animal_injuries                ///
+>                alcohol_collision              ///
+>                fatal_alcohol_collision        ///
+>                injury_alcohol_collision       ///
+>                major_injury_alcohol_collision ///
+>                minor_injury_alcohol_collision ///
+>                pdo_alcohol                    ///
+>                alcohol_fatalities             ///
+>                alcohol_injuries,              ///
+>                by(fips                        ///
+>                   year)
+
+. 
+. * County-years with no crash records are true zeros
+. fillin fips year
+
+. foreach v of varlist total_all_cause-alcohol_injuries {
+  2.     replace `v' = 0 if _fillin == 1
+  3. }
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+
+. drop _fillin
+
+. 
+. gen data_source = cond(year < 2019, "ReportBeam", ///
+>                         cond(year == 2019, "ReportBeam + eCrash", "eCrash"))
+
+. 
+. * Deer and the county-table totals cover 2005-2016 only
+. merge 1:1 fips year using `deer'
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                           738
+        from master                       738  (_merge==1)
+        from using                          0  (_merge==2)
+
+    matched                               984  (_merge==3)
+    -----------------------------------------
+
+. assert _merge != 2
+
+. drop _merge
+
+. 
+. gen pct_gap_vs_table = 100 * (total_all_cause - table_total) / table_total
+(738 missing values generated)
+
+. di as txt _n "Crash-level total vs county table, % gap by year (2005-2016)"
+
+Crash-level total vs county table, % gap by year (2005-2016)
+
+. tabstat pct_gap_vs_table,        ///
+>         by(year)                 ///
+>         statistics(mean min max) ///
+>         format(%6.1f)
+
+Summary for variables: pct_gap_vs_table
+     by categories of: year 
+
+    year |      mean       min       max
+---------+------------------------------
+    2004 |         .         .         .
+    2005 |      -1.6     -12.2      11.2
+    2006 |       0.5     -24.7     163.1
+    2007 |       0.3     -26.4     132.9
+    2008 |      -0.4     -24.4     123.5
+    2009 |      -1.0     -29.6     122.4
+    2010 |      -2.5     -21.3     105.9
+    2011 |      -2.5     -22.2     111.5
+    2012 |      -1.9     -50.0     122.0
+    2013 |       0.4     -35.6     129.6
+    2014 |       1.9     -33.5     138.1
+    2015 |       1.6     -30.6     171.0
+    2016 |       8.5     -27.6     188.1
+    2017 |         .         .         .
+    2018 |         .         .         .
+    2019 |         .         .         .
+    2020 |         .         .         .
+    2021 |         .         .         .
+    2022 |         .         .         .
+    2023 |         .         .         .
+    2024 |         .         .         .
+---------+------------------------------
+   Total |       0.3     -50.0     188.1
+----------------------------------------
+
+. drop table_total ///
+>      pct_gap_vs_table
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 5: MERGE COUNTY IDENTIFIERS
+. *---------------------------------------------------------------
+. 
+. local file_name = "$path/dataSTATA/state_county_identifiers.dta"
+
+. merge m:1 fips using "`file_name'"
+
+    Result                           # of obs.
+    -----------------------------------------
+    not matched                         3,069
+        from master                         0  (_merge==1)
+        from using                      3,069  (_merge==2)
+
+    matched                             1,722  (_merge==3)
+    -----------------------------------------
+
+. * The identifiers file covers every state; other states' rows are discarded
+. drop if _merge == 2
+(3,069 observations deleted)
+
+. assert _merge == 3
+
+. drop _merge
+
+. 
+. *---------------------------------------------------------------
+. * SECTION 6: CHECKS AND SAVE
+. *---------------------------------------------------------------
+. 
+. isid fips year
+
+. qui tab year
+
+. assert r(r) == 21 // every year 2004-2024 present
+
+. bysort year: gen n_counties = _N
+
+. assert n_counties == 82
+
+. drop n_counties
+
+. 
+. assert fatal_collision  ///
+>      + injury_collision ///
+>      + pdo_collision    ///
+>      + unknown_severity_collision == total_all_cause
+
+. assert major_injury_collision + minor_injury_collision == injury_collision
+
+. assert animal_collision <= total_all_cause
+
+. assert alcohol_collision <= total_all_cause
+
+. foreach v of varlist total_all_cause-alcohol_injuries {
+  2.     assert `v' >= 0 if !missing(`v')
+  3. }
+
+. * Deer comes from a different source than animal, so report rather than asser
+> t
+. count if deer_total > animal_collision & !missing(deer_total)
+  317
+
+. di as txt r(N) " county-years with deer_total > animal_collision"
+317 county-years with deer_total > animal_collision
+
+. 
+. label var total_all_cause            "All-cause collisions"
+
+. label var unknown_severity_collision "Collisions with no person injury record
+> "
+
+. label var animal_collision           "Animal-related collisions"
+
+. label var alcohol_collision          "Alcohol-related collisions (rule differ
+> s by data_source)"
+
+. label var deer_total                 "Deer collisions (county tables, 2005-20
+> 16 only)"
+
+. label var data_source                "Crash-record format behind the row"
+
+. 
+. * TODO: the 2020 append script expects the old names (total_total, animal_tot
+> al,
+. * deer_fatal); update it or rename here
+. order state_letter_code              ///
+>       state_name                     ///
+>       county_name                    ///
+>       state_fips                     ///
+>       county_fips                    ///
+>       fips                           ///
+>       year                           ///
+>       data_source                    ///
+>       total_all_cause                ///
+>       fatal_collision                ///
+>       major_injury_collision         ///
+>       minor_injury_collision         ///
+>       injury_collision               ///
+>       pdo_collision                  ///
+>       unknown_severity_collision     ///
+>       total_fatalities               ///
+>       total_injuries                 ///
+>       animal_collision               ///
+>       fatal_animal_collision         ///
+>       injury_animal_collision        ///
+>       major_injury_animal_collision  ///
+>       minor_injury_animal_collision  ///
+>       pdo_animal                     ///
+>       animal_fatalities              ///
+>       animal_injuries                ///
+>       deer_fatal_collision           ///
+>       deer_injury_collision          ///
+>       deer_pdo_collision             ///
+>       deer_total                     ///
+>       alcohol_collision              ///
+>       fatal_alcohol_collision        ///
+>       injury_alcohol_collision       ///
+>       major_injury_alcohol_collision ///
+>       minor_injury_alcohol_collision ///
+>       pdo_alcohol                    ///
+>       alcohol_fatalities             ///
+>       alcohol_injuries
+
+. 
+. * Statewide shares by year, for spotting breaks between eras
+. preserve
+
+.     collapse (sum) total_all_cause    ///
+>                    animal_collision   ///
+>                    alcohol_collision, ///
+>                    by(year            ///
+>                       data_source)
+
+.     gen share_animal  = 100 * animal_collision  / total_all_cause
+
+.     gen share_alcohol = 100 * alcohol_collision / total_all_cause
+
+.     list year            ///
+>          data_source     ///
+>          total_all_cause ///
+>          share_animal    ///
+>          share_alcohol,  ///
+>          sep(0)          ///
+>          noobs
+
+  +-------------------------------------------------------------+
+  | year           data_source   total_~e   share~al   share~ol |
+  |-------------------------------------------------------------|
+  | 2004            ReportBeam      60513    3.18444   3.828929 |
+  | 2005            ReportBeam      77833   3.474105   3.651407 |
+  | 2006            ReportBeam      77862   3.924893   3.869667 |
+  | 2007            ReportBeam      76650   4.557077   4.067841 |
+  | 2008            ReportBeam      72588   4.942966   3.997906 |
+  | 2009            ReportBeam      68256   5.167311   3.670007 |
+  | 2010            ReportBeam      68214   5.290703   3.386402 |
+  | 2011            ReportBeam      66758   4.790437   3.509692 |
+  | 2012            ReportBeam      66727   4.755197   3.565274 |
+  | 2013            ReportBeam      69705   4.754322   3.414389 |
+  | 2014            ReportBeam      71003   4.544878   3.135079 |
+  | 2015            ReportBeam      76566    4.45498   2.963456 |
+  | 2016            ReportBeam      81318   4.465186   2.781672 |
+  | 2017            ReportBeam      76958   4.212687   2.605317 |
+  | 2018            ReportBeam      77346   4.570372   2.601298 |
+  | 2019   ReportBeam + eCrash      75871   5.522532   3.034097 |
+  | 2020                eCrash      74465   5.931646   4.020681 |
+  | 2021                eCrash      83319   5.490944   3.702637 |
+  | 2022                eCrash      78736   5.890571   3.735267 |
+  | 2023                eCrash      76512    6.57936    3.63211 |
+  | 2024                eCrash      74736   6.093449   3.682295 |
+  +-------------------------------------------------------------+
+
+. restore
+
+. 
+. qui summ year
+
+. local t1 = r(min)
+
+. local t2 = r(max)
+
+. 
+. * Final save
+. sort fips year // to keep saved files in a predictable order
+
+. compress
+  variable year was float now int
+  variable deer_total was float now int
+  variable total_all_cause was double now int
+  variable fatal_collision was double now byte
+  variable major_injury_collision was double now int
+  variable minor_injury_collision was double now int
+  variable injury_collision was double now int
+  variable pdo_collision was double now int
+  variable unknown_severity_collision was double now int
+  variable total_fatalities was double now byte
+  variable total_injuries was double now int
+  variable animal_collision was double now int
+  variable fatal_animal_collision was double now byte
+  variable injury_animal_collision was double now byte
+  variable major_injury_animal_collision was double now byte
+  variable minor_injury_animal_collision was double now byte
+  variable pdo_animal was double now int
+  variable animal_fatalities was double now byte
+  variable animal_injuries was double now byte
+  variable alcohol_collision was double now int
+  variable fatal_alcohol_collision was double now byte
+  variable injury_alcohol_collision was double now int
+  variable major_injury_alcohol_collision was double now byte
+  variable minor_injury_alcohol_collision was double now int
+  variable pdo_alcohol was double now int
+  variable alcohol_fatalities was double now byte
+  variable alcohol_injuries was double now int
+  variable state_name was str20 now str11
+  variable county_name was str33 now str15
+  (330,624 bytes saved)
+
+. local file_name = "$working_data/dvcs_MS_county_year_`t1'_`t2'.dta"
+
+. save "`file_name'", replace
+(note: file /mnt/data_d/Dropbox/Research/VehicleCollisionsDataRepo/dataSTATA/dv
+> cs_MS_county_year_2004_2024.dta not found)
+file /mnt/data_d/Dropbox/Research/VehicleCollisionsDataRepo/dataSTATA/dvcs_MS_c
+> ounty_year_2004_2024.dta saved
+
+. 
+. * Wrap up
+. log close
+      name:  <unnamed>
+       log:  /mnt/data_d/Dropbox/Research/VehicleCollisionsDataRepo/logs/clean_
+> MS.log
+  log type:  text
+ closed on:  16 Nov 2026, 15:53:47
+-------------------------------------------------------------------------------
