@@ -17,6 +17,9 @@ KNOWN BREAKS (data_source marks each row's era):
     animal_collision covers every year.
   - Alcohol share is about 1.4 pp higher in eCrash (crash-level flag) than in
     ReportBeam (built from person records).
+  - From 3 Sep 2019 eCrash also records "Animal(s)" as a roadway contributing
+    circumstance; the ReportBeam extract has no such field. Animal crashes rise
+    25% (shared field) or 42% (with it) from 2018 to 2020.
 
 CHANGELOG:
   07/01/2020 [Siyue Ouyang]: created
@@ -35,6 +38,8 @@ CHANGELOG:
     no variable type declarations (compress sets types).
   11/16/2026 [Wendy Wang]: read crash dates written as text (2012, 2015-2018);
     stop in Section 1 if a year's dates can't be read.
+  11/21/2026 [Wendy Wang]: count eCrash's "Animal(s)" roadway contributing
+    circumstance as animal-related (decided 11/16/26).
 ==============================================================*/
 
 *---------------------------------------------------------------
@@ -260,7 +265,7 @@ forvalues file_year = 2004/2019 {
 * (site and download date in dataRAW/DVCs/MS/source.txt)
 * Each pass reads one workbook (sheets Crashes, Vehicles, Drivers, Passengers,
 * Non-Motorists), joins on crashid and saves one row per crash.
-* Headers checked in the 2020, 2023 and 2024 files; 2019, 2021, 2022 not checked.
+* All six files read cleanly in the 11/16/26 run.
 
 local ec_2019 "Public Data Request 21-02-04 1755 (19-01-01 to 19-12-31).xlsx"
 local ec_2020 "Public Data Request 21-01-15 1700 (20-01-01 to 21-01-01).xlsx"
@@ -311,12 +316,18 @@ forvalues file_year = 2019/2024 {
 
     * Crashes: one row per crash
     import excel using "`file_name'", sheet("Crashes") firstrow case(lower) clear
-    keep crashid       ///
-         crashdate     ///
-         countyid      ///
-         fatalitycount ///
-         injurycount   ///
-         alcoholinvolvement
+    * This header is too long for a Stata name, so find it by its label
+    ds, has(varlabel "Roadway Environmental Contributing Circumstances")
+    local road_var "`r(varlist)'"
+    assert wordcount("`road_var'") == 1
+    rename `road_var' road_contrib
+    keep crashid            ///
+         crashdate          ///
+         countyid           ///
+         fatalitycount      ///
+         injurycount        ///
+         alcoholinvolvement ///
+         road_contrib
     * Crash Date is text ("2024/01/01") in the 2024 file; handle an Excel date too
     cap confirm string variable crashdate
     if _rc == 0 gen crash_date = date(crashdate, "YMD")
@@ -342,6 +353,9 @@ forvalues file_year = 2019/2024 {
     foreach v in is_animal sev_rank {
         replace `v' = 0 if missing(`v')
     }
+    * An animal on the road also counts when it contributed without being hit
+    * (e.g. "Animal(s); Weather conditions"); the ReportBeam extract has no such field
+    replace is_animal = 1 if strpos(lower(road_contrib), "animal") > 0
 
     rename countyid county_nmbr
     rename fatalitycount total_fatalities
