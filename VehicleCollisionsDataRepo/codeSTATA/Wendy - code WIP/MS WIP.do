@@ -39,7 +39,8 @@ CHANGELOG:
   11/16/2026 [Wendy Wang]: read crash dates written as text (2012, 2015-2018);
     stop in Section 1 if a year's dates can't be read.
   11/21/2026 [Wendy Wang]: count eCrash's "Animal(s)" roadway contributing
-    circumstance as animal-related (decided 11/16/26).
+    circumstance as animal-related (decided 11/16/26); settle the alcohol rule
+    and the post-switch ReportBeam drop; flag 2004 as possibly incomplete.
 ==============================================================*/
 
 *---------------------------------------------------------------
@@ -122,6 +123,8 @@ tempfile rb_all    ///
          occupants ///
          persons
 local is_first = 1
+* DECISION (pending): 2004 has 60,513 crashes against about 77,800 in 2005-06,
+* though all 12 months are present; kept for now
 forvalues file_year = 2004/2019 {
     local folder = "$ms_raw/ReportBeam-`file_year'-CrashData/ReportBeam-`file_year'"
     di as txt _n "ReportBeam `file_year'"
@@ -161,8 +164,8 @@ forvalues file_year = 2004/2019 {
     destring p19_condition_cd, ///
              replace force
     gen bac = real(p32_alcohol_result)
-    * DECISION (pending): alcohol rule. Conditions 4, 5, 7 = drinking; or BAC > 0.
-    * Closest of the rules tested to eCrash's crash-level flag.
+    * Settled 11/21/26: any person with condition 4, 5 or 7 (drinking, impaired,
+    * intoxicated) or BAC > 0, i.e. alcohol-involved, as eCrash's flag is
     gen is_alcohol = inlist(p19_condition_cd, 4, 5, 7) | (bac > 0 & !missing(bac))
     append using `occupants'
     replace is_alcohol = 0 if missing(is_alcohol)
@@ -219,7 +222,7 @@ forvalues file_year = 2004/2019 {
     }
 
     * eCrash covers 2019 from the switch date, so later ReportBeam records are dropped
-    * DECISION (pending): about 1,200 late records, most of them not in eCrash
+    * Settled 11/21/26: drop all; 52 are in eCrash, the rest are about 1.6% of 2019
     if `file_year' == 2019 {
         count if crash_date >= $ms_switch & !missing(crash_date)
         di as txt "Dropping " r(N) " ReportBeam crashes on or after the eCrash switch"
