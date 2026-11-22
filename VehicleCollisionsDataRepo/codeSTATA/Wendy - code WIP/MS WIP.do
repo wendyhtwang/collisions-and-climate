@@ -9,8 +9,8 @@ SOURCES:
   2004 to 2 Sep 2019   ReportBeam crash tables, dataRAW/DVCs/MS/ReportBeam-<YYYY>-CrashData
   3 Sep 2019 to 2024   eCrash public data requests, dataRAW/DVCs/MS (2023-24 marked DRAFT)
   2005-2016            county deer tables, dataCSV/DVCs/MS (the only deer source)
-  Settled 11/02/26: DRAFT years are used if they cover all 12 months (checked in
-  Section 4); 2024 is the last year of the panel.
+  Settled 11/02/26: DRAFT years are used if all 12 months are present (Section 4);
+  2024 is the last year.
 
 KNOWN BREAKS (data_source marks each row's era):
   - The crash tables read here carry no deer code, so deer is 2005-2016 only;
@@ -28,19 +28,14 @@ CHANGELOG:
   07/15/2020 [Siyue Ouyang]: make every single state data ready-to-use, add more states
   07/26/2020 [Siyue Ouyang]: add data in ~dataRAW, update
   11/08/2020 [Owen Shao]: add TVC from dataCSV, update
-  11/02/2026 [Wendy Wang]: rebuilt from crash-level records (2004-2024) to the
-    Code Style Guide, with AZ.do/IA.do variable names; county tables kept for
-    deer. DRAFT, not yet run.
-  11/09/2026 [Wendy Wang]: use the 2023-24 DRAFT files; check that every year
-    covers all 12 months; read eCrash text dates; drop crash IDs before stacking.
-  11/16/2026 [Wendy Wang]: drop ReportBeam rows with non-numeric crash IDs (run
-    stopped in 2006); read text dates in the crash table; sources in source.txt;
-    no variable type declarations (compress sets types).
-  11/16/2026 [Wendy Wang]: read crash dates written as text (2012, 2015-2018);
-    stop in Section 1 if a year's dates can't be read.
-  11/21/2026 [Wendy Wang]: count eCrash's "Animal(s)" roadway contributing
-    circumstance as animal-related (decided 11/16/26); settle the alcohol rule
-    and the post-switch ReportBeam drop; flag 2004 as possibly incomplete.
+  11/02/2026 [Wendy Wang]: rebuilt from crash-level records (2004-2024) with
+    AZ.do/IA.do variable names; county tables kept for deer
+  11/09/2026 [Wendy Wang]: add 2023-24 DRAFT files; check 12 months per year
+  11/16/2026 [Wendy Wang]: drop non-numeric crash IDs; sources in source.txt
+  11/16/2026 [Wendy Wang]: read text crash dates (2012, 2015-2018)
+  11/21/2026 [Wendy Wang]: count eCrash "Animal(s)" contributing circumstance;
+    settle alcohol rule and post-switch drop; 
+    flag 2004 as potentially incomplete (pending PI decision)
 ==============================================================*/
 
 *---------------------------------------------------------------
@@ -97,8 +92,8 @@ log using "$path/logs/clean_MS.log", replace text
 
 set excelxlsxlargefile on
 
-* Some ReportBeam tables hold broken rows (the 2006 vehicle table has crash ID
-* "PRO") that make the ID column text; drop them so every table keys on a number
+* Broken ReportBeam rows (e.g. crash ID "PRO" in 2006) make the ID column text;
+* drop them so every table keys on a number
 cap program drop drop_bad_ids
 program define drop_bad_ids
     destring intcrashid, replace force
@@ -116,15 +111,14 @@ end
 * county, worst injury (KABCO), animal and alcohol flags.
 * Code values (14 = Animal; conditions 4, 5, 7) are listed in
 * dataRAW/DVCs/MS/ReportBeamCodeValueTable.txt.
-* Column names checked across 2004-2019 (not every table in every year).
 
 tempfile rb_all    ///
          vehicles  ///
          occupants ///
          persons
 local is_first = 1
-* DECISION (pending): 2004 has 60,513 crashes against about 77,800 in 2005-06,
-* though all 12 months are present; kept for now
+* DECISION (pending): 2004 is incomplete. Agencies joined ReportBeam from Jan
+* to Apr 2004 (Jan-Feb crashes about 20% of 2005), unevenly across counties
 forvalues file_year = 2004/2019 {
     local folder = "$ms_raw/ReportBeam-`file_year'-CrashData/ReportBeam-`file_year'"
     di as txt _n "ReportBeam `file_year'"
@@ -194,8 +188,8 @@ forvalues file_year = 2004/2019 {
              g7_fatal_cnt   ///
              g8_injury_cnt, ///
              replace force
-    * A date-time in 2018. A split row makes the column text (2012, 2015-2018),
-    * and Stata then writes each date as text; read the date from its first word
+    * Split rows make this column text in 2012 and 2015-2018; read the date from
+    * its first word, since a time may follow
     cap confirm string variable g3_reported_date
     if _rc == 0 {
         gen temp = word(strtrim(g3_reported_date), 1)
@@ -268,7 +262,6 @@ forvalues file_year = 2004/2019 {
 * (site and download date in dataRAW/DVCs/MS/source.txt)
 * Each pass reads one workbook (sheets Crashes, Vehicles, Drivers, Passengers,
 * Non-Motorists), joins on crashid and saves one row per crash.
-* All six files read cleanly in the 11/16/26 run.
 
 local ec_2019 "Public Data Request 21-02-04 1755 (19-01-01 to 19-12-31).xlsx"
 local ec_2020 "Public Data Request 21-01-15 1700 (20-01-01 to 21-01-01).xlsx"
@@ -599,8 +592,9 @@ drop _merge
 *---------------------------------------------------------------
 
 isid fips year
+* Every year 2004-2024 present
 qui tab year
-assert r(r) == 21 // every year 2004-2024 present
+assert r(r) == 21
 bysort year: gen n_counties = _N
 assert n_counties == 82
 drop n_counties
